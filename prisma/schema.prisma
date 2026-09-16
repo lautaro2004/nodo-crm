@@ -1,0 +1,475 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // "nexo" agregado en la Fase 4 (integración Nexo -> Nodo): el CRM
+  // necesita LEER nexo.Appointment para sincronizar Leads. Ver
+  // modules/nexo/ — es la ÚNICA capa autorizada a usar el modelo
+  // `Appointment` de abajo; el resto de la aplicación nunca debe
+  // importarlo directo (ver docs/architecture/crm-fase4-nexo-leads.md).
+  schemas = ["public", "crm", "nexo"]
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// IDENTIDAD Y TENANT COMPARTIDOS (public) — espejo de las tablas físicas
+// que ya crea y usa Nexo. Mismas tablas, mismos datos, DOS proyectos
+// Prisma independientes declarando el mismo esquema físico — eso es
+// exactamente lo que permite "una identidad, dos productos" sin un
+// servicio de auth separado. Ver sección B del documento de esta fase.
+//
+// Decisión explícita: NO se incluye acá un modelo `Lead` (el `public.Lead`
+// de Nexo, pipeline comercial de Kodexa) — el CRM no lo necesita en esta
+// fase, y declararlo colisionaría de nombre con `crm.Lead` (el prospecto
+// propio de cada negocio que usa el CRM, un concepto completamente
+// distinto). Documentado en detalle en la Fase 1 y otra vez acá porque es
+// el punto de confusión más probable de todo este schema.
+// ═══════════════════════════════════════════════════════════════════════
+
+model User {
+  id            String       @id @default(cuid())
+  name          String
+  email         String       @unique
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  memberships   Membership[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("user")
+  @@schema("public")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+  @@schema("public")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+  @@schema("public")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+  @@schema("public")
+}
+
+// Espejo deliberadamente incompleto de public.Business: solo se declaran
+// los campos que el CRM realmente usa (id/name/timestamps). Los campos
+// específicos de Nexo (slug, siteTemplate, deposit*, menu*, etc. — ver
+// Fase 3, "Business como entidad compartida") existen físicamente en la
+// tabla pero no acá: son nullable o tienen DEFAULT en Postgres, así que un
+// INSERT hecho desde el Prisma Client del CRM (ver modules/business en
+// esta fase) nunca los necesita. El CRM nunca debe escribirlos ni leerlos
+// — no son de su dominio.
+model Business {
+  id          String       @id @default(cuid())
+  name        String
+  // Agregado en Fase 3 (CRM Core): columna física ya existente (Nexo la
+  // usa para el sitio público) — solo se agrega la declaración de campo al
+  // espejo de este proyecto, sin ninguna migración, para que el CRM pueda
+  // mostrar el logo del negocio en el Workspace (ver crm-fase3-core.md,
+  // "Workspace — nombre y logo"). No se toca nexo/ ni se crea nada nuevo
+  // en la base.
+  logoUrl     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  workspace   Workspace?
+
+  @@schema("public")
+}
+
+model Membership {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   @default("owner")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+  @@schema("public")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CRM — modelos propios de este producto.
+//
+// Toda tabla de dominio referencia `businessId`, pero la FK real apunta a
+// Workspace.businessId (no directo a public.Business) — a propósito: esto
+// hace que la base misma exija "no puede existir un Company/Contact/...
+// sin que su Business tenga antes un Workspace creado", en vez de confiar
+// en que el código de aplicación lo chequee. El nombre de columna sigue
+// siendo `businessId` en todos lados por consistencia de lectura/queries
+// (mismo criterio que usa nexo.* contra public.Business).
+// ═══════════════════════════════════════════════════════════════════════
+
+// Entidad raíz del CRM. Su EXISTENCIA para un businessId es la señal de
+// "este negocio usa CRM" — reemplaza una tabla ProductAccess/Entitlement
+// formal y compartida (fuera de alcance, ver Fase 1 y el pedido de esta
+// fase, punto 9).
+model Workspace {
+  businessId        String   @id
+  industryTemplate  String?
+  activeModules     String[]
+  onboardingStep    String?
+  defaultPipelineId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  companies               Company[]
+  contacts                Contact[]
+  leads                   Lead[]
+  opportunities           Opportunity[]
+  tasks                   Task[]
+  activities              Activity[]
+  pipelines               Pipeline[]
+  tags                    Tag[]
+  statusDefinitions       StatusDefinition[]
+  customFieldDefinitions  CustomFieldDefinition[]
+
+  @@schema("crm")
+}
+
+// "Empresa cliente" del negocio que usa el CRM — NO confundir con
+// public.Business (el tenant/cliente de Kodexa). El ítem "Clientes" del
+// MVP (ver Fase 1, sección 12) se resuelve con `status`, sin un modelo
+// aparte: "prospect" mientras se está evaluando, "customer" una vez que
+// convirtió.
+model Company {
+  id         String   @id @default(cuid())
+  businessId String
+  ownerId    String?
+  name       String
+  domain     String?
+  phone      String?
+  status     String   @default("prospect")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace     Workspace     @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  contacts      Contact[]
+  leads         Lead[]
+  opportunities Opportunity[]
+
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  businessId String
+  ownerId    String?
+  companyId  String?
+  name       String
+  email      String?
+  phone      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace     Workspace     @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+
+  @@index([businessId])
+  @@index([companyId])
+  @@schema("crm")
+}
+
+// Lead propio del CRM — un prospecto DEL NEGOCIO QUE USA EL CRM. No
+// confundir con public.Lead (pipeline comercial de Kodexa/Nexo, un
+// concepto de dominio completamente distinto que comparte nombre). Ver
+// comentario al principio de este archivo.
+model Lead {
+  id         String   @id @default(cuid())
+  businessId String
+  ownerId    String?
+  companyId  String?
+  name       String
+  email      String?
+  phone      String?
+  status     String   @default("new")
+  // "manual" | "nexo_appointment" (Fase 4) | "import" (futuro).
+  source     String?  @default("manual")
+  // ID del registro de origen en el sistema externo (hoy: nexo.Appointment.id)
+  // — null para leads manuales/importados sin origen puntual. Junto con
+  // `source`, es la base de la idempotencia de la sincronización con Nexo:
+  // @@unique([businessId, source, sourceRef]) hace que reprocesar el MISMO
+  // turno nunca cree un segundo Lead. Postgres no considera dos NULL
+  // iguales en un unique index, así que los leads manuales (sourceRef null)
+  // nunca chocan entre sí por esto. Ver modules/nexo/sync-leads.ts.
+  sourceRef  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, source, sourceRef])
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model Pipeline {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  workspace     Workspace       @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model PipelineStage {
+  id         String  @id @default(cuid())
+  pipelineId String
+  key        String
+  label      String
+  order      Int     @default(0)
+  isWon      Boolean @default(false)
+  isLost     Boolean @default(false)
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([pipelineId, key])
+  @@schema("crm")
+}
+
+model Opportunity {
+  id         String    @id @default(cuid())
+  businessId String
+  ownerId    String?
+  companyId  String?
+  contactId  String?
+  pipelineId String
+  stageId    String
+  title      String
+  amount     Float?
+  status     String    @default("open")
+  closedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company   Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact   Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pipeline  Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage     PipelineStage @relation(fields: [stageId], references: [id])
+
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  businessId  String
+  ownerId     String?
+  relatedType String?
+  relatedId   String?
+  title       String
+  dueAt       DateTime?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@index([businessId])
+  @@schema("crm")
+}
+
+// Polimórfica a propósito (relatedType/relatedId) para no tener una tabla
+// de historial por cada entidad — mismo criterio de "un solo choke point"
+// que ya usa BusinessNotification en Nexo.
+model Activity {
+  id          String   @id @default(cuid())
+  businessId  String
+  ownerId     String?
+  relatedType String
+  relatedId   String
+  type        String
+  body        String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([relatedType, relatedId])
+  @@schema("crm")
+}
+
+// Estados configurables para entidades que no tienen pipeline propio
+// (Lead/Company/Task — Opportunity ya tiene el suyo vía PipelineStage).
+// Mismo criterio que TODO el resto de este proyecto (y de Nexo): el campo
+// de estado en el modelo de dominio es un String libre, nunca un enum de
+// Prisma — esta tabla es el catálogo de valores válidos/etiquetas, no una
+// constraint de base.
+model StatusDefinition {
+  id         String  @id @default(cuid())
+  businessId String
+  entityType String
+  key        String
+  label      String
+  color      String?
+  order      Int     @default(0)
+  isDefault  Boolean @default(false)
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@unique([businessId, entityType, key])
+  @@schema("crm")
+}
+
+// Definición de campo personalizado. Tipos primitivos únicamente en esta
+// fase (texto/número/moneda/fecha/fecha-hora/boolean/selección/selección
+// múltiple/email/teléfono/URL) — relaciones y archivos quedan post-MVP
+// (ver Fase 1, sección 12): ninguno de los dos cabe en un CustomFieldValue
+// de texto sin inventar un tipo de dato nuevo sin un caso de uso pedido
+// todavía.
+model CustomFieldDefinition {
+  id         String   @id @default(cuid())
+  businessId String
+  entityType String
+  key        String
+  label      String
+  type       String
+  options    String[]
+  required   Boolean  @default(false)
+  order      Int      @default(0)
+
+  workspace Workspace          @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  values    CustomFieldValue[]
+
+  @@unique([businessId, entityType, key])
+  @@schema("crm")
+}
+
+model CustomFieldValue {
+  id           String  @id @default(cuid())
+  definitionId String
+  entityId     String
+  value        String?
+
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, entityId])
+  @@schema("crm")
+}
+
+// Catálogo de etiquetas del negocio.
+model Tag {
+  id         String  @id @default(cuid())
+  businessId String
+  name       String
+  color      String?
+
+  workspace  Workspace   @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  entityTags EntityTag[]
+
+  @@unique([businessId, name])
+  @@schema("crm")
+}
+
+// Asociación polimórfica etiqueta<->entidad — agregada en Fase 3 (Core
+// funcional), estaba deliberadamente pospuesta en la Fase 2 ("no construir
+// por adelantado el tagging hasta que se conecte a una pantalla real" —
+// ver crm-fase2-bootstrap.md). businessId repetido acá a propósito (mismo
+// criterio que el resto del schema): permite scopear/aislar sin tener que
+// resolver primero el Tag para saber de qué negocio es.
+model EntityTag {
+  id         String   @id @default(cuid())
+  businessId String
+  tagId      String
+  entityType String
+  entityId   String
+  createdAt  DateTime @default(now())
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tagId, entityType, entityId])
+  @@index([businessId, entityType, entityId])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ESPEJO DE SOLO LECTURA DE NEXO (Fase 4 — integración Nexo -> Nodo)
+//
+// Nexo es el dueño real de esta tabla (schema físico "nexo", migraciones
+// del repo de Nexo). Este modelo es una declaración PARCIAL (solo los
+// campos que el CRM necesita leer, ver auditoría en
+// docs/architecture/crm-fase4-nexo-leads.md) para que el Prisma Client de
+// ESTE proyecto pueda consultarla — mismo patrón ya usado para
+// public.Business (Fase 2).
+//
+// CONVENCIÓN, no una restricción que Prisma imponga técnicamente: SOLO
+// modules/nexo/*.ts puede importar/usar este modelo. Ningún otro módulo,
+// componente o ruta de API debe referenciarlo directo — ver
+// modules/nexo/appointments.ts, el único adapter autorizado. El CRM NUNCA
+// escribe acá (ni una sola llamada a .create/.update/.delete en todo el
+// código de aplicación — los únicos usos de escritura son en tests, para
+// crear datos de prueba, documentado explícitamente ahí).
+model Appointment {
+  id            String   @id
+  businessId    String
+  serviceName   String
+  customerName  String
+  customerPhone String
+  date          String
+  startTime     String
+  status        String
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  @@schema("nexo")
+}
