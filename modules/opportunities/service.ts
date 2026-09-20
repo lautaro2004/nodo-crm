@@ -87,6 +87,8 @@ export async function listOpportunities(businessId: string, filters: ListOpportu
   });
 }
 
+const TASKS_INCLUDE = { orderBy: { dueAt: "asc" as const }, select: { id: true, title: true, status: true, priority: true, dueAt: true } };
+
 export async function getOpportunity(businessId: string, id: string) {
   return prisma.opportunity.findFirst({
     where: { id, businessId },
@@ -95,6 +97,10 @@ export async function getOpportunity(businessId: string, id: string) {
       contact: { select: { id: true, name: true } },
       stage: true,
       pipeline: { include: { stages: { orderBy: { order: "asc" } } } },
+      tasks: TASKS_INCLUDE,
+      // Fase 5 — "Origen: Lead convertido". A lo sumo uno (convertedOpportunityId
+      // es @unique del lado del Lead).
+      convertedFromLead: { select: { id: true, name: true } },
     },
   });
 }

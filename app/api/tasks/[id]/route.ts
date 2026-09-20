@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { data, response: badRequest } = await parseBody(request, taskUpdateSchema);
   if (!data) return badRequest;
 
-  const task = await updateTask(ctx.businessId, id, data);
+  const task = await updateTask(ctx.businessId, id, data, ctx.userId);
   if (!task) return notFound();
   return NextResponse.json(task);
 }

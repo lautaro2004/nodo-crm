@@ -6,9 +6,9 @@ import { prisma } from "@/lib/prisma";
 // acá para las 4 entidades pedidas en un solo request.
 export async function globalSearch(businessId: string, query: string, limitPerEntity = 5) {
   const q = query.trim();
-  if (!q) return { companies: [], contacts: [], leads: [], opportunities: [] };
+  if (!q) return { companies: [], contacts: [], leads: [], opportunities: [], tasks: [] };
 
-  const [companies, contacts, leads, opportunities] = await Promise.all([
+  const [companies, contacts, leads, opportunities, tasks] = await Promise.all([
     prisma.company.findMany({
       where: { businessId, name: { contains: q, mode: "insensitive" } },
       take: limitPerEntity,
@@ -25,7 +25,14 @@ export async function globalSearch(businessId: string, query: string, limitPerEn
       where: { businessId, title: { contains: q, mode: "insensitive" } },
       take: limitPerEntity,
     }),
+    // Agregado en la fase de pulido UX — Tareas ya era una entidad de
+    // primer nivel (vistas, Kanban, filtros) pero la búsqueda global
+    // todavía no la incluía.
+    prisma.task.findMany({
+      where: { businessId, title: { contains: q, mode: "insensitive" } },
+      take: limitPerEntity,
+    }),
   ]);
 
-  return { companies, contacts, leads, opportunities };
+  return { companies, contacts, leads, opportunities, tasks };
 }

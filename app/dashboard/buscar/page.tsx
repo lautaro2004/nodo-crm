@@ -11,17 +11,21 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
 
   const { q } = await searchParams;
   const results = await globalSearch(ctx.businessId, q ?? "");
-  const total = results.companies.length + results.contacts.length + results.leads.length + results.opportunities.length;
+  const total =
+    results.companies.length + results.contacts.length + results.leads.length + results.opportunities.length + results.tasks.length;
 
   return (
     <div>
-      <PageHeader title="Buscar" />
-      <SearchFilterBar searchPlaceholder="Buscar empresas, contactos, leads, oportunidades…" />
+      <PageHeader title="Buscar" description="Acceso rápido a empresas, contactos, leads, oportunidades y tareas." />
+      <SearchFilterBar searchPlaceholder="Buscar empresas, contactos, leads, oportunidades, tareas…" />
 
       {!q ? (
-        <EmptyState title="Escribí algo para buscar" />
+        <EmptyState
+          title="Escribí algo para buscar"
+          description="Busca por nombre, email, título — los resultados se agrupan por tipo de entidad."
+        />
       ) : total === 0 ? (
-        <EmptyState title={`Sin resultados para "${q}"`} />
+        <EmptyState title={`Sin resultados para "${q}"`} description="Probá con otro término, o revisá que esté bien escrito." />
       ) : (
         <div className="space-y-6">
           <ResultSection title="Empresas" items={results.companies.map((c) => ({ id: c.id, label: c.name }))} basePath="/dashboard/empresas" />
@@ -32,6 +36,7 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
             items={results.opportunities.map((o) => ({ id: o.id, label: o.title }))}
             basePath="/dashboard/oportunidades"
           />
+          <ResultSection title="Tareas" items={results.tasks.map((t) => ({ id: t.id, label: t.title }))} basePath="/dashboard/tareas" />
         </div>
       )}
     </div>

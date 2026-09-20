@@ -64,10 +64,12 @@ export async function listCompanies(businessId: string, filters: ListCompaniesFi
 // así que un id real de OTRO negocio nunca matchea — es lo que hace el
 // aislamiento real, no solo "el campo existe" (ver Fase 4 de Nexo, mismo
 // criterio).
+const TASKS_INCLUDE = { orderBy: { dueAt: "asc" as const }, select: { id: true, title: true, status: true, priority: true, dueAt: true } };
+
 export async function getCompany(businessId: string, id: string) {
   return prisma.company.findFirst({
     where: { id, businessId },
-    include: { contacts: true, leads: true, opportunities: true },
+    include: { contacts: true, leads: true, opportunities: true, tasks: TASKS_INCLUDE },
   });
 }
 

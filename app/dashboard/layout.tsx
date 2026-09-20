@@ -21,9 +21,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar businessName={workspace.business.name} activeModules={workspace.activeModules} />
-      <div className="flex flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 p-6 lg:p-8">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar businessName={workspace.business.name} activeModules={workspace.activeModules} />
+        <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>

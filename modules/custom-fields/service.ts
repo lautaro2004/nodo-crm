@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type CustomFieldEntityType = "lead" | "contact" | "company" | "opportunity";
+export type CustomFieldEntityType = "lead" | "contact" | "company" | "opportunity" | "task";
 
 export interface CreateCustomFieldDefinitionInput {
   entityType: CustomFieldEntityType;

@@ -11,6 +11,12 @@ import { AddActivityForm } from "@/components/activities/add-activity-form";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { StatusSelect } from "@/components/shared/status-select";
 import { OwnerAssign } from "@/components/shared/owner-assign";
+import { SendEmailAction } from "@/components/email/send-email-action";
+import { listTemplates } from "@/modules/email/templates";
+import { RelatedEventsList } from "@/components/calendar/related-events-list";
+import { listUpcomingEvents } from "@/modules/calendar/service";
+import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
+import { listWorkspaceMembers } from "@/modules/business/members";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
 
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,21 +27,29 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const opportunity = await getOpportunity(ctx.businessId, id);
   if (!opportunity) notFound();
 
-  const [activities, assignedTags, allTags] = await Promise.all([
+  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "opportunity", id),
     listTagsForEntity(ctx.businessId, "opportunity", id),
     listTags(ctx.businessId),
+    listWorkspaceMembers(ctx.businessId),
+    listUpcomingEvents(ctx.businessId, { opportunityId: id }),
+    listTemplates(ctx.businessId),
   ]);
+  const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
   return (
     <div>
       <PageHeader
         title={opportunity.title}
         description={opportunity.company?.name}
+        backHref="/dashboard/oportunidades"
         actions={
-          <Link href={`/dashboard/oportunidades/${id}/editar`}>
-            <Button variant="secondary">Editar</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <SendEmailAction entityType="opportunity" entityId={id} templates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))} />
+            <Link href={`/dashboard/oportunidades/${id}/editar`}>
+              <Button variant="secondary">Editar</Button>
+            </Link>
+          </div>
         }
       />
 
@@ -94,12 +108,34 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
               <TagPicker entityType="opportunity" entityId={id} assigned={assignedTags} allTags={allTags} />
             </div>
           </Card>
+
+          {opportunity.convertedFromLead && (
+            <Card className="p-4">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">Origen</h2>
+              <p className="text-sm text-slate-700">
+                Lead convertido:{" "}
+                <Link href={`/dashboard/leads/${opportunity.convertedFromLead.id}`} className="text-slate-900 underline">
+                  {opportunity.convertedFromLead.name}
+                </Link>
+              </p>
+            </Card>
+          )}
+
+          <Card className="p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Tareas relacionadas</h2>
+            <RelatedTasksList tasks={opportunity.tasks} />
+          </Card>
+
+          <Card className="p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Próximas actividades</h2>
+            <RelatedEventsList events={upcomingEvents} entity="opportunityId" entityId={id} returnTo={`/dashboard/oportunidades/${id}`} />
+          </Card>
         </div>
 
         <div>
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Historial</h2>
           <AddActivityForm relatedType="opportunity" relatedId={id} />
-          <ActivityFeed activities={activities} />
+          <ActivityFeed activities={activities} memberNameById={memberNameById} />
         </div>
       </div>
     </div>

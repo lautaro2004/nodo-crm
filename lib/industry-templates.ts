@@ -29,6 +29,13 @@ const DEFAULT_LEAD_STATUSES: IndustryTemplate["leadStatuses"] = [
   { key: "new", label: "Nuevo", color: "#64748b" },
   { key: "contacted", label: "Contactado", color: "#0ea5e9" },
   { key: "qualified", label: "Calificado", color: "#22c55e" },
+  // "converted" (Fase 5): se setea EXCLUSIVAMENTE por la conversión
+  // (modules/leads/conversion.ts), nunca elegible a mano desde el <select>
+  // de estado — ver la guarda en modules/leads/service.ts::updateLead. Se
+  // agrega igual al template para que aparezca con su label/color
+  // correctos apenas exista un Lead convertido, sin depender de que
+  // ensureConvertedStatusDefinition() lo siembre después.
+  { key: "converted", label: "Convertido", color: "#6366f1" },
   { key: "disqualified", label: "Descartado", color: "#ef4444" },
 ];
 

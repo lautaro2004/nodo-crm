@@ -6,11 +6,15 @@ import { getCompany } from "@/modules/companies/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
+import { listWorkspaceMembers } from "@/modules/business/members";
 import { Badge, Button, Card, PageHeader } from "@/components/ui/primitives";
 import { ActivityFeed } from "@/components/activities/activity-feed";
 import { AddActivityForm } from "@/components/activities/add-activity-form";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { CustomFieldsEditor } from "@/components/custom-fields/custom-fields-editor";
+import { RelatedEventsList } from "@/components/calendar/related-events-list";
+import { listUpcomingEvents } from "@/modules/calendar/service";
+import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
 import { COMPANY_STATUS_LABELS } from "@/lib/labels";
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,18 +25,22 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const company = await getCompany(ctx.businessId, id);
   if (!company) notFound();
 
-  const [activities, assignedTags, allTags, customFields] = await Promise.all([
+  const [activities, assignedTags, allTags, customFields, members, upcomingEvents] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "company", id),
     listTagsForEntity(ctx.businessId, "company", id),
     listTags(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "company", id),
+    listWorkspaceMembers(ctx.businessId),
+    listUpcomingEvents(ctx.businessId, { companyId: id }),
   ]);
+  const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
   return (
     <div>
       <PageHeader
         title={company.name}
         description={company.domain ?? undefined}
+        backHref="/dashboard/empresas"
         actions={
           <Link href={`/dashboard/empresas/${id}/editar`}>
             <Button variant="secondary">Editar</Button>
@@ -84,12 +92,22 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               />
             </div>
           </Card>
+
+          <Card className="p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Tareas relacionadas</h2>
+            <RelatedTasksList tasks={company.tasks} />
+          </Card>
+
+          <Card className="p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Próximas actividades</h2>
+            <RelatedEventsList events={upcomingEvents} entity="companyId" entityId={id} returnTo={`/dashboard/empresas/${id}`} />
+          </Card>
         </div>
 
         <div>
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Actividad</h2>
           <AddActivityForm relatedType="company" relatedId={id} />
-          <ActivityFeed activities={activities} />
+          <ActivityFeed activities={activities} memberNameById={memberNameById} />
         </div>
       </div>
     </div>

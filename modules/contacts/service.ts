@@ -57,10 +57,20 @@ export async function listContacts(businessId: string, filters: ListContactsFilt
   });
 }
 
+const TASKS_INCLUDE = { orderBy: { dueAt: "asc" as const }, select: { id: true, title: true, status: true, priority: true, dueAt: true } };
+
 export async function getContact(businessId: string, id: string) {
   return prisma.contact.findFirst({
     where: { id, businessId },
-    include: { company: { select: { id: true, name: true } }, opportunities: true },
+    include: {
+      company: { select: { id: true, name: true } },
+      opportunities: true,
+      tasks: TASKS_INCLUDE,
+      // Fase 5 — "Origen: Lead convertido". Array porque más de un Lead
+      // puede haberse convertido reutilizando este mismo Contact ("usar
+      // existente").
+      convertedFromLeads: { select: { id: true, name: true } },
+    },
   });
 }
 

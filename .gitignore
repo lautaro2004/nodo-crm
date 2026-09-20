@@ -35,3 +35,45 @@ next-env.d.ts
 # volcados de datos tomados como red de seguridad antes de pruebas contra
 # la base real (pueden contener datos reales) — mismo criterio que en nexo/.
 /prisma/_backup_pre_*/
+
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# local tooling
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# prisma backups
+/prisma/_backup_pre_*/

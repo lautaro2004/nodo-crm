@@ -167,6 +167,9 @@ model Workspace {
   leads                   Lead[]
   opportunities           Opportunity[]
   tasks                   Task[]
+  calendarEvents           CalendarEvent[]
+  emailSettings           EmailSettings?
+  emailTemplates          EmailTemplate[]
   activities              Activity[]
   pipelines               Pipeline[]
   tags                    Tag[]
@@ -196,6 +199,8 @@ model Company {
   contacts      Contact[]
   leads         Lead[]
   opportunities Opportunity[]
+  tasks         Task[]
+  calendarEvents CalendarEvent[]
 
   @@index([businessId])
   @@schema("crm")
@@ -215,6 +220,13 @@ model Contact {
   workspace     Workspace     @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
   company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   opportunities Opportunity[]
+  tasks         Task[]
+  calendarEvents CalendarEvent[]
+  // Leads que se convirtieron EN este Contact (Fase 5) — array a propósito:
+  // "usar contacto existente" permite que más de un Lead termine apuntando
+  // al mismo Contact (ver modules/leads/conversion.ts). onDelete: SetNull
+  // en el lado del Lead: borrar este Contact nunca borra el Lead histórico.
+  convertedFromLeads Lead[] @relation("LeadConvertedContact")
 
   @@index([businessId])
   @@index([companyId])
@@ -247,11 +259,30 @@ model Lead {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
-  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  // Conversión (Fase 5 — Lead → Contact → Opportunity). FKs directas, no
+  // polimórficas (mismo criterio que Task.companyId/contactId/...) — un
+  // Lead se convierte en, a lo sumo, UN Contact y UNA Opportunity, así que
+  // no hace falta relatedType/relatedId genérico acá. convertedAt es la
+  // fuente de verdad de "¿ya se convirtió?" (no basta con mirar status:
+  // ver modules/leads/service.ts, guardas de updateLead). onDelete:
+  // SetNull en ambas — borrar el Contact/Opportunity resultante nunca
+  // borra el Lead histórico, y borrar el Lead nunca toca el Contact/
+  // Opportunity reales (ver docs/architecture/crm-fase5-lead-conversion.md,
+  // "Eliminaciones").
+  convertedAt           DateTime?
+  convertedContactId     String?
+  convertedOpportunityId String?  @unique
+
+  workspace           Workspace    @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company             Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  tasks               Task[]
+  calendarEvents       CalendarEvent[]
+  convertedContact     Contact?     @relation("LeadConvertedContact", fields: [convertedContactId], references: [id], onDelete: SetNull)
+  convertedOpportunity Opportunity? @relation("LeadConvertedOpportunity", fields: [convertedOpportunityId], references: [id], onDelete: SetNull)
 
   @@unique([businessId, source, sourceRef])
   @@index([businessId])
+  @@index([convertedContactId])
   @@schema("crm")
 }
 
@@ -306,32 +337,173 @@ model Opportunity {
   contact   Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   pipeline  Pipeline      @relation(fields: [pipelineId], references: [id])
   stage     PipelineStage @relation(fields: [stageId], references: [id])
+  tasks     Task[]
+  calendarEvents CalendarEvent[]
+  // Lead que originó esta Opportunity vía conversión (Fase 5) — ?  porque
+  // la inmensa mayoría de las Opportunity NO vienen de una conversión
+  // (se crean directo). Uno-a-uno real: convertedOpportunityId es @unique
+  // del lado del Lead, así que nunca hay dos Leads apuntando a la misma
+  // Opportunity.
+  convertedFromLead Lead? @relation("LeadConvertedOpportunity")
 
   @@index([businessId])
   @@schema("crm")
 }
 
+// Unidad de trabajo real del CRM (Fase "Tareas v2") — ver
+// docs/architecture/crm-fase-tareas.md para el análisis completo.
+//
+// status/priority: String, NO un enum nativo de Postgres — mismo criterio
+// que TODO el resto del proyecto (Nexo y CRM), para no pagar fricción de
+// migración por cada valor nuevo. El vocabulario fijo pedido
+// (TODO/IN_PROGRESS/COMPLETED/CANCELLED, LOW/MEDIUM/HIGH/URGENT) se valida
+// en TypeScript/Zod (ver lib/schemas.ts), no en la base.
+//
+// ownerId sigue siendo el "responsable" (mismo campo que ya existía y ya
+// está en uso — no se renombra). createdById es NUEVO: quien creó la
+// tarea, casi siempre distinto de a quién se la asignó.
+//
+// relatedType/relatedId (genéricos, de un solo relacionado) se
+// REEMPLAZAN por 4 FKs explícitas opcionales — mismo patrón que ya usa
+// Opportunity (companyId/contactId) — porque una tarea real necesita poder
+// relacionarse con MÁS DE UNA entidad a la vez (ej. una Empresa Y una
+// Oportunidad en la misma tarea), algo que el polimórfico de a uno no
+// podía representar. Se verificó antes de este cambio que la única fila
+// real existente tenía ambos campos en null — sin pérdida de datos.
 model Task {
   id          String    @id @default(cuid())
   businessId  String
-  ownerId     String?
-  relatedType String?
-  relatedId   String?
   title       String
+  description String?
+  status      String    @default("todo")
+  priority    String    @default("medium")
+  startDate   DateTime?
   dueAt       DateTime?
-  status      String    @default("pending")
+  completedAt DateTime?
+  ownerId     String?
+  createdById String?
+  companyId     String?
+  contactId     String?
+  leadId        String?
+  opportunityId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  attachments TaskAttachment[]
 
   @@index([businessId])
+  @@index([businessId, ownerId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([leadId])
+  @@index([opportunityId])
+  @@schema("crm")
+}
+
+// Metadata únicamente — el binario vive en Supabase Storage (bucket
+// privado "task-attachments"), nunca en Postgres. Mismo patrón ya
+// probado en Nexo (nexo/lib/payment-proofs.ts): storagePath es la
+// referencia real, nunca una URL pública; el acceso siempre pasa por una
+// signed URL de corta duración generada bajo demanda (ver
+// modules/tasks/attachments.ts).
+model TaskAttachment {
+  id            String   @id @default(cuid())
+  businessId    String
+  taskId        String
+  fileName      String
+  storagePath   String
+  mimeType      String
+  fileSizeBytes Int
+  uploadedById  String?
+  createdAt     DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([taskId])
   @@schema("crm")
 }
 
 // Polimórfica a propósito (relatedType/relatedId) para no tener una tabla
 // de historial por cada entidad — mismo criterio de "un solo choke point"
 // que ya usa BusinessNotification en Nexo.
+// Evento agendado (reunión/llamada/seguimiento/...). Entidad propia y NO
+// una Activity: Activity es un log append-only ("pasó X"), un evento es un
+// compromiso futuro editable con inicio/fin, responsable y estado. El
+// historial del evento sí va a Activity (ver modules/calendar/service.ts).
+// FKs directas nullable (mismo criterio que Task), sin tabla polimórfica.
+// Google Calendar (futuro) = tabla CalendarIntegration/externalId aparte,
+// sin tocar este modelo.
+model CalendarEvent {
+  id            String   @id @default(cuid())
+  businessId    String
+  title         String
+  description   String?
+  type          String   @default("meeting")
+  status        String   @default("scheduled")
+  startsAt      DateTime
+  endsAt        DateTime
+  location      String?
+  ownerId       String?
+  createdById   String?
+  companyId     String?
+  contactId     String?
+  leadId        String?
+  opportunityId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace   Workspace    @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, startsAt])
+  @@index([businessId, ownerId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([leadId])
+  @@index([opportunityId])
+  @@schema("crm")
+}
+
+// Configuración de remitente por negocio (1:1 con Workspace). La API key
+// del proveedor NO vive acá: es un secreto de plataforma (env). Ver
+// docs/architecture/crm-email-foundation.md.
+model EmailSettings {
+  businessId String   @id
+  provider   String   @default("sandbox")
+  fromEmail  String?
+  fromName   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@schema("crm")
+}
+
+model EmailTemplate {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  subject    String
+  bodyHtml   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@unique([businessId, name])
+  @@schema("crm")
+}
+
 model Activity {
   id          String   @id @default(cuid())
   businessId  String

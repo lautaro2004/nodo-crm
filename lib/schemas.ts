@@ -39,6 +39,26 @@ export const leadCreateSchema = z.object({
 });
 export const leadUpdateSchema = leadCreateSchema.partial();
 
+// Fase 5 — payload de "Convertir Lead". discriminatedUnion sobre
+// contact.mode para que el body sea inválido (400 en el borde, no un bug
+// silencioso más adentro) si falta contactId cuando mode es "existing".
+export const convertLeadSchema = z.object({
+  contact: z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("new") }),
+    z.object({ mode: z.literal("existing"), contactId: z.string().trim().min(1) }),
+  ]),
+  createOpportunity: z.boolean(),
+  opportunity: z
+    .object({
+      title: z.string().trim().min(1, "El nombre de la oportunidad es obligatorio").max(160),
+      pipelineId: z.string().trim().min(1, "Elegí un pipeline"),
+      stageId: z.string().trim().min(1, "Elegí una etapa"),
+      ownerId: z.string().trim().max(60).optional().nullable(),
+      amount: z.number().nonnegative().optional().nullable(),
+    })
+    .optional(),
+});
+
 export const pipelineCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   isDefault: z.boolean().optional(),
@@ -70,21 +90,94 @@ export const opportunityUpdateSchema = opportunityCreateSchema.partial().extend(
   status: z.enum(["open", "won", "lost"]).optional(),
 });
 
+// Vocabulario fijo de Task — validado acá (TypeScript/Zod), NO como enum
+// nativo de Postgres — ver comentario en prisma/schema.prisma, modelo
+// Task, y docs/architecture/crm-fase-tareas.md.
+export const taskStatusEnum = z.enum(["todo", "in_progress", "completed", "cancelled"]);
+export const taskPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
+
 export const taskCreateSchema = z.object({
   title: z.string().trim().min(1, "El título es obligatorio").max(200),
+  description: z.string().trim().max(8000).optional().nullable(),
+  priority: taskPriorityEnum.optional(),
+  startDate: z.string().trim().optional().nullable(),
   dueAt: z.string().trim().optional().nullable(),
-  relatedType: z.enum(["lead", "contact", "company", "opportunity"]).optional().nullable(),
-  relatedId: z.string().trim().max(60).optional().nullable(),
   ownerId: z.string().trim().max(60).optional().nullable(),
+  companyId: z.string().trim().max(60).optional().nullable(),
+  contactId: z.string().trim().max(60).optional().nullable(),
+  leadId: z.string().trim().max(60).optional().nullable(),
+  opportunityId: z.string().trim().max(60).optional().nullable(),
 });
 export const taskUpdateSchema = taskCreateSchema.partial().extend({
-  status: z.enum(["pending", "done"]).optional(),
+  status: taskStatusEnum.optional(),
+});
+
+export const calendarEventTypeEnum = z.enum(["meeting", "call", "follow_up", "event", "other"]);
+export const calendarEventStatusEnum = z.enum(["scheduled", "completed", "cancelled"]);
+
+export const calendarEventCreateSchema = z.object({
+  title: z.string().trim().min(1, "El título es obligatorio").max(200),
+  description: z.string().trim().max(8000).optional().nullable(),
+  type: calendarEventTypeEnum.optional(),
+  startsAt: z.string().trim().min(1),
+  endsAt: z.string().trim().min(1),
+  location: z.string().trim().max(300).optional().nullable(),
+  ownerId: z.string().trim().max(60).optional().nullable(),
+  companyId: z.string().trim().max(60).optional().nullable(),
+  contactId: z.string().trim().max(60).optional().nullable(),
+  leadId: z.string().trim().max(60).optional().nullable(),
+  opportunityId: z.string().trim().max(60).optional().nullable(),
+});
+export const calendarEventUpdateSchema = calendarEventCreateSchema.partial().extend({
+  status: calendarEventStatusEnum.optional(),
+});
+
+export const emailSettingsSchema = z.object({
+  provider: z.enum(["sandbox", "resend"]),
+  fromEmail: z.string().trim().email("Email inválido").max(200).optional().nullable().or(z.literal("")),
+  fromName: z.string().trim().max(120).optional().nullable(),
+});
+
+export const emailTemplateCreateSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(120),
+  subject: z.string().trim().min(1, "El asunto es obligatorio").max(300),
+  bodyHtml: z.string().trim().min(1, "El cuerpo es obligatorio").max(100000),
+});
+export const emailTemplateUpdateSchema = emailTemplateCreateSchema.partial();
+
+const emailEntityTypeEnum = z.enum(["contact", "lead", "opportunity"]);
+export const emailPreviewSchema = z.object({
+  entityType: emailEntityTypeEnum,
+  entityId: z.string().trim().min(1).max(60),
+  templateId: z.string().trim().max(60).optional(),
+});
+export const emailSendSchema = z.object({
+  entityType: emailEntityTypeEnum,
+  entityId: z.string().trim().min(1).max(60),
+  subject: z.string().trim().min(1, "El asunto es obligatorio").max(300),
+  bodyHtml: z.string().trim().min(1, "El cuerpo es obligatorio").max(100000),
+});
+
+export const taskCommentSchema = z.object({
+  body: z.string().trim().min(1, "Escribí algo").max(4000),
 });
 
 export const activityCreateSchema = z.object({
-  relatedType: z.enum(["lead", "contact", "company", "opportunity"]),
+  relatedType: z.enum(["lead", "contact", "company", "opportunity", "task"]),
   relatedId: z.string().trim().min(1),
-  type: z.enum(["note", "call", "email", "meeting", "stage_change", "status_change"]),
+  type: z.enum([
+    "note",
+    "call",
+    "email",
+    "meeting",
+    "stage_change",
+    "status_change",
+    "comment",
+    "assigned",
+    "priority_changed",
+    "due_date_changed",
+    "attachment_added",
+  ]),
   body: z.string().trim().max(4000).optional().nullable(),
 });
 

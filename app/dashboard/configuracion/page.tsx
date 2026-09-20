@@ -11,6 +11,8 @@ const SETTINGS_LINKS = [
   { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados" },
   { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
   { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
+  { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)" },
+  { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email" },
 ];
 
 export default async function SettingsPage() {

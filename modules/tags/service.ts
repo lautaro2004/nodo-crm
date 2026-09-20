@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type TaggableType = "lead" | "contact" | "company" | "opportunity";
+export type TaggableType = "lead" | "contact" | "company" | "opportunity" | "task";
 
 export async function createTag(businessId: string, data: { name: string; color?: string | null }) {
   return prisma.tag.create({ data: { businessId, name: data.name, color: data.color ?? null } });

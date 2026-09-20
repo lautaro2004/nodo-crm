@@ -76,17 +76,37 @@ export async function listLeads(businessId: string, filters: ListLeadsFilters = 
   });
 }
 
+const TASKS_INCLUDE = { orderBy: { dueAt: "asc" as const }, select: { id: true, title: true, status: true, priority: true, dueAt: true } };
+
 export async function getLead(businessId: string, id: string) {
   return prisma.lead.findFirst({
     where: { id, businessId },
-    include: { company: { select: { id: true, name: true } } },
+    include: {
+      company: { select: { id: true, name: true } },
+      tasks: TASKS_INCLUDE,
+      convertedContact: { select: { id: true, name: true } },
+      convertedOpportunity: { select: { id: true, title: true } },
+    },
   });
 }
 
+// "converted" es un estado terminal que SOLO puede setear la transacción
+// de modules/leads/conversion.ts (que escribe convertedAt/
+// convertedContactId/convertedOpportunityId a la vez) — nunca este método
+// de edición general. Sin esta guarda, alguien podría elegir "Convertido"
+// en el <select> de estado del Lead sin que exista ningún Contact/
+// Opportunity real detrás, rompiendo el invariante "convertedAt implica
+// convertedContactId" que el resto de la UI asume. Ver
+// docs/architecture/crm-fase5-lead-conversion.md, "Estado del Lead".
 export async function updateLead(businessId: string, id: string, data: UpdateLeadInput) {
   await assertCompanyBelongs(businessId, data.companyId);
   const current = await prisma.lead.findFirst({ where: { id, businessId } });
   if (!current) return null;
+
+  if (data.status === "converted") throw new Error("use_convert_endpoint");
+  if (current.status === "converted" && data.status && data.status !== current.status) {
+    throw new Error("lead_already_converted");
+  }
 
   const updated = await prisma.lead.update({ where: { id }, data });
 

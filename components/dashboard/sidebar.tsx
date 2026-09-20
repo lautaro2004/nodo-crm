@@ -13,7 +13,10 @@ import {
   TrendingUpIcon,
   CheckSquareIcon,
   ActivityIcon,
+  CalendarIcon,
   SettingsIcon,
+  SearchIcon,
+  XIcon,
 } from "@/components/ui/icons";
 
 interface NavItem {
@@ -23,28 +26,55 @@ interface NavItem {
   module?: string; // si está seteado, el item se oculta cuando el módulo no está activo
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Inicio", icon: <HomeIcon /> },
-  { href: "/dashboard/empresas", label: "Empresas / Clientes", icon: <BuildingIcon />, module: "companies" },
-  { href: "/dashboard/contactos", label: "Contactos", icon: <UsersIcon />, module: "contacts" },
-  { href: "/dashboard/leads", label: "Leads", icon: <TargetIcon />, module: "leads" },
-  { href: "/dashboard/oportunidades", label: "Oportunidades", icon: <TrendingUpIcon />, module: "opportunities" },
-  { href: "/dashboard/tareas", label: "Tareas", icon: <CheckSquareIcon />, module: "tasks" },
-  { href: "/dashboard/actividades", label: "Actividades", icon: <ActivityIcon /> },
+// Agrupado en secciones (pedido explícito de la fase de pulido UX: "el
+// sidebar debe soportar crecimiento futuro") — antes era una lista plana
+// sin jerarquía. Los grupos reflejan módulos que YA existen, ninguno se
+// agrega para "completar el menú".
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ href: "/dashboard", label: "Inicio", icon: <HomeIcon /> }] },
+  {
+    label: "CRM",
+    items: [
+      { href: "/dashboard/empresas", label: "Empresas", icon: <BuildingIcon />, module: "companies" },
+      { href: "/dashboard/contactos", label: "Contactos", icon: <UsersIcon />, module: "contacts" },
+      { href: "/dashboard/leads", label: "Leads", icon: <TargetIcon />, module: "leads" },
+      { href: "/dashboard/oportunidades", label: "Oportunidades", icon: <TrendingUpIcon />, module: "opportunities" },
+    ],
+  },
+  {
+    label: "Trabajo",
+    items: [
+      { href: "/dashboard/tareas", label: "Tareas", icon: <CheckSquareIcon />, module: "tasks" },
+      { href: "/dashboard/calendario", label: "Calendario", icon: <CalendarIcon /> },
+      { href: "/dashboard/actividades", label: "Actividad", icon: <ActivityIcon /> },
+    ],
+  },
+  {
+    label: "Herramientas",
+    items: [{ href: "/dashboard/buscar", label: "Búsqueda", icon: <SearchIcon /> }],
+  },
 ];
 
-export function Sidebar({
-  businessName,
-  activeModules,
-}: {
-  businessName: string;
-  activeModules: string[];
-}) {
+function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+  return (
+    <Link
+      href={item.href}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        active ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      }`}
+    >
+      <span className={active ? "text-indigo-600" : "text-slate-400"}>{item.icon}</span>
+      {item.label}
+    </Link>
+  );
+}
+
+function SidebarContent({ businessName, activeModules, onNavigate }: { businessName: string; activeModules: string[]; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const visibleItems = NAV_ITEMS.filter((item) => !item.module || activeModules.includes(item.module));
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-slate-200 bg-white">
+    <div className="flex h-full flex-col" onClick={onNavigate}>
       <div className="flex h-16 items-center border-b border-slate-100 px-5">
         <Logo />
       </div>
@@ -54,39 +84,74 @@ export function Sidebar({
         <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">{businessName}</p>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-        {visibleItems.map((item) => {
-          const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
+        {NAV_GROUPS.map((group, i) => {
+          const visibleItems = group.items.filter((item) => !item.module || activeModules.includes(item.module));
+          if (visibleItems.length === 0) return null;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                active ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <span className={active ? "text-indigo-600" : "text-slate-400"}>{item.icon}</span>
-              {item.label}
-            </Link>
+            <div key={group.label ?? `group-${i}`}>
+              {group.label && (
+                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
+              )}
+              <div className="space-y-0.5">
+                {visibleItems.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
           );
         })}
       </nav>
 
       <div className="border-t border-slate-100 p-3">
-        <Link
-          href="/dashboard/configuracion"
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            pathname.startsWith("/dashboard/configuracion")
-              ? "bg-indigo-50 text-indigo-700"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <span className={pathname.startsWith("/dashboard/configuracion") ? "text-indigo-600" : "text-slate-400"}>
-            <SettingsIcon />
-          </span>
-          Configuración
-        </Link>
+        <NavLink item={{ href: "/dashboard/configuracion", label: "Configuración", icon: <SettingsIcon /> }} pathname={pathname} />
+      </div>
+    </div>
+  );
+}
+
+// Desktop: sidebar fija, siempre visible (lg+). Mobile/tablet: oculta por
+// default, se abre como drawer controlado desde Topbar (ver
+// components/dashboard/mobile-nav.tsx) — antes era un <aside w-64> fijo
+// sin ninguna estrategia responsive, lo que generaba overflow horizontal
+// real en pantallas chicas.
+export function Sidebar({ businessName, activeModules }: { businessName: string; activeModules: string[] }) {
+  return (
+    <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
+      <div className="sticky top-0 h-screen">
+        <SidebarContent businessName={businessName} activeModules={activeModules} />
       </div>
     </aside>
+  );
+}
+
+export function MobileSidebarDrawer({
+  businessName,
+  activeModules,
+  open,
+  onClose,
+}: {
+  businessName: string;
+  activeModules: string[];
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden">
+      <button aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
+      <div className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl">
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={onClose}
+          className="absolute right-3 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        >
+          <XIcon className="h-5 w-5" />
+        </button>
+        <SidebarContent businessName={businessName} activeModules={activeModules} onNavigate={onClose} />
+      </div>
+    </div>
   );
 }

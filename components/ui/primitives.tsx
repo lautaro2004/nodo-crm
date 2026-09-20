@@ -3,10 +3,14 @@ import type {
   InputHTMLAttributes,
   LabelHTMLAttributes,
   ReactNode,
+  Ref,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
   TableHTMLAttributes,
 } from "react";
+import Link from "next/link";
+
+import { ChevronLeftIcon, ListIcon, KanbanIcon } from "@/components/ui/icons";
 
 // Sistema de diseño propio de Nodo (sin shadcn/radix instalado — ver
 // docs/architecture/crm-fase3-ui.md, "Decisiones de diseño"). Un único
@@ -86,7 +90,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return <input className={cx(FIELD_BASE, className)} {...props} />;
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   return <textarea className={cx(FIELD_BASE, className)} {...props} />;
 }
 
@@ -98,16 +102,76 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  backHref,
+  backLabel = "Volver",
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  backHref?: string;
+  backLabel?: string;
+}) {
   return (
-    <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
-        {description && <p className="mt-1.5 text-sm text-slate-500">{description}</p>}
+    <div className="mb-8">
+      {backHref && (
+        <Link
+          href={backHref}
+          className="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 transition-colors hover:text-slate-900"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+          {backLabel}
+        </Link>
+      )}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+          {description && <p className="mt-1.5 text-sm text-slate-500">{description}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
+}
+
+// Switcher Lista/Kanban reutilizado por Tareas y Oportunidades — mismo
+// criterio en las dos pantallas (navega vía query param `?display=`, la
+// page como server component decide qué renderizar). No es un componente
+// de estado propio: solo arma los dos links.
+export function ViewToggle({ basePath, params, value }: { basePath: string; params: URLSearchParams; value: "list" | "kanban" }) {
+  function hrefFor(display: "list" | "kanban") {
+    const next = new URLSearchParams(params);
+    if (display === "list") next.delete("display");
+    else next.set("display", display);
+    const qs = next.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  }
+
+  const base = "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors";
+  const active = "bg-white text-slate-900 shadow-sm";
+  const inactive = "text-slate-500 hover:text-slate-700";
+
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+      <Link href={hrefFor("list")} className={cx(base, value === "list" ? active : inactive)}>
+        <ListIcon className="h-4 w-4" />
+        Lista
+      </Link>
+      <Link href={hrefFor("kanban")} className={cx(base, value === "kanban" ? active : inactive)}>
+        <KanbanIcon className="h-4 w-4" />
+        Kanban
+      </Link>
+    </div>
+  );
+}
+
+// Placeholder de carga simple (Next.js loading.tsx) — un bloque gris con
+// pulse, sin depender de ninguna librería de skeletons.
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cx("animate-pulse rounded-lg bg-slate-200/70", className)} />;
 }
 
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {

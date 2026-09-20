@@ -26,8 +26,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const lead = await updateLead(ctx.businessId, id, data);
     if (!lead) return notFound();
     return NextResponse.json(lead);
-  } catch {
-    return NextResponse.json({ error: "company_not_found" }, { status: 400 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "invalid_input" }, { status: 400 });
   }
 }
 

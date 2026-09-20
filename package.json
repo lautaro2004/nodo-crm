@@ -13,6 +13,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.8.0",
+    "@supabase/supabase-js": "^2.112.2",
     "better-auth": "^1.6.26",
     "dotenv": "^17.4.2",
     "next": "^15.5.19",
