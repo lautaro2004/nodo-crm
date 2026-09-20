@@ -36,5 +36,6 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
 export const LEAD_SOURCE_LABELS: Record<string, string> = {
   manual: "Manual",
   nexo_appointment: "Nexo — Reserva",
+  nexo_inquiry: "Nexo — Consulta",
   import: "Importación",
 };

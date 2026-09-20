@@ -26,7 +26,7 @@ export async function getDashboardMetrics(businessId: string): Promise<Dashboard
       prisma.task.count({ where: { businessId, status: "pending" } }),
       // Fase 4 — dato real (COUNT sobre Lead.source), no una métrica de
       // marketing inventada.
-      prisma.lead.count({ where: { businessId, source: "nexo_appointment" } }),
+      prisma.lead.count({ where: { businessId, source: { in: ["nexo_appointment", "nexo_inquiry"] } } }),
     ]);
 
   return { companiesCount, contactsCount, openLeadsCount, openOpportunitiesCount, pendingTasksCount, leadsFromNexoCount };

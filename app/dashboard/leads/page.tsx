@@ -73,7 +73,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                     <Badge>{statusLabel(l.status)}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    {l.source === "nexo_appointment" ? (
+                    {l.source?.startsWith("nexo_") ? (
                       <Badge className="bg-indigo-100 text-indigo-700">{LEAD_SOURCE_LABELS[l.source]}</Badge>
                     ) : (
                       <span className="text-slate-500">{LEAD_SOURCE_LABELS[l.source ?? "manual"] ?? l.source}</span>

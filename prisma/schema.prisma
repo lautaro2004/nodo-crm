@@ -473,3 +473,24 @@ model Appointment {
 
   @@schema("nexo")
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ESPEJO DE SOLO LECTURA DE NEXO — nexo.Inquiry (consultas del sitio
+// público de Nexo). Mismo contrato que `Appointment` de arriba: Nexo es el
+// dueño de la tabla (su migración vive en el repo de Nexo, NO se genera
+// ninguna acá), declaración parcial, y SOLO modules/nexo/inquiries.ts puede
+// usar este modelo. El CRM nunca escribe acá.
+// ═══════════════════════════════════════════════════════════════════════
+model Inquiry {
+  id               String   @id
+  businessId       String
+  customerName     String
+  customerWhatsapp String
+  customerEmail    String
+  message          String
+  status           String
+  createdAt        DateTime
+  updatedAt        DateTime
+
+  @@schema("nexo")
+}

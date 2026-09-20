@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { listNexoAppointments } from "@/modules/nexo/appointments";
+import { listNexoInquiries } from "@/modules/nexo/inquiries";
 import { createActivity } from "@/modules/activities/service";
 
 const SOURCE = "nexo_appointment";
@@ -82,4 +83,69 @@ export async function syncLeadsFromNexoAppointments(businessId: string): Promise
   }
 
   return { created, skipped, total: appointments.length };
+}
+
+const INQUIRY_SOURCE = "nexo_inquiry";
+
+// Mismo contrato que syncLeadsFromNexoAppointments (idempotente por
+// (businessId, source, sourceRef), create-only, nunca pisa un Lead ya
+// tocado). Diferencia: una consulta SÍ trae email, y el texto de la
+// consulta va como nota (Activity), no como columna nueva del Lead.
+export async function syncLeadsFromNexoInquiries(businessId: string): Promise<SyncLeadsResult> {
+  const inquiries = await listNexoInquiries(businessId);
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const inquiry of inquiries) {
+    const existing = await prisma.lead.findUnique({
+      where: { businessId_source_sourceRef: { businessId, source: INQUIRY_SOURCE, sourceRef: inquiry.id } },
+    });
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const lead = await prisma.lead.create({
+      data: {
+        businessId,
+        name: inquiry.customerName,
+        email: inquiry.customerEmail,
+        phone: inquiry.customerWhatsapp,
+        status: "new",
+        source: INQUIRY_SOURCE,
+        sourceRef: inquiry.id,
+      },
+    });
+
+    await createActivity(businessId, {
+      relatedType: "lead",
+      relatedId: lead.id,
+      type: "note",
+      body: `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
+    });
+    created++;
+  }
+
+  return { created, skipped, total: inquiries.length };
+}
+
+export interface SyncNexoResult extends SyncLeadsResult {
+  appointments: SyncLeadsResult;
+  inquiries: SyncLeadsResult;
+}
+
+// Única acción de usuario ("Sincronizar con Nexo"): corre ambas fuentes y
+// devuelve los totales combinados más el desglose.
+export async function syncLeadsFromNexo(businessId: string): Promise<SyncNexoResult> {
+  const appointments = await syncLeadsFromNexoAppointments(businessId);
+  const inquiries = await syncLeadsFromNexoInquiries(businessId);
+  return {
+    created: appointments.created + inquiries.created,
+    skipped: appointments.skipped + inquiries.skipped,
+    total: appointments.total + inquiries.total,
+    appointments,
+    inquiries,
+  };
 }
