@@ -2,25 +2,30 @@ import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { getWorkspaceWithBusiness } from "@/modules/workspace/service";
+import { getModuleLabel } from "@/modules/workspace/module-config";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { ModulesToggle } from "@/components/configuracion/modules-toggle";
 import { INDUSTRY_TEMPLATES, type IndustryKey } from "@/lib/industry-templates";
-
-const SETTINGS_LINKS = [
-  { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas" },
-  { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados" },
-  { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
-  { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
-  { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)" },
-  { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email" },
-];
 
 export default async function SettingsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
-  const workspace = await getWorkspaceWithBusiness(ctx.businessId);
+  const [workspace, moduleLabel] = await Promise.all([
+    getWorkspaceWithBusiness(ctx.businessId),
+    getModuleLabel(ctx.businessId, "opportunity"),
+  ]);
   if (!workspace) return null;
+
+  const SETTINGS_LINKS = [
+    { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas" },
+    { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados" },
+    { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
+    { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
+    { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")` },
+    { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)" },
+    { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email" },
+  ];
 
   return (
     <div>
@@ -37,7 +42,7 @@ export default async function SettingsPage() {
 
         <Card className="p-4">
           <h2 className="mb-2 text-sm font-semibold text-slate-900">Módulos activos</h2>
-          <ModulesToggle activeModules={workspace.activeModules} />
+          <ModulesToggle activeModules={workspace.activeModules} opportunityLabelPlural={moduleLabel.labelPlural} />
         </Card>
 
         <Card className="p-4 lg:col-span-2">

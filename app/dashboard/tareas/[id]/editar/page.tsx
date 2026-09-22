@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { getTask } from "@/modules/tasks/service";
+import { getReminderForTask } from "@/modules/reminders/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
 import { listCompanies } from "@/modules/companies/service";
 import { listContacts } from "@/modules/contacts/service";
@@ -14,18 +15,23 @@ function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "";
 }
 
+function toDateTimeInputValue(date: Date | null): string {
+  return date ? date.toISOString().slice(0, 16) : "";
+}
+
 export default async function EditTaskPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
   const { id } = await params;
-  const [task, members, companies, contacts, leads, opportunities] = await Promise.all([
+  const [task, members, companies, contacts, leads, opportunities, reminder] = await Promise.all([
     getTask(ctx.businessId, id),
     listWorkspaceMembers(ctx.businessId),
     listCompanies(ctx.businessId),
     listContacts(ctx.businessId),
     listLeads(ctx.businessId),
     listOpportunities(ctx.businessId),
+    getReminderForTask(ctx.businessId, id),
   ]);
   if (!task) notFound();
 
@@ -44,13 +50,14 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
           description: task.description ?? "",
           priority: task.priority,
           startDate: toDateInputValue(task.startDate),
-          dueAt: toDateInputValue(task.dueAt),
+          dueAt: toDateTimeInputValue(task.dueAt),
           ownerId: task.ownerId ?? "",
           companyId: task.companyId ?? "",
           contactId: task.contactId ?? "",
           leadId: task.leadId ?? "",
           opportunityId: task.opportunityId ?? "",
         }}
+        initialReminder={toDateTimeInputValue(reminder?.remindAt ?? null) || null}
       />
     </div>
   );

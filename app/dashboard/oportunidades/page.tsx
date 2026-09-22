@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { getModuleLabel } from "@/modules/workspace/module-config";
 import { listPipelines } from "@/modules/pipelines/service";
 import { listOpportunities } from "@/modules/opportunities/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
@@ -18,7 +19,7 @@ export default async function OpportunitiesPage({
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
-  const pipelines = await listPipelines(ctx.businessId);
+  const [pipelines, moduleLabel] = await Promise.all([listPipelines(ctx.businessId), getModuleLabel(ctx.businessId, "opportunity")]);
   const { pipelineId: requestedPipelineId, display, q, status } = await searchParams;
   const pipeline = pipelines.find((p) => p.id === requestedPipelineId) ?? pipelines.find((p) => p.isDefault) ?? pipelines[0];
   const isKanban = display !== "list"; // default histórico: Kanban primero, no rompe bookmarks existentes
@@ -45,7 +46,7 @@ export default async function OpportunitiesPage({
   return (
     <div>
       <PageHeader
-        title="Oportunidades"
+        title={moduleLabel.labelPlural}
         description={pipeline ? `Pipeline: ${pipeline.name}` : undefined}
         actions={
           <div className="flex gap-2">
@@ -54,7 +55,7 @@ export default async function OpportunitiesPage({
             </Link>
             {pipeline && (
               <Link href="/dashboard/oportunidades/nueva">
-                <Button>Nueva oportunidad</Button>
+                <Button>Nueva {moduleLabel.labelSingular.toLowerCase()}</Button>
               </Link>
             )}
           </div>
@@ -85,7 +86,7 @@ export default async function OpportunitiesPage({
       {!pipeline ? (
         <EmptyState
           title="Todavía no hay ningún pipeline"
-          description="Creá uno para empezar a registrar oportunidades."
+          description={`Creá uno para empezar a registrar ${moduleLabel.labelPlural.toLowerCase()}.`}
           action={
             <Link href="/dashboard/oportunidades/pipelines">
               <Button>Crear pipeline</Button>
@@ -108,11 +109,11 @@ export default async function OpportunitiesPage({
 
           {opportunities.length === 0 ? (
             <EmptyState
-              title="Todavía no hay oportunidades"
+              title={`Todavía no hay ${moduleLabel.labelPlural.toLowerCase()}`}
               description="Creá la primera para empezar a trabajar este pipeline."
               action={
                 <Link href="/dashboard/oportunidades/nueva">
-                  <Button>Nueva oportunidad</Button>
+                  <Button>Nueva {moduleLabel.labelSingular.toLowerCase()}</Button>
                 </Link>
               }
             />

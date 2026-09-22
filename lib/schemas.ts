@@ -7,7 +7,12 @@ import { z } from "zod";
 
 export const onboardingSchema = z.object({
   businessName: z.string().trim().min(1).max(120).optional(),
-  industry: z.enum(["software", "comercio", "servicios", "gimnasio", "inmobiliaria", "otro"]).optional(),
+  industry: z.enum(["software", "comercio", "servicios", "gimnasio", "inmobiliaria", "construccion", "otro"]).optional(),
+  // Selección editable del paso "¿Qué querés gestionar?" (sugerida según
+  // el rubro, pero el usuario puede cambiarla antes de confirmar) — sólo
+  // tiene efecto si además viene `industry` en el mismo request; ver
+  // app/api/onboarding/route.ts.
+  activeModules: z.array(z.enum(["companies", "contacts", "leads", "opportunities", "tasks"])).min(1).optional(),
 });
 
 export const companyCreateSchema = z.object({
@@ -156,6 +161,25 @@ export const emailSendSchema = z.object({
   entityId: z.string().trim().min(1).max(60),
   subject: z.string().trim().min(1, "El asunto es obligatorio").max(300),
   bodyHtml: z.string().trim().min(1, "El cuerpo es obligatorio").max(100000),
+});
+
+export const taskReminderSchema = z.object({
+  remindAt: z.string().trim().min(1, "Elegí fecha y hora"),
+});
+
+export const importRowSchema = z.object({
+  standard: z.record(z.string(), z.string()),
+  custom: z.record(z.string(), z.string()),
+});
+export const importExecuteSchema = z.object({
+  rows: z.array(importRowSchema).min(1, "No hay filas para importar").max(2000),
+});
+
+export const moduleConfigUpdateSchema = z.object({
+  internalModule: z.enum(["opportunity"]),
+  labelSingular: z.string().trim().min(1, "Obligatorio").max(60),
+  labelPlural: z.string().trim().min(1, "Obligatorio").max(60),
+  icon: z.enum(["trending-up", "target", "calendar", "check-square", "building"]).optional().nullable(),
 });
 
 export const taskCommentSchema = z.object({

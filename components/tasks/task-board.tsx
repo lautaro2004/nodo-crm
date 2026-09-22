@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Badge, Card, Select } from "@/components/ui/primitives";
+import { BellIcon } from "@/components/ui/icons";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_PRIORITY_BADGE_VARIANT } from "@/lib/labels";
 
 const COLUMNS = Object.entries(TASK_STATUS_LABELS).map(([key, label]) => ({ key, label }));
@@ -16,6 +17,7 @@ interface TaskCard {
   dueAt: Date | null;
   ownerName: string | null;
   relatedLabel: string | null;
+  hasReminder?: boolean;
 }
 
 function isOverdue(task: TaskCard): boolean {
@@ -51,8 +53,9 @@ export function TaskBoard({ tasks }: { tasks: TaskCard[] }) {
             <div className="space-y-2">
               {cards.map((t) => (
                 <Card key={t.id} className="p-3">
-                  <Link href={`/dashboard/tareas/${t.id}`} className="text-sm font-medium text-slate-900 hover:underline">
-                    {t.title}
+                  <Link href={`/dashboard/tareas/${t.id}`} className="flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:underline">
+                    {t.hasReminder && <BellIcon className="h-3.5 w-3.5 shrink-0 text-indigo-500" aria-label="Con recordatorio" />}
+                    <span className="truncate">{t.title}</span>
                   </Link>
                   {t.relatedLabel && <p className="mt-0.5 truncate text-xs text-slate-500">{t.relatedLabel}</p>}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

@@ -4,19 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/primitives";
+import { AVAILABLE_MODULES, STATIC_MODULE_LABELS } from "@/modules/workspace/available-modules";
 
-const ALL_MODULES = [
-  { key: "companies", label: "Empresas / Clientes" },
-  { key: "contacts", label: "Contactos" },
-  { key: "leads", label: "Leads" },
-  { key: "opportunities", label: "Oportunidades" },
-  { key: "tasks", label: "Tareas" },
-];
-
-export function ModulesToggle({ activeModules }: { activeModules: string[] }) {
+export function ModulesToggle({ activeModules, opportunityLabelPlural }: { activeModules: string[]; opportunityLabelPlural: string }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>(activeModules);
   const [saving, setSaving] = useState(false);
+
+  // El nombre de "opportunities" en esta lista es el que configuró el
+  // Workspace (ver /dashboard/configuracion/modulo-oportunidades) — el
+  // resto son fijos, no son módulos configurables en esta fase.
+  const ALL_MODULES = AVAILABLE_MODULES.map((key) => ({
+    key,
+    label: key === "opportunities" ? opportunityLabelPlural : STATIC_MODULE_LABELS[key],
+  }));
 
   function toggle(key: string) {
     setSelected((prev) => (prev.includes(key) ? prev.filter((m) => m !== key) : [...prev, key]));

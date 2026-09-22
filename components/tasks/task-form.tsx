@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { Button, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { TASK_PRIORITY_LABELS } from "@/lib/labels";
+import { TaskReminderField, type ReminderState } from "@/components/tasks/task-reminder-field";
+import { computeRemindAt, guessOffsetKey } from "@/components/tasks/reminder-offsets";
 
 interface Option {
   id: string;
@@ -32,6 +34,7 @@ export function TaskForm({
   contacts,
   leads,
   opportunities,
+  initialReminder,
 }: {
   initial?: Partial<TaskFormValues>;
   taskId?: string;
@@ -40,6 +43,8 @@ export function TaskForm({
   contacts: Option[];
   leads: Option[];
   opportunities: Option[];
+  // remindAt en formato "YYYY-MM-DDTHH:mm" del recordatorio pending existente (edición).
+  initialReminder?: string | null;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<TaskFormValues>({
@@ -53,6 +58,11 @@ export function TaskForm({
     contactId: initial?.contactId ?? "",
     leadId: initial?.leadId ?? "",
     opportunityId: initial?.opportunityId ?? "",
+  });
+  const [reminder, setReminder] = useState<ReminderState>(() => {
+    if (!initialReminder || !initial?.dueAt) return { offset: "none", custom: "" };
+    const offset = guessOffsetKey(initial.dueAt, initialReminder);
+    return { offset, custom: offset === "custom" ? initialReminder : "" };
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -81,12 +91,25 @@ export function TaskForm({
       }),
     });
 
-    setLoading(false);
     if (!res.ok) {
+      setLoading(false);
       setError("Revisá los datos e intentá de nuevo.");
       return;
     }
     const saved = await res.json();
+
+    const remindAt = reminder.offset === "custom" ? reminder.custom : reminder.offset === "none" ? null : computeRemindAt(values.dueAt, Number(reminder.offset));
+    if (remindAt) {
+      await fetch(`/api/tasks/${saved.id}/reminder`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remindAt }),
+      });
+    } else if (taskId && initialReminder) {
+      await fetch(`/api/tasks/${saved.id}/reminder`, { method: "DELETE" });
+    }
+
+    setLoading(false);
     router.push(`/dashboard/tareas/${saved.id}`);
     router.refresh();
   }
@@ -125,8 +148,12 @@ export function TaskForm({
         </div>
         <div>
           <Label htmlFor="dueAt">Vencimiento</Label>
-          <Input id="dueAt" type="date" value={values.dueAt} onChange={(e) => setValues({ ...values, dueAt: e.target.value })} />
+          <Input id="dueAt" type="datetime-local" value={values.dueAt} onChange={(e) => setValues({ ...values, dueAt: e.target.value })} />
         </div>
+      </div>
+
+      <div>
+        <TaskReminderField dueAt={values.dueAt} value={reminder} onChange={setReminder} />
       </div>
 
       <div>

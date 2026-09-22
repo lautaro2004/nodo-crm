@@ -60,6 +60,7 @@ export default async function TasksPage({
     ownerId: t.ownerId,
     ownerName: t.ownerId ? (memberNameById.get(t.ownerId) ?? null) : null,
     relatedLabel: [t.company?.name, t.contact?.name, t.lead?.name, t.opportunity?.title].filter(Boolean).join(" · ") || null,
+    hasReminder: t.reminders.length > 0,
   }));
 
   const groups = groupTasks(taskCards, activeGroup, memberNameById);
@@ -149,6 +150,7 @@ interface TaskCardData {
   ownerId: string | null;
   ownerName: string | null;
   relatedLabel: string | null;
+  hasReminder: boolean;
 }
 
 function groupTasks(

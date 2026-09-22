@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { INDUSTRY_TEMPLATES, type IndustryKey } from "@/lib/industry-templates";
+import { seedModuleLabelIfEmpty } from "@/modules/workspace/module-config";
 
 const DEFAULT_MODULES = ["companies", "contacts", "leads", "opportunities", "tasks"];
 
@@ -37,18 +38,29 @@ export async function getWorkspaceWithBusiness(businessId: string) {
 // siembra Pipeline/PipelineStage/StatusDefinition por default — SOLO si el
 // Workspace todavía no tiene ninguno propio (no pisa configuración que el
 // dueño ya haya tocado a mano). Cierra el onboarding (onboardingStep: null).
-export async function applyIndustryTemplate(businessId: string, industry: IndustryKey) {
+//
+// `activeModulesOverride`: paso 2 del onboarding ("¿Qué querés
+// gestionar?") — el usuario pudo haber destildado alguno de los módulos
+// sugeridos por el template. Si no viene, se usan los del template tal
+// cual (comportamiento previo, y el que sigue usando applyIndustryTemplate
+// cuando se llama sin ese paso, ej. desde un test o un script). El
+// Pipeline/estados/nombre de módulo se siembran SIEMPRE según el template
+// elegido, estén o no esos módulos activos — no es irreversible: quedan
+// listos para cuando el usuario los reactive desde Configuración (Fase 4:
+// "esto debe ser una configuración inicial, no irreversible").
+export async function applyIndustryTemplate(businessId: string, industry: IndustryKey, activeModulesOverride?: string[]) {
   const template = INDUSTRY_TEMPLATES[industry];
+  const activeModules = activeModulesOverride ?? template.activeModules;
 
   await prisma.workspace.update({
     where: { businessId },
-    data: { industryTemplate: industry, activeModules: template.activeModules, onboardingStep: null },
+    data: { industryTemplate: industry, activeModules, onboardingStep: null },
   });
 
   const existingPipelines = await prisma.pipeline.count({ where: { businessId } });
   if (existingPipelines === 0) {
     const pipeline = await prisma.pipeline.create({
-      data: { businessId, name: "Ventas", isDefault: true },
+      data: { businessId, name: template.pipelineName, isDefault: true },
     });
     await prisma.pipelineStage.createMany({
       data: template.pipelineStages.map((s, order) => ({
@@ -92,6 +104,8 @@ export async function applyIndustryTemplate(businessId: string, industry: Indust
       })),
     });
   }
+
+  await seedModuleLabelIfEmpty(businessId, "opportunity", template.moduleLabel);
 
   return getWorkspace(businessId);
 }

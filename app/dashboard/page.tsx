@@ -8,17 +8,19 @@ import { listUpcomingEvents } from "@/modules/calendar/service";
 import { addDaysKey, dayKey, timeLabel } from "@/lib/calendar-dates";
 import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/labels";
 import { ActivityFeed } from "@/components/activities/activity-feed";
+import { getModuleLabel } from "@/modules/workspace/module-config";
 
 export default async function DashboardHomePage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null; // el layout ya redirige antes de llegar acá
 
-  const [metrics, recentActivity, members, pipelineSummary, upcoming] = await Promise.all([
+  const [metrics, recentActivity, members, pipelineSummary, upcoming, moduleLabel] = await Promise.all([
     getDashboardMetrics(ctx.businessId),
     listRecentActivities(ctx.businessId, 10),
     listWorkspaceMembers(ctx.businessId),
     getPipelineSummary(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { limit: 8 }),
+    getModuleLabel(ctx.businessId, "opportunity"),
   ]);
   const todayKey = dayKey(new Date());
   const tomorrowKey = addDaysKey(todayKey, 1);
@@ -35,7 +37,7 @@ export default async function DashboardHomePage() {
         <StatCard label="Empresas / Clientes" value={metrics.companiesCount} />
         <StatCard label="Contactos" value={metrics.contactsCount} />
         <StatCard label="Leads abiertos" value={metrics.openLeadsCount} />
-        <StatCard label="Oportunidades abiertas" value={metrics.openOpportunitiesCount} />
+        <StatCard label={`${moduleLabel.labelPlural} abiertas`} value={metrics.openOpportunitiesCount} />
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">

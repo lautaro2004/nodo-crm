@@ -11,6 +11,7 @@ import { ActivityFeed } from "@/components/activities/activity-feed";
 import { TaskCommentForm } from "@/components/tasks/task-comment-form";
 import { TaskAssigneeSelect } from "@/components/tasks/task-assignee-select";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
+import { TaskReminderStatus } from "@/components/tasks/task-reminder-status";
 import { StatusSelect } from "@/components/shared/status-select";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_PRIORITY_BADGE_VARIANT } from "@/lib/labels";
 
@@ -76,11 +77,21 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               </div>
               <div>
                 <dt className="text-slate-500">Vencimiento</dt>
-                <dd className="mt-0.5 text-slate-900">{task.dueAt ? task.dueAt.toLocaleDateString("es-AR") : "—"}</dd>
+                <dd className="mt-0.5 text-slate-900">
+                  {task.dueAt
+                    ? `${task.dueAt.toLocaleDateString("es-AR")} ${task.dueAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
+                    : "—"}
+                </dd>
               </div>
               <div>
                 <dt className="text-slate-500">Completada</dt>
                 <dd className="mt-0.5 text-slate-900">{task.completedAt ? task.completedAt.toLocaleDateString("es-AR") : "—"}</dd>
+              </div>
+              <div>
+                <dt className="mb-0.5 text-slate-500">Recordatorio</dt>
+                <dd className="mt-0.5">
+                  <TaskReminderStatus taskId={id} remindAt={task.reminders[0]?.remindAt ?? null} />
+                </dd>
               </div>
             </div>
 

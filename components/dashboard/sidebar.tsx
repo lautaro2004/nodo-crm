@@ -10,14 +10,16 @@ import {
   BuildingIcon,
   UsersIcon,
   TargetIcon,
-  TrendingUpIcon,
   CheckSquareIcon,
   ActivityIcon,
   CalendarIcon,
   SettingsIcon,
   SearchIcon,
+  UploadIcon,
   XIcon,
 } from "@/components/ui/icons";
+import { ModuleIcon } from "@/components/ui/module-icon";
+import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
 
 interface NavItem {
   href: string;
@@ -30,30 +32,45 @@ interface NavItem {
 // sidebar debe soportar crecimiento futuro") — antes era una lista plana
 // sin jerarquía. Los grupos reflejan módulos que YA existen, ninguno se
 // agrega para "completar el menú".
-const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
-  { label: null, items: [{ href: "/dashboard", label: "Inicio", icon: <HomeIcon /> }] },
-  {
-    label: "CRM",
-    items: [
-      { href: "/dashboard/empresas", label: "Empresas", icon: <BuildingIcon />, module: "companies" },
-      { href: "/dashboard/contactos", label: "Contactos", icon: <UsersIcon />, module: "contacts" },
-      { href: "/dashboard/leads", label: "Leads", icon: <TargetIcon />, module: "leads" },
-      { href: "/dashboard/oportunidades", label: "Oportunidades", icon: <TrendingUpIcon />, module: "opportunities" },
-    ],
-  },
-  {
-    label: "Trabajo",
-    items: [
-      { href: "/dashboard/tareas", label: "Tareas", icon: <CheckSquareIcon />, module: "tasks" },
-      { href: "/dashboard/calendario", label: "Calendario", icon: <CalendarIcon /> },
-      { href: "/dashboard/actividades", label: "Actividad", icon: <ActivityIcon /> },
-    ],
-  },
-  {
-    label: "Herramientas",
-    items: [{ href: "/dashboard/buscar", label: "Búsqueda", icon: <SearchIcon /> }],
-  },
-];
+//
+// El item de "Oportunidades" recibe su label/ícono como parámetro (Fase
+// de módulos configurables): el Workspace puede llamarlo "Ventas",
+// "Casos", "Proyectos", etc. — la URL /dashboard/oportunidades NUNCA
+// cambia (Fase 5: "mantener URLs internas estables"), sólo el texto.
+function buildNavGroups(opportunityLabel: ModuleLabel): { label: string | null; items: NavItem[] }[] {
+  return [
+    { label: null, items: [{ href: "/dashboard", label: "Inicio", icon: <HomeIcon /> }] },
+    {
+      label: "CRM",
+      items: [
+        { href: "/dashboard/empresas", label: "Empresas", icon: <BuildingIcon />, module: "companies" },
+        { href: "/dashboard/contactos", label: "Contactos", icon: <UsersIcon />, module: "contacts" },
+        { href: "/dashboard/leads", label: "Leads", icon: <TargetIcon />, module: "leads" },
+        {
+          href: "/dashboard/oportunidades",
+          label: opportunityLabel.labelPlural,
+          icon: <ModuleIcon icon={opportunityLabel.icon} />,
+          module: "opportunities",
+        },
+      ],
+    },
+    {
+      label: "Trabajo",
+      items: [
+        { href: "/dashboard/tareas", label: "Tareas", icon: <CheckSquareIcon />, module: "tasks" },
+        { href: "/dashboard/calendario", label: "Calendario", icon: <CalendarIcon /> },
+        { href: "/dashboard/actividades", label: "Actividad", icon: <ActivityIcon /> },
+      ],
+    },
+    {
+      label: "Herramientas",
+      items: [
+        { href: "/dashboard/buscar", label: "Búsqueda", icon: <SearchIcon /> },
+        { href: "/dashboard/importar", label: "Importar", icon: <UploadIcon /> },
+      ],
+    },
+  ];
+}
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
@@ -70,8 +87,19 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-function SidebarContent({ businessName, activeModules, onNavigate }: { businessName: string; activeModules: string[]; onNavigate?: () => void }) {
+function SidebarContent({
+  businessName,
+  activeModules,
+  opportunityLabel,
+  onNavigate,
+}: {
+  businessName: string;
+  activeModules: string[];
+  opportunityLabel: ModuleLabel;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
+  const navGroups = buildNavGroups(opportunityLabel);
 
   return (
     <div className="flex h-full flex-col" onClick={onNavigate}>
@@ -85,7 +113,7 @@ function SidebarContent({ businessName, activeModules, onNavigate }: { businessN
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-        {NAV_GROUPS.map((group, i) => {
+        {navGroups.map((group, i) => {
           const visibleItems = group.items.filter((item) => !item.module || activeModules.includes(item.module));
           if (visibleItems.length === 0) return null;
           return (
@@ -115,11 +143,19 @@ function SidebarContent({ businessName, activeModules, onNavigate }: { businessN
 // components/dashboard/mobile-nav.tsx) — antes era un <aside w-64> fijo
 // sin ninguna estrategia responsive, lo que generaba overflow horizontal
 // real en pantallas chicas.
-export function Sidebar({ businessName, activeModules }: { businessName: string; activeModules: string[] }) {
+export function Sidebar({
+  businessName,
+  activeModules,
+  opportunityLabel,
+}: {
+  businessName: string;
+  activeModules: string[];
+  opportunityLabel: ModuleLabel;
+}) {
   return (
     <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
       <div className="sticky top-0 h-screen">
-        <SidebarContent businessName={businessName} activeModules={activeModules} />
+        <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} />
       </div>
     </aside>
   );
@@ -128,11 +164,13 @@ export function Sidebar({ businessName, activeModules }: { businessName: string;
 export function MobileSidebarDrawer({
   businessName,
   activeModules,
+  opportunityLabel,
   open,
   onClose,
 }: {
   businessName: string;
   activeModules: string[];
+  opportunityLabel: ModuleLabel;
   open: boolean;
   onClose: () => void;
 }) {
@@ -150,7 +188,7 @@ export function MobileSidebarDrawer({
         >
           <XIcon className="h-5 w-5" />
         </button>
-        <SidebarContent businessName={businessName} activeModules={activeModules} onNavigate={onClose} />
+        <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} onNavigate={onClose} />
       </div>
     </div>
   );

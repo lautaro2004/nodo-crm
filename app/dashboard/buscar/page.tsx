@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { globalSearch } from "@/modules/search/service";
+import { getModuleLabel } from "@/modules/workspace/module-config";
 import { Card, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { SearchFilterBar } from "@/components/dashboard/search-filter-bar";
 
@@ -10,14 +11,17 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
   if (ctx.status !== "ok") return null;
 
   const { q } = await searchParams;
-  const results = await globalSearch(ctx.businessId, q ?? "");
+  const [results, moduleLabel] = await Promise.all([
+    globalSearch(ctx.businessId, q ?? ""),
+    getModuleLabel(ctx.businessId, "opportunity"),
+  ]);
   const total =
     results.companies.length + results.contacts.length + results.leads.length + results.opportunities.length + results.tasks.length;
 
   return (
     <div>
-      <PageHeader title="Buscar" description="Acceso rápido a empresas, contactos, leads, oportunidades y tareas." />
-      <SearchFilterBar searchPlaceholder="Buscar empresas, contactos, leads, oportunidades, tareas…" />
+      <PageHeader title="Buscar" description={`Acceso rápido a empresas, contactos, leads, ${moduleLabel.labelPlural.toLowerCase()} y tareas.`} />
+      <SearchFilterBar searchPlaceholder={`Buscar empresas, contactos, leads, ${moduleLabel.labelPlural.toLowerCase()}, tareas…`} />
 
       {!q ? (
         <EmptyState
@@ -32,7 +36,7 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
           <ResultSection title="Contactos" items={results.contacts.map((c) => ({ id: c.id, label: c.name }))} basePath="/dashboard/contactos" />
           <ResultSection title="Leads" items={results.leads.map((l) => ({ id: l.id, label: l.name }))} basePath="/dashboard/leads" />
           <ResultSection
-            title="Oportunidades"
+            title={moduleLabel.labelPlural}
             items={results.opportunities.map((o) => ({ id: o.id, label: o.title }))}
             basePath="/dashboard/oportunidades"
           />

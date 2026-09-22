@@ -8,7 +8,9 @@ import { ensureWorkspace, applyIndustryTemplate } from "@/modules/workspace/serv
 
 // Ruta delgada: resuelve sesión, delega en los módulos. No confía en
 // ningún businessId enviado por el cliente — el único dato que acepta del
-// body es businessName (para crear uno nuevo) e industry.
+// body es businessName (para crear uno nuevo), industry y, opcionalmente,
+// activeModules (paso 2 del onboarding: la selección editable de módulos
+// sugeridos — ver componentes/onboarding/onboarding-form.tsx).
 export async function POST(request: Request) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status === "unauthenticated") {
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
   await ensureWorkspace(businessId);
 
   if (data.industry) {
-    await applyIndustryTemplate(businessId, data.industry);
+    await applyIndustryTemplate(businessId, data.industry, data.activeModules);
   }
 
   return NextResponse.json({ ok: true, businessId });

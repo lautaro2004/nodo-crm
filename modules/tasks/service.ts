@@ -84,6 +84,9 @@ const INCLUDE_RELATIONS = {
   lead: { select: { id: true, name: true } },
   opportunity: { select: { id: true, title: true } },
   attachments: true,
+  // Sólo el recordatorio activo, para pintar el indicador en lista/kanban
+  // sin traer el historial completo de recordatorios ya enviados/cancelados.
+  reminders: { where: { status: "pending" }, select: { id: true, remindAt: true }, take: 1 },
 } as const;
 
 export interface ListTasksFilters {

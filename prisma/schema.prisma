@@ -170,6 +170,9 @@ model Workspace {
   calendarEvents           CalendarEvent[]
   emailSettings           EmailSettings?
   emailTemplates          EmailTemplate[]
+  reminders               Reminder[]
+  notifications           Notification[]
+  moduleConfigs           ModuleConfig[]
   activities              Activity[]
   pipelines               Pipeline[]
   tags                    Tag[]
@@ -395,6 +398,7 @@ model Task {
   lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   attachments TaskAttachment[]
+  reminders   Reminder[]
 
   @@index([businessId])
   @@index([businessId, ownerId])
@@ -504,6 +508,86 @@ model EmailTemplate {
   @@schema("crm")
 }
 
+// Recordatorio para un usuario, anclado a una Task o a una Activity (una
+// de las dos, nunca ninguna ni ambas — validado en
+// modules/reminders/service.ts, no hay constraint de base porque Postgres
+// no puede expresar "exactamente una de dos FKs nullable" con un CHECK
+// simple sin duplicar lógica). Cascade en ambas FKs: el recordatorio no
+// tiene razón de existir sin su tarea/actividad (a diferencia de
+// Task.companyId, que usa SetNull porque la Task sí sobrevive sin la
+// Company). `userId` es sólo el id (sin relación Prisma a User, mismo
+// criterio que Task.ownerId) — el usuario se valida contra Membership.
+model Reminder {
+  id         String    @id @default(cuid())
+  businessId String
+  userId     String
+  taskId     String?
+  activityId String?
+  remindAt   DateTime
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  activity  Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status, remindAt])
+  @@index([userId])
+  @@index([taskId])
+  @@index([activityId])
+  @@schema("crm")
+}
+
+// Notificación interna mínima y reutilizable (no sólo para Recordatorios,
+// aunque hoy sea el único emisor) — mismo criterio que
+// nexo.BusinessNotification, pero por USUARIO además de por negocio:
+// nexo.BusinessNotification es para el dueño del negocio en general, acá
+// cada miembro tiene su propia bandeja (ej.: "recordame A a las 13:00"
+// sólo le llega a A, no a todo el Workspace).
+model Notification {
+  id           String    @id @default(cuid())
+  businessId   String
+  userId       String
+  type         String
+  title        String
+  body         String
+  resourceHref String?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@index([businessId, userId, readAt])
+  @@index([userId, createdAt])
+  @@schema("crm")
+}
+
+// Nombre visible + ícono configurable por Workspace para un módulo interno
+// que YA existe (hoy sólo "opportunity" — ver INTERNAL_MODULES en
+// modules/workspace/module-config.ts). Deliberadamente NO tiene un
+// campo `enabled`: ese estado ya existe en Workspace.activeModules
+// (["companies","contacts",...,"opportunities",...]) y duplicarlo acá
+// crearía dos fuentes de verdad que podrían desincronizarse. Fila
+// ausente = usar los defaults del template de industria (o el fallback
+// genérico "Oportunidad/Oportunidades") — no todo Workspace tiene por
+// qué tener una fila acá.
+model ModuleConfig {
+  id             String   @id @default(cuid())
+  businessId     String
+  internalModule String
+  labelSingular  String
+  labelPlural    String
+  icon           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@unique([businessId, internalModule])
+  @@schema("crm")
+}
+
 model Activity {
   id          String   @id @default(cuid())
   businessId  String
@@ -514,7 +598,8 @@ model Activity {
   body        String?
   createdAt   DateTime @default(now())
 
-  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  workspace Workspace  @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  reminders Reminder[]
 
   @@index([businessId])
   @@index([relatedType, relatedId])

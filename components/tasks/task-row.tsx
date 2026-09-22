@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/primitives";
+import { BellIcon } from "@/components/ui/icons";
 import { TASK_PRIORITY_LABELS, TASK_PRIORITY_BADGE_VARIANT } from "@/lib/labels";
 
 interface TaskItem {
@@ -15,6 +16,7 @@ interface TaskItem {
   company: { id: string; name: string } | null;
   opportunity: { id: string; title: string } | null;
   ownerName: string | null;
+  hasReminder?: boolean;
 }
 
 function isOverdue(task: TaskItem): boolean {
@@ -46,7 +48,10 @@ export function TaskRow({ task }: { task: TaskItem }) {
       <input type="checkbox" checked={isDone} onChange={() => {}} onClick={toggleComplete} className="h-4 w-4 accent-indigo-600" />
 
       <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm ${isDone ? "text-slate-400 line-through" : "text-slate-900"}`}>{task.title}</p>
+        <p className={`flex items-center gap-1.5 truncate text-sm ${isDone ? "text-slate-400 line-through" : "text-slate-900"}`}>
+          {task.hasReminder && <BellIcon className="h-3.5 w-3.5 shrink-0 text-indigo-500" aria-label="Con recordatorio" />}
+          <span className="truncate">{task.title}</span>
+        </p>
         {context && <p className="truncate text-xs text-slate-400">{context}</p>}
       </div>
 
