@@ -32,6 +32,13 @@ interface Conflict {
   title: string;
 }
 
+const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
+  google_not_connected: "Conectá Google Calendar en Configuración → Integraciones para usar esta opción.",
+  google_needs_reconnect: "Google revocó el acceso. Reconectá Google Calendar en Configuración → Integraciones.",
+  google_event_forbidden: "Este evento está en el Google Calendar de otra persona: solo ella puede modificarlo.",
+  google_sync_failed: "No pudimos actualizar Google Calendar. No se guardó ningún cambio; probá de nuevo.",
+};
+
 export function EventForm({
   initial,
   eventId,
@@ -41,6 +48,8 @@ export function EventForm({
   leads,
   opportunities,
   returnTo,
+  googleCalendarConnected = false,
+  googleLinked = false,
 }: {
   initial?: Partial<EventFormValues>;
   eventId?: string;
@@ -50,6 +59,10 @@ export function EventForm({
   leads: Option[];
   opportunities: Option[];
   returnTo?: string;
+  // Google conectado con permiso de Calendar: habilita crear el evento también allá.
+  googleCalendarConnected?: boolean;
+  // El evento ya vive en Google: los cambios de título/horario/lugar se reflejan allá.
+  googleLinked?: boolean;
 }) {
   const router = useRouter();
   const [values, setValues] = useState<EventFormValues>({
@@ -69,6 +82,7 @@ export function EventForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [syncToGoogle, setSyncToGoogle] = useState(false);
 
   const rangeValid = !!values.date && !!values.startTime && !!values.endTime && values.endTime > values.startTime;
 
@@ -115,12 +129,14 @@ export function EventForm({
         contactId: values.contactId || null,
         leadId: values.leadId || null,
         opportunityId: values.opportunityId || null,
+        ...(!eventId && syncToGoogle ? { syncToGoogle: true } : {}),
       }),
     });
 
     setLoading(false);
     if (!res.ok) {
-      setError("Revisá los datos e intentá de nuevo.");
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(GOOGLE_ERROR_MESSAGES[body?.error ?? ""] ?? "Revisá los datos e intentá de nuevo.");
       return;
     }
     router.push(returnTo ?? "/dashboard/calendario");
@@ -203,6 +219,21 @@ export function EventForm({
           <RelationSelect id="opportunityId" label="Oportunidad" empty="Ninguna" value={values.opportunityId} options={opportunities} onChange={(v) => set({ opportunityId: v })} />
         </div>
       </div>
+
+      {!eventId && googleCalendarConnected && (
+        <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-indigo-600" checked={syncToGoogle} onChange={(e) => setSyncToGoogle(e.target.checked)} />
+          <span>
+            Crear también en mi Google Calendar
+            <span className="block text-xs text-slate-500">Se agrega al calendario principal de tu cuenta de Google.</span>
+          </span>
+        </label>
+      )}
+      {eventId && googleLinked && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+          Este evento también está en Google Calendar: los cambios de título, descripción, lugar y horario se reflejan allá.
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={loading}>

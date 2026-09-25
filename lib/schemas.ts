@@ -132,6 +132,7 @@ export const calendarEventCreateSchema = z.object({
   contactId: z.string().trim().max(60).optional().nullable(),
   leadId: z.string().trim().max(60).optional().nullable(),
   opportunityId: z.string().trim().max(60).optional().nullable(),
+  syncToGoogle: z.boolean().optional(),
 });
 export const calendarEventUpdateSchema = calendarEventCreateSchema.partial().extend({
   status: calendarEventStatusEnum.optional(),

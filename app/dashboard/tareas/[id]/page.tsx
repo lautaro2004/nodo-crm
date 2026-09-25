@@ -13,6 +13,9 @@ import { TaskAssigneeSelect } from "@/components/tasks/task-assignee-select";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
 import { TaskReminderStatus } from "@/components/tasks/task-reminder-status";
 import { StatusSelect } from "@/components/shared/status-select";
+import { TaskGoogleCalendarAction } from "@/components/tasks/task-google-calendar-action";
+import { getConnectionStatus } from "@/lib/google/connection";
+import { getTaskGoogleLink } from "@/modules/tasks/google-calendar";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_PRIORITY_BADGE_VARIANT } from "@/lib/labels";
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +31,10 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
     listActivitiesForEntity(ctx.businessId, "task", id),
     listTaskAttachments(ctx.businessId, id),
   ]);
+  const googleStatus = await getConnectionStatus({ businessId: ctx.businessId, userId: ctx.userId }).catch(() => null);
+  const googleLink = googleStatus?.features.calendar
+    ? await getTaskGoogleLink(ctx.businessId, ctx.userId, id).catch(() => ({ linked: false }))
+    : { linked: false };
   const createdByMember = members.find((m) => m.userId === task.createdById);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -91,6 +98,17 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                 <dt className="mb-0.5 text-slate-500">Recordatorio</dt>
                 <dd className="mt-0.5">
                   <TaskReminderStatus taskId={id} remindAt={task.reminders[0]?.remindAt ?? null} />
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-0.5 text-slate-500">Google Calendar</dt>
+                <dd className="mt-0.5">
+                  <TaskGoogleCalendarAction
+                    taskId={id}
+                    calendarConnected={!!googleStatus?.features.calendar}
+                    hasDueDate={!!task.dueAt}
+                    linked={googleLink.linked}
+                  />
                 </dd>
               </div>
             </div>

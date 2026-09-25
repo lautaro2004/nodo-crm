@@ -23,6 +23,7 @@ export default async function SettingsPage() {
     { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
     { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
     { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")` },
+    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)" },
     { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)" },
     { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email" },
   ];

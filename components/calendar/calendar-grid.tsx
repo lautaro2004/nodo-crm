@@ -14,6 +14,14 @@ export interface GridEvent {
   ownerName: string | null;
   relatedLabel: string | null;
 }
+// Evento de Google Calendar que Nodo solo muestra (no es de Nodo).
+export interface GridExternal {
+  id: string;
+  title: string;
+  startsAt: Date;
+  allDay: boolean;
+  htmlLink: string | null;
+}
 export interface GridTask {
   id: string;
   title: string;
@@ -52,6 +60,24 @@ function EventChip({ event, detailed }: { event: GridEvent; detailed?: boolean }
   );
 }
 
+function ExternalChip({ event }: { event: GridExternal }) {
+  const label = (
+    <>
+      <span className="font-medium">{event.allDay ? "Todo el día" : timeLabel(event.startsAt)}</span>{" "}
+      <span className="break-words">{event.title}</span>
+      <span className="ml-1 rounded bg-white/70 px-1 text-[10px] font-medium text-emerald-700">Google</span>
+    </>
+  );
+  const className = "block rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs leading-snug text-emerald-900";
+  return event.htmlLink ? (
+    <a href={event.htmlLink} target="_blank" rel="noopener noreferrer" title={`Evento de Google Calendar: ${event.title}`} className={`${className} hover:brightness-95`}>
+      {label}
+    </a>
+  ) : (
+    <div className={className}>{label}</div>
+  );
+}
+
 function TaskChip({ task }: { task: GridTask }) {
   return (
     <Link
@@ -71,6 +97,7 @@ export function CalendarGrid({
   todayKey,
   eventsByDay,
   tasksByDay,
+  externalByDay,
   dayHref,
   newHref,
 }: {
@@ -80,6 +107,7 @@ export function CalendarGrid({
   todayKey: string;
   eventsByDay: Map<string, GridEvent[]>;
   tasksByDay: Map<string, GridTask[]>;
+  externalByDay?: Map<string, GridExternal[]>;
   dayHref: (key: string) => string;
   newHref: (key: string) => string;
 }) {
@@ -97,10 +125,11 @@ export function CalendarGrid({
           {days.map((key) => {
             const events = eventsByDay.get(key) ?? [];
             const tasks = tasksByDay.get(key) ?? [];
+            const external = externalByDay?.get(key) ?? [];
             const outside = key.slice(0, 7) !== anchor.slice(0, 7);
             const shown = events.slice(0, 3);
             const extra = events.length - shown.length + Math.max(0, tasks.length - (events.length ? 0 : 2));
-            if (outside && events.length === 0 && tasks.length === 0) {
+            if (outside && events.length === 0 && tasks.length === 0 && external.length === 0) {
               return <div key={key} className="hidden min-h-24 bg-slate-50 md:block" />;
             }
             return (
@@ -121,6 +150,9 @@ export function CalendarGrid({
                 </div>
                 {shown.map((e) => (
                   <EventChip key={e.id} event={e} />
+                ))}
+                {external.slice(0, 2).map((e) => (
+                  <ExternalChip key={e.id} event={e} />
                 ))}
                 {tasks.slice(0, events.length ? 1 : 2).map((t) => (
                   <TaskChip key={t.id} task={t} />
@@ -144,6 +176,7 @@ export function CalendarGrid({
       {days.map((key) => {
         const events = eventsByDay.get(key) ?? [];
         const tasks = tasksByDay.get(key) ?? [];
+        const external = externalByDay?.get(key) ?? [];
         return (
           <div key={key} className="min-h-28 rounded-xl border border-slate-200 bg-white p-3">
             <div className="mb-2 flex items-center justify-between">
@@ -158,9 +191,12 @@ export function CalendarGrid({
               </Link>
             </div>
             <div className="space-y-1.5">
-              {events.length === 0 && tasks.length === 0 && <p className="text-xs text-slate-300">Sin actividades</p>}
+              {events.length === 0 && tasks.length === 0 && external.length === 0 && <p className="text-xs text-slate-300">Sin actividades</p>}
               {events.map((e) => (
                 <EventChip key={e.id} event={e} detailed={view === "day"} />
+              ))}
+              {external.map((e) => (
+                <ExternalChip key={e.id} event={e} />
               ))}
               {tasks.map((t) => (
                 <TaskChip key={t.id} task={t} />

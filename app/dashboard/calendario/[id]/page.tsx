@@ -45,6 +45,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       </Card>
       <EventForm
         eventId={event.id}
+        googleLinked={event.provider === "google"}
         initial={{
           title: event.title,
           description: event.description ?? "",

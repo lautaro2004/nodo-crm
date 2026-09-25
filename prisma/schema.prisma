@@ -119,6 +119,28 @@ model Business {
   @@schema("public")
 }
 
+// Espejo de public.GoogleConnection (la migración vive en Nexo, dueño del schema
+// public — mismo criterio que User/Business). Conexión Google (Gmail/Calendar)
+// de un usuario dentro de un negocio: el refresh token se guarda CIFRADO (ver
+// lib/google/crypto.ts) y nunca sale del servidor. Relaciones omitidas a
+// propósito: las FKs existen físicamente; el CRM solo filtra por businessId +
+// userId de la sesión.
+model GoogleConnection {
+  id              String   @id @default(cuid())
+  businessId      String
+  userId          String
+  googleEmail     String
+  refreshTokenEnc String?
+  scopes          String[]
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([businessId, userId])
+  @@index([businessId])
+  @@schema("public")
+}
+
 model Membership {
   id         String   @id @default(cuid())
   userId     String
@@ -399,6 +421,7 @@ model Task {
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   attachments TaskAttachment[]
   reminders   Reminder[]
+  calendarEvents CalendarEvent[]
 
   @@index([businessId])
   @@index([businessId, ownerId])
@@ -459,6 +482,16 @@ model CalendarEvent {
   contactId     String?
   leadId        String?
   opportunityId String?
+  // "internal" (solo Nodo) | "google" (además existe como evento en el Google
+  // Calendar principal de googleUserId). Los eventos externos de Google que Nodo
+  // solo LEE no se guardan acá: se consultan en vivo.
+  provider      String   @default("internal")
+  googleEventId String?
+  // Usuario cuya cuenta de Google contiene el evento: solo él puede
+  // editarlo/eliminarlo en Google (nunca se usa la conexión de otro usuario).
+  googleUserId  String?
+  // Tarea desde la que se creó con "Agregar a Google Calendar".
+  taskId        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -467,7 +500,12 @@ model CalendarEvent {
   contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  task        Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
+  // Un evento de Google no puede estar vinculado dos veces en el mismo negocio
+  // (los NULL no colisionan: los eventos internos no tienen googleEventId).
+  @@unique([businessId, googleEventId])
+  @@index([taskId])
   @@index([businessId, startsAt])
   @@index([businessId, ownerId])
   @@index([companyId])

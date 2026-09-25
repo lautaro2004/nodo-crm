@@ -7,6 +7,7 @@ import { listOpportunities } from "@/modules/opportunities/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { EventForm } from "@/components/calendar/event-form";
 import { dayKey, isDayKey } from "@/lib/calendar-dates";
+import { getConnectionStatus } from "@/lib/google/connection";
 
 export default async function NewEventPage({
   searchParams,
@@ -17,6 +18,7 @@ export default async function NewEventPage({
   if (ctx.status !== "ok") return null;
 
   const sp = await searchParams;
+  const googleStatus = await getConnectionStatus({ businessId: ctx.businessId, userId: ctx.userId }).catch(() => null);
   const [members, companies, contacts, leads, opportunities] = await Promise.all([
     listWorkspaceMembers(ctx.businessId),
     listCompanies(ctx.businessId),
@@ -36,6 +38,7 @@ export default async function NewEventPage({
       <PageHeader title="Programar actividad" backHref={returnTo ?? "/dashboard/calendario"} />
       <EventForm
         returnTo={returnTo}
+        googleCalendarConnected={!!googleStatus?.features.calendar}
         initial={{
           date: isDayKey(sp.date) ? sp.date : dayKey(new Date()),
           ownerId: ctx.userId,

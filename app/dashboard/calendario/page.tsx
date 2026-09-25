@@ -4,7 +4,10 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listEvents, listTaskDueDates, EVENT_TYPES, type EventType } from "@/modules/calendar/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
 import { PageHeader, Button } from "@/components/ui/primitives";
-import { CalendarGrid, type GridEvent, type GridTask } from "@/components/calendar/calendar-grid";
+import { CalendarGrid, type GridEvent, type GridExternal, type GridTask } from "@/components/calendar/calendar-grid";
+import { getConnectionStatus } from "@/lib/google/connection";
+import { listExternalEvents } from "@/modules/google-calendar/service";
+import { GoogleCalendarError } from "@/modules/google-calendar/client";
 import { CalendarFilters } from "@/components/calendar/calendar-filters";
 import {
   addDaysKey,
@@ -55,6 +58,26 @@ export default async function CalendarPage({
     listWorkspaceMembers(ctx.businessId),
   ]);
   const memberName = new Map(members.map((m) => [m.userId, m.name || m.email]));
+
+  // Eventos de Google Calendar del PROPIO usuario (su conexión, su negocio).
+  // Si Google falla, el calendario de Nodo sigue funcionando y se avisa.
+  const googleStatus = await getConnectionStatus({ businessId: ctx.businessId, userId: ctx.userId }).catch(() => null);
+  const googleConnected = !!googleStatus?.features.calendar;
+  let googleProblem: "revoked" | "error" | null = googleStatus?.status === "revoked" ? "revoked" : null;
+  const externalByDay = new Map<string, GridExternal[]>();
+  if (googleConnected) {
+    try {
+      const linked = new Set(events.map((e) => e.googleEventId).filter((id): id is string => !!id));
+      const external = await listExternalEvents({ businessId: ctx.businessId, userId: ctx.userId }, { from, to }, linked);
+      for (const e of external) {
+        const startsAt = new Date(e.start);
+        const key = dayKey(startsAt);
+        externalByDay.set(key, [...(externalByDay.get(key) ?? []), { id: e.id, title: e.title, startsAt, allDay: e.allDay, htmlLink: e.htmlLink }]);
+      }
+    } catch (error) {
+      googleProblem = error instanceof GoogleCalendarError && error.code === "revoked" ? "revoked" : "error";
+    }
+  }
 
   const eventsByDay = new Map<string, GridEvent[]>();
   for (const e of events) {
@@ -134,8 +157,22 @@ export default async function CalendarPage({
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <CalendarFilters members={members} />
+        {googleConnected && !googleProblem && (
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Google Calendar conectado</span>
+        )}
+        {!googleConnected && googleProblem !== "revoked" && (
+          <Link href="/dashboard/configuracion/integraciones" className="text-xs text-slate-500 hover:underline">
+            Conectar Google Calendar →
+          </Link>
+        )}
+        {googleProblem === "revoked" && (
+          <Link href="/dashboard/configuracion/integraciones" className="text-xs font-medium text-amber-700 hover:underline">
+            Google revocó el acceso: reconectar →
+          </Link>
+        )}
+        {googleProblem === "error" && <span className="text-xs text-amber-700">No pudimos leer Google Calendar ahora; se muestran solo los eventos de Nodo.</span>}
       </div>
 
       <CalendarGrid
@@ -145,6 +182,7 @@ export default async function CalendarPage({
         todayKey={todayKey}
         eventsByDay={eventsByDay}
         tasksByDay={tasksByDay}
+        externalByDay={externalByDay}
         dayHref={(key) => href({ view: "day", date: key })}
         newHref={(key) => `/dashboard/calendario/nuevo?date=${key}`}
       />
