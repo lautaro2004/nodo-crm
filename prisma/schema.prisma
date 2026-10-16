@@ -334,6 +334,11 @@ model PipelineStage {
   order      Int     @default(0)
   isWon      Boolean @default(false)
   isLost     Boolean @default(false)
+  // Clave de la paleta de 10 colores (lib/status-colors.ts). Nullable: las
+  // etapas existentes quedan sin color y la UI usa un default de lectura
+  // (verde Ganado, rojo Perdido, gris el resto). Ver migración
+  // 20261016120000_pipeline_stage_color.
+  color      String?
 
   pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]

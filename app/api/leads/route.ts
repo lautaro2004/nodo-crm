@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guard";
 import { leadCreateSchema } from "@/lib/schemas";
 import { createLead, listLeads } from "@/modules/leads/service";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   try {
     const lead = await createLead(ctx.businessId, data);
     return NextResponse.json(lead, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "company_not_found" }, { status: 400 });
+  } catch (err) {
+    return domainErrorResponse(err);
   }
 }

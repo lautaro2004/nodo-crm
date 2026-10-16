@@ -222,7 +222,7 @@ export function EventForm({
 
       {!eventId && googleCalendarConnected && (
         <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-indigo-600" checked={syncToGoogle} onChange={(e) => setSyncToGoogle(e.target.checked)} />
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-500" checked={syncToGoogle} onChange={(e) => setSyncToGoogle(e.target.checked)} />
           <span>
             Crear también en mi Google Calendar
             <span className="block text-xs text-slate-500">Se agrega al calendario principal de tu cuenta de Google.</span>

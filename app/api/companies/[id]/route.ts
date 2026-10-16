@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
 import { companyUpdateSchema } from "@/lib/schemas";
 import { getCompany, updateCompany, deleteCompany } from "@/modules/companies/service";
 
@@ -22,9 +22,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { data, response: badRequest } = await parseBody(request, companyUpdateSchema);
   if (!data) return badRequest;
 
-  const company = await updateCompany(ctx.businessId, id, data);
-  if (!company) return notFound();
-  return NextResponse.json(company);
+  try {
+    const company = await updateCompany(ctx.businessId, id, data);
+    if (!company) return notFound();
+    return NextResponse.json(company);
+  } catch (err) {
+    return domainErrorResponse(err);
+  }
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {

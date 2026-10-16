@@ -42,23 +42,23 @@ const DEFAULT_PIPELINE_STAGES: IndustryTemplate["pipelineStages"] = [
 ];
 
 const DEFAULT_LEAD_STATUSES: IndustryTemplate["leadStatuses"] = [
-  { key: "new", label: "Nuevo", color: "#64748b" },
-  { key: "contacted", label: "Contactado", color: "#0ea5e9" },
-  { key: "qualified", label: "Calificado", color: "#22c55e" },
+  { key: "new", label: "Nuevo", color: "sky" },
+  { key: "contacted", label: "Contactado", color: "blue" },
+  { key: "qualified", label: "Calificado", color: "violet" },
   // "converted" (Fase 5): se setea EXCLUSIVAMENTE por la conversión
   // (modules/leads/conversion.ts), nunca elegible a mano desde el <select>
   // de estado — ver la guarda en modules/leads/service.ts::updateLead. Se
   // agrega igual al template para que aparezca con su label/color
   // correctos apenas exista un Lead convertido, sin depender de que
   // ensureConvertedStatusDefinition() lo siembre después.
-  { key: "converted", label: "Convertido", color: "#6366f1" },
-  { key: "disqualified", label: "Descartado", color: "#ef4444" },
+  { key: "converted", label: "Convertido", color: "emerald" },
+  { key: "disqualified", label: "Descartado", color: "red" },
 ];
 
 const DEFAULT_COMPANY_STATUSES: IndustryTemplate["companyStatuses"] = [
-  { key: "prospect", label: "Prospecto", color: "#64748b" },
-  { key: "customer", label: "Cliente", color: "#22c55e" },
-  { key: "archived", label: "Archivado", color: "#94a3b8" },
+  { key: "prospect", label: "Prospecto", color: "slate" },
+  { key: "customer", label: "Cliente", color: "teal" },
+  { key: "archived", label: "Archivado", color: "slate" },
 ];
 
 const DEFAULT_OPPORTUNITY_LABEL: IndustryModuleLabel = { labelSingular: "Oportunidad", labelPlural: "Oportunidades", icon: "trending-up" };

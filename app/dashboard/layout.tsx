@@ -26,12 +26,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const opportunityLabel = await getModuleLabel(ctx.businessId, "opportunity");
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="app-backdrop flex min-h-screen">
       <Sidebar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} />
-        <main className="flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+        <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+          <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
     </div>

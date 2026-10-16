@@ -138,13 +138,13 @@ export function CalendarGrid({
                   <Link
                     href={dayHref(key)}
                     className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs ${
-                      key === todayKey ? "bg-indigo-600 font-semibold text-white" : "text-slate-600 hover:bg-slate-100"
+                      key === todayKey ? "bg-brand-500 font-semibold text-slate-900" : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     <span className="md:hidden">{weekdayShort(key)} </span>
                     {dayNumber(key)}
                   </Link>
-                  <Link href={newHref(key)} className="text-xs text-slate-300 hover:text-indigo-600" aria-label="Programar en este día">
+                  <Link href={newHref(key)} className="text-xs text-slate-300 hover:text-brand-700" aria-label="Programar en este día">
                     +
                   </Link>
                 </div>
@@ -182,11 +182,11 @@ export function CalendarGrid({
             <div className="mb-2 flex items-center justify-between">
               <Link
                 href={dayHref(key)}
-                className={`text-sm font-medium ${key === todayKey ? "text-indigo-600" : "text-slate-700"} hover:underline`}
+                className={`text-sm font-medium ${key === todayKey ? "text-brand-700" : "text-slate-700"} hover:underline`}
               >
                 {weekdayShort(key)} {dayNumber(key)}
               </Link>
-              <Link href={newHref(key)} className="text-xs text-slate-400 hover:text-indigo-600">
+              <Link href={newHref(key)} className="text-xs text-slate-400 hover:text-brand-700">
                 + Programar
               </Link>
             </div>

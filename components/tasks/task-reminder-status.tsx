@@ -21,7 +21,7 @@ export function TaskReminderStatus({ taskId, remindAt }: { taskId: string; remin
 
   return (
     <div className="flex items-center gap-2 text-sm text-slate-900">
-      <BellIcon className="h-4 w-4 shrink-0 text-indigo-500" />
+      <BellIcon className="h-4 w-4 shrink-0 text-brand-500" />
       <span>
         {remindAt.toLocaleDateString("es-AR")} {remindAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
       </span>

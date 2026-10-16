@@ -86,7 +86,7 @@ export function LeadForm({
       <div>
         <Label htmlFor="status">Estado</Label>
         <Select id="status" value={values.status} onChange={(e) => setValues({ ...values, status: e.target.value })}>
-          {statusOptions.map((s) => (
+          {statusOptions.filter((s) => s.key !== "converted" || s.key === values.status).map((s) => (
             <option key={s.key} value={s.key}>
               {s.label}
             </option>

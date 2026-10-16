@@ -106,7 +106,7 @@ export function OnboardingForm({ needsBusinessName }: { needsBusinessName: boole
                     onClick={() => setIndustry(opt.value)}
                     className={`rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                       industry === opt.value
-                        ? "border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600"
+                        ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500"
                         : "border-slate-200 text-slate-700 hover:bg-slate-50"
                     }`}
                   >
@@ -139,14 +139,14 @@ export function OnboardingForm({ needsBusinessName }: { needsBusinessName: boole
                     <label
                       key={key}
                       className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm ${
-                        selectedModules.includes(key) ? "border-indigo-200 bg-indigo-50/50" : "border-slate-200"
+                        selectedModules.includes(key) ? "border-brand-200 bg-brand-50/50" : "border-slate-200"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedModules.includes(key)}
                         onChange={() => toggleModule(key)}
-                        className="mt-0.5 h-4 w-4 accent-indigo-600"
+                        className="mt-0.5 h-4 w-4 accent-brand-500"
                       />
                       <span>
                         <span className="block font-medium text-slate-900">{label}</span>

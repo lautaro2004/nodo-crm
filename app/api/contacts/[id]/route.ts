@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
 import { contactUpdateSchema } from "@/lib/schemas";
 import { getContact, updateContact, deleteContact } from "@/modules/contacts/service";
 
@@ -26,8 +26,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const contact = await updateContact(ctx.businessId, id, data);
     if (!contact) return notFound();
     return NextResponse.json(contact);
-  } catch {
-    return NextResponse.json({ error: "company_not_found" }, { status: 400 });
+  } catch (err) {
+    return domainErrorResponse(err);
   }
 }
 

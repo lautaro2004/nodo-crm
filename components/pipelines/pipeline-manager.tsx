@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Badge, Button, Card, Input } from "@/components/ui/primitives";
+import { Badge, Button, Card, InlineAlert, Input } from "@/components/ui/primitives";
+import { StatusBadge } from "@/components/status/status-badge";
+import { ColorSelect } from "@/components/status/color-picker";
+import { readApiError } from "@/lib/error-messages";
+import { stageColorKey } from "@/lib/status-colors";
 
 interface Stage {
   id: string;
@@ -12,6 +16,7 @@ interface Stage {
   order: number;
   isWon: boolean;
   isLost: boolean;
+  color: string | null;
 }
 interface Pipeline {
   id: string;
@@ -28,6 +33,18 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
   const router = useRouter();
   const [newPipelineName, setNewPipelineName] = useState("");
   const [newStageLabel, setNewStageLabel] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  async function setStageColor(pipelineId: string, stageId: string, color: string) {
+    setError(null);
+    const res = await fetch(`/api/pipelines/${pipelineId}/stages/${stageId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color }),
+    });
+    if (!res.ok) return setError(await readApiError(res));
+    router.refresh();
+  }
 
   async function createPipeline() {
     if (!newPipelineName.trim()) return;
@@ -58,10 +75,12 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
     router.refresh();
   }
 
-  async function deleteStage(pipelineId: string, stageId: string) {
-    const res = await fetch(`/api/pipelines/${pipelineId}/stages/${stageId}`, { method: "DELETE" });
+  async function deleteStage(pipelineId: string, stage: Stage) {
+    if (!window.confirm(`¿Borrar la etapa “${stage.label}”?`)) return;
+    setError(null);
+    const res = await fetch(`/api/pipelines/${pipelineId}/stages/${stage.id}`, { method: "DELETE" });
     if (!res.ok) {
-      alert("No se puede borrar: hay oportunidades en esta etapa.");
+      setError("No se puede borrar: hay oportunidades en esta etapa. Movelas a otra etapa primero.");
       return;
     }
     router.refresh();
@@ -82,6 +101,7 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
 
   return (
     <div className="space-y-6">
+      {error && <InlineAlert onDismiss={() => setError(null)}>{error}</InlineAlert>}
       <Card className="p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-900">Nuevo pipeline</h2>
         <div className="flex gap-2">
@@ -105,16 +125,18 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
 
           <ul className="space-y-1">
             {pipeline.stages.map((stage, index) => (
-              <li key={stage.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                <span className="text-sm text-slate-800">
-                  {stage.label}
-                  {stage.isWon && <Badge className="ml-2">Ganada</Badge>}
-                  {stage.isLost && <Badge className="ml-2">Perdida</Badge>}
+              <li key={stage.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2">
+                <span className="flex items-center gap-2 text-sm text-slate-800">
+                  <StatusBadge label={stage.label} color={stageColorKey(stage)} />
+                  {stage.isWon && <Badge variant="success">Ganada</Badge>}
+                  {stage.isLost && <Badge variant="danger">Perdida</Badge>}
                 </span>
                 <div className="flex items-center gap-1">
+                  <ColorSelect id={stage.id} value={stageColorKey(stage)} onChange={(c) => setStageColor(pipeline.id, stage.id, c)} />
                   <button
                     type="button"
                     onClick={() => moveStage(pipeline, index, -1)}
+                    aria-label={`Subir ${stage.label}`}
                     className="rounded px-1.5 text-slate-400 hover:bg-slate-100"
                   >
                     ↑
@@ -122,13 +144,14 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
                   <button
                     type="button"
                     onClick={() => moveStage(pipeline, index, 1)}
+                    aria-label={`Bajar ${stage.label}`}
                     className="rounded px-1.5 text-slate-400 hover:bg-slate-100"
                   >
                     ↓
                   </button>
                   <button
                     type="button"
-                    onClick={() => deleteStage(pipeline.id, stage.id)}
+                    onClick={() => deleteStage(pipeline.id, stage)}
                     className="rounded px-1.5 text-red-400 hover:bg-red-50"
                   >
                     Borrar

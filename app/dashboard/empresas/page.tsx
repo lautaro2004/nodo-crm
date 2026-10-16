@@ -3,9 +3,10 @@ import Link from "next/link";
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listCompanies } from "@/modules/companies/service";
 import { listTags } from "@/modules/tags/service";
-import { PageHeader, Card, Badge, Button, EmptyState } from "@/components/ui/primitives";
+import { PageHeader, Card, Button, EmptyState } from "@/components/ui/primitives";
 import { SearchFilterBar } from "@/components/dashboard/search-filter-bar";
-import { COMPANY_STATUS_LABELS } from "@/lib/labels";
+import { listStatusOptions, findStatusOption } from "@/modules/status-definitions/service";
+import { StatusBadge } from "@/components/status/status-badge";
 
 export default async function CompaniesPage({
   searchParams,
@@ -16,9 +17,10 @@ export default async function CompaniesPage({
   if (ctx.status !== "ok") return null;
 
   const { q, status, tagId } = await searchParams;
-  const [companies, tags] = await Promise.all([
+  const [companies, tags, statusOptions] = await Promise.all([
     listCompanies(ctx.businessId, { search: q, status, tagId }),
     listTags(ctx.businessId),
+    listStatusOptions(ctx.businessId, "company"),
   ]);
 
   return (
@@ -35,7 +37,7 @@ export default async function CompaniesPage({
 
       <SearchFilterBar
         searchPlaceholder="Buscar por nombre, dominio o teléfono…"
-        statusOptions={Object.entries(COMPANY_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+        statusOptions={statusOptions.map((s) => ({ value: s.key, label: s.label }))}
         tagOptions={tags.map((t) => ({ value: t.id, label: t.name }))}
       />
 
@@ -71,7 +73,7 @@ export default async function CompaniesPage({
                   </td>
                   <td className="px-4 py-3 text-slate-600">{c.phone ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <Badge>{COMPANY_STATUS_LABELS[c.status] ?? c.status}</Badge>
+                    <StatusBadge label={findStatusOption(statusOptions, c.status).label} color={findStatusOption(statusOptions, c.status).color} />
                   </td>
                   <td className="px-4 py-3 text-slate-500">{c.createdAt.toLocaleDateString("es-AR")}</td>
                 </tr>

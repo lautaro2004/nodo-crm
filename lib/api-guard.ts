@@ -46,3 +46,32 @@ export async function parseBody<T>(
 export function notFound(): NextResponse {
   return NextResponse.json({ error: "not_found" }, { status: 404 });
 }
+
+// Errores de dominio conocidos (lanzados como `new Error("<código>")` por
+// los servicios de modules/*) -> respuesta 4xx con el código, para que la
+// UI pueda mostrar un mensaje claro (ver lib/error-messages.ts). Un error
+// que no está en esta lista se relanza: sigue siendo un 500 real, nunca se
+// disfraza de error de validación.
+const DOMAIN_ERROR_STATUS: Record<string, number> = {
+  company_not_found: 400,
+  contact_not_found: 400,
+  pipeline_not_found: 400,
+  stage_not_found: 400,
+  stage_not_in_pipeline: 400,
+  stage_required: 400,
+  user_not_in_business: 400,
+  invalid_status: 400,
+  use_convert_endpoint: 400,
+  lead_already_converted: 409,
+  status_in_use: 409,
+  status_key_taken: 409,
+  pipeline_in_use: 409,
+  stage_in_use: 409,
+};
+
+export function domainErrorResponse(err: unknown): NextResponse {
+  const code = err instanceof Error ? err.message : "";
+  const status = DOMAIN_ERROR_STATUS[code];
+  if (!status) throw err;
+  return NextResponse.json({ error: code }, { status });
+}

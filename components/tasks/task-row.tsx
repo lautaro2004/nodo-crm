@@ -45,11 +45,11 @@ export function TaskRow({ task }: { task: TaskItem }) {
       href={`/dashboard/tareas/${task.id}`}
       className="flex items-center gap-3 border-b border-slate-50 px-4 py-3 last:border-0 hover:bg-slate-50"
     >
-      <input type="checkbox" checked={isDone} onChange={() => {}} onClick={toggleComplete} className="h-4 w-4 accent-indigo-600" />
+      <input type="checkbox" checked={isDone} onChange={() => {}} onClick={toggleComplete} className="h-4 w-4 accent-brand-500" />
 
       <div className="min-w-0 flex-1">
         <p className={`flex items-center gap-1.5 truncate text-sm ${isDone ? "text-slate-400 line-through" : "text-slate-900"}`}>
-          {task.hasReminder && <BellIcon className="h-3.5 w-3.5 shrink-0 text-indigo-500" aria-label="Con recordatorio" />}
+          {task.hasReminder && <BellIcon className="h-3.5 w-3.5 shrink-0 text-brand-500" aria-label="Con recordatorio" />}
           <span className="truncate">{task.title}</span>
         </p>
         {context && <p className="truncate text-xs text-slate-400">{context}</p>}

@@ -124,7 +124,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   <StatusSelect
                     apiPath={`/api/leads/${id}`}
                     value={lead.status}
-                    options={statuses.map((s) => ({ key: s.key, label: s.label }))}
+                    label="Estado del lead"
+                    options={statuses.filter((s) => s.key !== "converted").map((s) => ({ key: s.key, label: s.label, color: s.color }))}
                   />
                 )}
               </div>

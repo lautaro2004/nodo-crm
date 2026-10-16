@@ -162,7 +162,7 @@ export function ConvertLeadAction({
                   type="radio"
                   checked={contactMode === "new"}
                   onChange={() => setContactMode("new")}
-                  className="h-4 w-4 accent-indigo-600"
+                  className="h-4 w-4 accent-brand-500"
                 />
                 Crear nuevo contacto
               </label>
@@ -171,7 +171,7 @@ export function ConvertLeadAction({
                   type="radio"
                   checked={contactMode === "existing"}
                   onChange={() => setContactMode("existing")}
-                  className="h-4 w-4 accent-indigo-600"
+                  className="h-4 w-4 accent-brand-500"
                 />
                 Usar contacto existente
               </label>
@@ -219,7 +219,7 @@ export function ConvertLeadAction({
                 type="checkbox"
                 checked={createOpportunity}
                 onChange={(e) => setCreateOpportunity(e.target.checked)}
-                className="h-4 w-4 accent-indigo-600"
+                className="h-4 w-4 accent-brand-500"
               />
               Crear oportunidad
             </label>

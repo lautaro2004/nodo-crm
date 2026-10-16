@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
+import { assertOptionalOwner } from "@/modules/business/members";
 
 export interface CreateOpportunityInput {
   title: string;
@@ -14,7 +15,7 @@ export interface UpdateOpportunityInput extends Partial<CreateOpportunityInput> 
   status?: "open" | "won" | "lost";
 }
 
-async function assertBelongsToBusiness(businessId: string, input: { companyId?: string | null; contactId?: string | null; pipelineId?: string; stageId?: string }) {
+async function assertBelongsToBusiness(businessId: string, input: { companyId?: string | null; contactId?: string | null; pipelineId?: string; ownerId?: string | null }) {
   if (input.companyId) {
     const c = await prisma.company.findFirst({ where: { id: input.companyId, businessId }, select: { id: true } });
     if (!c) throw new Error("company_not_found");
@@ -27,17 +28,35 @@ async function assertBelongsToBusiness(businessId: string, input: { companyId?: 
     const p = await prisma.pipeline.findFirst({ where: { id: input.pipelineId, businessId }, select: { id: true } });
     if (!p) throw new Error("pipeline_not_found");
   }
-  if (input.stageId) {
-    const s = await prisma.pipelineStage.findFirst({
-      where: { id: input.stageId, pipeline: { businessId } },
-      select: { id: true },
-    });
-    if (!s) throw new Error("stage_not_found");
-  }
+  await assertOptionalOwner(businessId, input.ownerId);
+}
+
+// La etapa tiene que pertenecer al negocio (vía pipeline) Y al mismo
+// pipeline de la oportunidad — antes solo se chequeaba lo primero, así que
+// un PATCH podía dejar una oportunidad del pipeline A "parada" en una
+// etapa del pipeline B (desaparece de ambos Kanban).
+async function resolveStage(businessId: string, stageId: string, pipelineId: string) {
+  const stage = await prisma.pipelineStage.findFirst({
+    where: { id: stageId, pipeline: { businessId } },
+    select: { id: true, pipelineId: true, label: true, isWon: true, isLost: true },
+  });
+  if (!stage) throw new Error("stage_not_found");
+  if (stage.pipelineId && stage.pipelineId !== pipelineId) throw new Error("stage_not_in_pipeline");
+  return stage;
+}
+
+// Status derivado de la etapa: mover a una etapa Ganada/Perdida cierra la
+// oportunidad; volver a una etapa normal la reabre. Antes lo calculaba el
+// Kanban en el navegador — cualquier otro cliente de la API (o el form de
+// edición) podía dejar "Ganado" con status "open".
+function statusForStage(stage: { isWon?: boolean; isLost?: boolean }): "open" | "won" | "lost" {
+  return stage.isWon ? "won" : stage.isLost ? "lost" : "open";
 }
 
 export async function createOpportunity(businessId: string, data: CreateOpportunityInput) {
   await assertBelongsToBusiness(businessId, data);
+  const stage = await resolveStage(businessId, data.stageId, data.pipelineId);
+  const status = statusForStage(stage);
   const opportunity = await prisma.opportunity.create({
     data: {
       businessId,
@@ -48,6 +67,7 @@ export async function createOpportunity(businessId: string, data: CreateOpportun
       stageId: data.stageId,
       amount: data.amount ?? null,
       ownerId: data.ownerId ?? null,
+      ...(status !== "open" ? { status, closedAt: new Date() } : {}),
     },
   });
   await createActivity(businessId, {
@@ -65,7 +85,17 @@ export interface ListOpportunitiesFilters {
   stageId?: string;
   status?: string;
   ownerId?: string;
+  /** Solo abiertas sin cambios desde esta fecha (oportunidades estancadas). */
+  stalledBefore?: Date;
+  sort?: string;
 }
+
+const OPPORTUNITY_ORDER = {
+  recent: { createdAt: "desc" },
+  updated: { updatedAt: "desc" },
+  amount: { amount: { sort: "desc", nulls: "last" } },
+  title: { title: "asc" },
+} as const;
 
 export async function listOpportunities(businessId: string, filters: ListOpportunitiesFilters = {}) {
   return prisma.opportunity.findMany({
@@ -74,8 +104,9 @@ export async function listOpportunities(businessId: string, filters: ListOpportu
       ...(filters.pipelineId ? { pipelineId: filters.pipelineId } : {}),
       ...(filters.stageId ? { stageId: filters.stageId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+      ...(filters.ownerId ? { ownerId: filters.ownerId === "none" ? null : filters.ownerId } : {}),
       ...(filters.search ? { title: { contains: filters.search, mode: "insensitive" } } : {}),
+      ...(filters.stalledBefore ? { status: "open", updatedAt: { lt: filters.stalledBefore } } : {}),
     },
     include: {
       company: { select: { id: true, name: true } },
@@ -83,7 +114,7 @@ export async function listOpportunities(businessId: string, filters: ListOpportu
       stage: true,
       pipeline: { select: { id: true, name: true } },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: OPPORTUNITY_ORDER[(filters.sort ?? "recent") as keyof typeof OPPORTUNITY_ORDER] ?? OPPORTUNITY_ORDER.recent,
   });
 }
 
@@ -107,25 +138,46 @@ export async function getOpportunity(businessId: string, id: string) {
 
 export async function updateOpportunity(businessId: string, id: string, data: UpdateOpportunityInput) {
   await assertBelongsToBusiness(businessId, data);
-  const current = await prisma.opportunity.findFirst({ where: { id, businessId } });
+  const current = await prisma.opportunity.findFirst({ where: { id, businessId }, include: { stage: { select: { label: true } } } });
   if (!current) return null;
 
-  const closedAt = data.status && data.status !== "open" ? new Date() : data.status === "open" ? null : undefined;
+  const pipelineId = data.pipelineId ?? current.pipelineId;
+  if (data.pipelineId && data.pipelineId !== current.pipelineId && !data.stageId) throw new Error("stage_required");
+
+  const stageChanged = !!data.stageId && data.stageId !== current.stageId;
+  const nextStage = data.stageId ? await resolveStage(businessId, data.stageId, pipelineId) : null;
+
+  // Un status explícito en el mismo request gana (ej. "Marcar como
+  // perdida" desde el detalle); si solo cambió la etapa, se deriva de ella.
+  const nextStatus = data.status ?? (stageChanged && nextStage ? statusForStage(nextStage) : undefined);
+  const statusChanged = !!nextStatus && nextStatus !== current.status;
+  const closedAt = statusChanged ? (nextStatus === "open" ? null : new Date()) : undefined;
 
   const updated = await prisma.opportunity.update({
     where: { id },
-    data: { ...data, ...(closedAt !== undefined ? { closedAt } : {}) },
+    data: {
+      ...data,
+      ...(nextStatus ? { status: nextStatus } : {}),
+      ...(closedAt !== undefined ? { closedAt } : {}),
+    },
   });
 
-  if (data.stageId && data.stageId !== current.stageId) {
-    await createActivity(businessId, { relatedType: "opportunity", relatedId: id, type: "stage_change", body: null });
+  if (stageChanged) {
+    const from = current.stage?.label;
+    const to = nextStage?.label;
+    await createActivity(businessId, {
+      relatedType: "opportunity",
+      relatedId: id,
+      type: "stage_change",
+      body: from && to ? `${from} → ${to}` : null,
+    });
   }
-  if (data.status && data.status !== current.status) {
+  if (statusChanged) {
     await createActivity(businessId, {
       relatedType: "opportunity",
       relatedId: id,
       type: "status_change",
-      body: `${current.status} → ${data.status}`,
+      body: `${current.status} → ${nextStatus}`,
     });
   }
 

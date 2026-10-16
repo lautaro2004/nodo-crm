@@ -95,7 +95,7 @@ export function SendEmailAction({
         {templates.length === 0 ? (
           <p className="text-sm text-slate-600">
             Todavía no hay plantillas. Creá una en{" "}
-            <Link href="/dashboard/configuracion/plantillas/nueva" className="text-indigo-600 underline">
+            <Link href="/dashboard/configuracion/plantillas/nueva" className="text-brand-700 underline">
               Configuración → Plantillas
             </Link>
             .

@@ -7,7 +7,7 @@ import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
-import { Badge, Button, Card, PageHeader } from "@/components/ui/primitives";
+import { Button, Card, PageHeader } from "@/components/ui/primitives";
 import { ActivityFeed } from "@/components/activities/activity-feed";
 import { AddActivityForm } from "@/components/activities/add-activity-form";
 import { TagPicker } from "@/components/tags/tag-picker";
@@ -15,7 +15,8 @@ import { CustomFieldsEditor } from "@/components/custom-fields/custom-fields-edi
 import { RelatedEventsList } from "@/components/calendar/related-events-list";
 import { listUpcomingEvents } from "@/modules/calendar/service";
 import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
-import { COMPANY_STATUS_LABELS } from "@/lib/labels";
+import { listStatusOptions, findStatusOption } from "@/modules/status-definitions/service";
+import { StatusBadge } from "@/components/status/status-badge";
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await resolveWorkspaceContext();
@@ -25,14 +26,16 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const company = await getCompany(ctx.businessId, id);
   if (!company) notFound();
 
-  const [activities, assignedTags, allTags, customFields, members, upcomingEvents] = await Promise.all([
+  const [activities, assignedTags, allTags, customFields, members, upcomingEvents, statusOptions] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "company", id),
     listTagsForEntity(ctx.businessId, "company", id),
     listTags(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "company", id),
     listWorkspaceMembers(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { companyId: id }),
+    listStatusOptions(ctx.businessId, "company"),
   ]);
+  const status = findStatusOption(statusOptions, company.status);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
   return (
@@ -56,7 +59,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               <div>
                 <dt className="text-slate-500">Estado</dt>
                 <dd className="mt-0.5">
-                  <Badge>{COMPANY_STATUS_LABELS[company.status] ?? company.status}</Badge>
+                  <StatusBadge label={status.label} color={status.color} />
                 </dd>
               </div>
               <div>

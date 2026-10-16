@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guard";
 import { companyCreateSchema } from "@/lib/schemas";
 import { createCompany, listCompanies } from "@/modules/companies/service";
 
@@ -24,6 +24,10 @@ export async function POST(request: Request) {
   const { data, response: badRequest } = await parseBody(request, companyCreateSchema);
   if (!data) return badRequest;
 
-  const company = await createCompany(ctx.businessId, data);
-  return NextResponse.json(company, { status: 201 });
+  try {
+    const company = await createCompany(ctx.businessId, data);
+    return NextResponse.json(company, { status: 201 });
+  } catch (err) {
+    return domainErrorResponse(err);
+  }
 }

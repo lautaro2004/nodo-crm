@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { assertOptionalOwner } from "@/modules/business/members";
 
 export interface CreateContactInput {
   name: string;
@@ -20,6 +21,7 @@ async function assertCompanyBelongs(businessId: string, companyId: string | null
 
 export async function createContact(businessId: string, data: CreateContactInput) {
   await assertCompanyBelongs(businessId, data.companyId);
+  await assertOptionalOwner(businessId, data.ownerId);
   return prisma.contact.create({
     data: {
       businessId,
@@ -76,6 +78,7 @@ export async function getContact(businessId: string, id: string) {
 
 export async function updateContact(businessId: string, id: string, data: UpdateContactInput) {
   await assertCompanyBelongs(businessId, data.companyId);
+  await assertOptionalOwner(businessId, data.ownerId);
   const result = await prisma.contact.updateMany({ where: { id, businessId }, data });
   if (result.count === 0) return null;
   return getContact(businessId, id);

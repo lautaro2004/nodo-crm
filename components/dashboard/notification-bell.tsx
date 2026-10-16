@@ -76,7 +76,7 @@ export function NotificationBell() {
         type="button"
         onClick={toggle}
         aria-label="Notificaciones"
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+        className="relative flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-900/[0.05] hover:text-slate-800"
       >
         <BellIcon className="h-5 w-5" />
         {unread > 0 && (
@@ -87,11 +87,11 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+        <div className="glass absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2">
           <div className="flex items-center justify-between px-2 py-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notificaciones</p>
             {unread > 0 && (
-              <button type="button" onClick={markAllRead} className="text-xs text-indigo-600 hover:underline">
+              <button type="button" onClick={markAllRead} className="text-xs text-brand-700 hover:underline">
                 Marcar todas leídas
               </button>
             )}
@@ -102,7 +102,7 @@ export function NotificationBell() {
             <ul className="max-h-96 space-y-0.5 overflow-y-auto">
               {items.map((n) => {
                 const content = (
-                  <div className={`rounded-lg px-2 py-2 text-sm ${n.readAt ? "text-slate-500" : "bg-indigo-50/60 text-slate-900"}`}>
+                  <div className={`rounded-lg px-2 py-2 text-sm ${n.readAt ? "text-slate-500" : "bg-brand-50/60 text-slate-900"}`}>
                     <p className="font-medium">{n.title}</p>
                     <p className="mt-0.5 text-xs text-slate-500">{n.body}</p>
                   </div>
