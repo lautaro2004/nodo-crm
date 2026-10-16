@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
+import { assertOptionalOwner } from "@/modules/business/members";
+import { assertValidStatus } from "@/modules/status-definitions/service";
 
 // crm.Lead — prospecto propio de CADA NEGOCIO que usa el CRM. NO es
 // public.Lead (pipeline comercial de Kodexa) — ver
@@ -33,6 +35,9 @@ async function assertCompanyBelongs(businessId: string, companyId: string | null
 
 export async function createLead(businessId: string, data: CreateLeadInput) {
   await assertCompanyBelongs(businessId, data.companyId);
+  await assertOptionalOwner(businessId, data.ownerId);
+  if (data.status === "converted") throw new Error("use_convert_endpoint");
+  await assertValidStatus(businessId, "lead", data.status);
   const lead = await prisma.lead.create({
     data: {
       businessId,
@@ -52,15 +57,23 @@ export async function createLead(businessId: string, data: CreateLeadInput) {
 export interface ListLeadsFilters {
   search?: string;
   status?: string;
+  /** userId, o "none" para los que no tienen responsable. */
   ownerId?: string;
+  sort?: string;
 }
+
+const LEAD_ORDER = {
+  recent: { createdAt: "desc" },
+  updated: { updatedAt: "desc" },
+  name: { name: "asc" },
+} as const;
 
 export async function listLeads(businessId: string, filters: ListLeadsFilters = {}) {
   return prisma.lead.findMany({
     where: {
       businessId,
       ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+      ...(filters.ownerId ? { ownerId: filters.ownerId === "none" ? null : filters.ownerId } : {}),
       ...(filters.search
         ? {
             OR: [
@@ -72,7 +85,7 @@ export async function listLeads(businessId: string, filters: ListLeadsFilters = 
         : {}),
     },
     include: { company: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: LEAD_ORDER[(filters.sort ?? "recent") as keyof typeof LEAD_ORDER] ?? LEAD_ORDER.recent,
   });
 }
 
@@ -107,6 +120,8 @@ export async function updateLead(businessId: string, id: string, data: UpdateLea
   if (current.status === "converted" && data.status && data.status !== current.status) {
     throw new Error("lead_already_converted");
   }
+  await assertOptionalOwner(businessId, data.ownerId);
+  if (data.status && data.status !== current.status) await assertValidStatus(businessId, "lead", data.status);
 
   const updated = await prisma.lead.update({ where: { id }, data });
 

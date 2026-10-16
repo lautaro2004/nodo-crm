@@ -41,3 +41,10 @@ export async function assertUserBelongsToBusiness(businessId: string, userId: st
   const membership = await client.membership.findFirst({ where: { businessId, userId }, select: { id: true } });
   if (!membership) throw new Error("user_not_in_business");
 }
+
+// Variante para campos opcionales de "Responsable" (Lead, Opportunity,
+// Company, Contact): null/undefined/"" = sin responsable, no se valida.
+export async function assertOptionalOwner(businessId: string, ownerId: string | null | undefined, client: PrismaOrTx = prisma) {
+  if (!ownerId) return;
+  await assertUserBelongsToBusiness(businessId, ownerId, client);
+}

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
-import { COMPANY_STATUS_LABELS } from "@/lib/labels";
 
 interface CompanyFormValues {
   name: string;
@@ -16,9 +15,11 @@ interface CompanyFormValues {
 export function CompanyForm({
   initial,
   companyId,
+  statusOptions,
 }: {
   initial?: Partial<CompanyFormValues>;
   companyId?: string;
+  statusOptions: { key: string; label: string }[];
 }) {
   const router = useRouter();
   const [values, setValues] = useState<CompanyFormValues>({
@@ -70,9 +71,9 @@ export function CompanyForm({
       <div>
         <Label htmlFor="status">Estado</Label>
         <Select id="status" value={values.status} onChange={(e) => setValues({ ...values, status: e.target.value })}>
-          {Object.entries(COMPANY_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
+          {statusOptions.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
             </option>
           ))}
         </Select>

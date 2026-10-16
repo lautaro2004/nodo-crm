@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
 import { statusDefinitionUpdateSchema } from "@/lib/schemas";
 import { updateStatusDefinition, deleteStatusDefinition } from "@/modules/status-definitions/service";
 
@@ -22,7 +22,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!ctx) return response;
 
   const { id } = await params;
-  const ok = await deleteStatusDefinition(ctx.businessId, id);
-  if (!ok) return notFound();
-  return NextResponse.json({ ok: true });
+  try {
+    const ok = await deleteStatusDefinition(ctx.businessId, id);
+    if (!ok) return notFound();
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return domainErrorResponse(err);
+  }
 }

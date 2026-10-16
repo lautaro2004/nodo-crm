@@ -6,6 +6,8 @@ const leadUpdate = vi.fn();
 const leadDeleteMany = vi.fn();
 const companyFindFirst = vi.fn();
 const activityCreate = vi.fn();
+const statusDefFindFirst = vi.fn();
+const membershipFindFirst = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -16,6 +18,8 @@ vi.mock("@/lib/prisma", () => ({
       deleteMany: (...args: unknown[]) => leadDeleteMany(...args),
     },
     company: { findFirst: (...args: unknown[]) => companyFindFirst(...args) },
+    statusDefinition: { findFirst: (...args: unknown[]) => statusDefFindFirst(...args) },
+    membership: { findFirst: (...args: unknown[]) => membershipFindFirst(...args) },
   },
 }));
 
@@ -32,6 +36,10 @@ beforeEach(() => {
   leadDeleteMany.mockReset();
   companyFindFirst.mockReset();
   activityCreate.mockReset();
+  statusDefFindFirst.mockReset();
+  membershipFindFirst.mockReset();
+  statusDefFindFirst.mockResolvedValue({ id: "sd_1" });
+  membershipFindFirst.mockResolvedValue({ id: "m_1" });
 });
 
 describe("createLead", () => {
@@ -80,5 +88,33 @@ describe("aislamiento multi-tenant", () => {
     const ok = await deleteLead("biz_A", "lead_de_biz_B");
     expect(leadDeleteMany).toHaveBeenCalledWith({ where: { id: "lead_de_biz_B", businessId: "biz_A" } });
     expect(ok).toBe(false);
+  });
+});
+
+describe("validaciones de integridad", () => {
+  it("rechaza un status que no existe en la configuración del Workspace", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "new" });
+    statusDefFindFirst.mockResolvedValue(null);
+    await expect(updateLead("biz_1", "lead_1", { status: "inventado" })).rejects.toThrow("invalid_status");
+    expect(statusDefFindFirst).toHaveBeenCalledWith({ where: { businessId: "biz_1", entityType: "lead", key: "inventado" }, select: { id: true } });
+    expect(leadUpdate).not.toHaveBeenCalled();
+  });
+
+  it("'new' siempre es válido aunque no esté configurado (default + sync de Nexo)", async () => {
+    statusDefFindFirst.mockResolvedValue(null);
+    leadCreate.mockResolvedValue({ id: "lead_1" });
+    await createLead("biz_1", { name: "X", status: "new" });
+    expect(leadCreate).toHaveBeenCalled();
+  });
+
+  it("rechaza un responsable que no es miembro del negocio", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "new" });
+    membershipFindFirst.mockResolvedValue(null);
+    await expect(updateLead("biz_1", "lead_1", { ownerId: "user_de_otro_negocio" })).rejects.toThrow("user_not_in_business");
+    expect(leadUpdate).not.toHaveBeenCalled();
+  });
+
+  it("no permite crear un lead directamente como 'converted'", async () => {
+    await expect(createLead("biz_1", { name: "X", status: "converted" })).rejects.toThrow("use_convert_endpoint");
   });
 });

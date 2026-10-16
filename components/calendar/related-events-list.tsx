@@ -48,7 +48,7 @@ export function RelatedEventsList({
           ))}
         </ul>
       )}
-      <Link href={newHref} className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline">
+      <Link href={newHref} className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline">
         + Programar actividad
       </Link>
     </div>

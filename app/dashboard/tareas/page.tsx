@@ -89,7 +89,7 @@ export default async function TasksPage({
               key={tab.key}
               href={qs ? `/dashboard/tareas?${qs}` : "/dashboard/tareas"}
               className={`rounded-t-lg px-3 py-2 text-sm font-medium transition-colors ${
-                activeView === tab.key ? "border-b-2 border-indigo-600 text-indigo-600" : "text-slate-500 hover:text-slate-700"
+                activeView === tab.key ? "border-b-2 border-brand-500 text-brand-700" : "text-slate-500 hover:text-slate-700"
               }`}
             >
               {tab.label}

@@ -1,5 +1,7 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { getDashboardMetrics, getPipelineSummary } from "@/modules/dashboard/service";
+import { getDashboardMetrics, getPipelineSummary, STALLED_DAYS } from "@/modules/dashboard/service";
+import { StatusDot } from "@/components/status/status-badge";
+import { resolveStatusColor } from "@/lib/status-colors";
 import { listRecentActivities } from "@/modules/activities/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
 import { PageHeader, StatCard, Card } from "@/components/ui/primitives";
@@ -31,32 +33,63 @@ export default async function DashboardHomePage() {
 
   return (
     <div>
-      <PageHeader title="Inicio" description="Vista general de tu Workspace." />
+      <PageHeader title="Inicio" description="Lo que necesita tu atención hoy." />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard label="Empresas / Clientes" value={metrics.companiesCount} />
-        <StatCard label="Contactos" value={metrics.contactsCount} />
-        <StatCard label="Leads abiertos" value={metrics.openLeadsCount} />
-        <StatCard label={`${moduleLabel.labelPlural} abiertas`} value={metrics.openOpportunitiesCount} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard label="Leads abiertos" value={metrics.openLeadsCount} href="/dashboard/leads" />
+        <StatCard label={`${moduleLabel.labelPlural} abiertas`} value={metrics.openOpportunitiesCount} href="/dashboard/oportunidades" />
+        <StatCard label="Tareas para hoy" value={metrics.dueTodayTasksCount} href="/dashboard/tareas" tone="brand" />
+        <StatCard label="Tareas vencidas" value={metrics.overdueTasksCount} href="/dashboard/tareas" tone="danger" />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Tareas pendientes" value={metrics.pendingTasksCount} />
-        <StatCard label="Tareas vencidas" value={metrics.overdueTasksCount} />
-        <StatCard label="Para hoy" value={metrics.dueTodayTasksCount} />
-        <StatCard label="Leads desde Nexo" value={metrics.leadsFromNexoCount} />
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard
+          label={`${moduleLabel.labelPlural} sin movimiento (+${STALLED_DAYS} días)`}
+          value={metrics.stalledOpportunitiesCount}
+          href="/dashboard/oportunidades?display=list&stalled=1"
+          tone="danger"
+        />
+        <StatCard label="Tareas pendientes" value={metrics.pendingTasksCount} href="/dashboard/tareas" />
+        <StatCard label="Empresas / Clientes" value={metrics.companiesCount} href="/dashboard/empresas" />
+        <StatCard label="Leads desde Nexo" value={metrics.leadsFromNexoCount} href="/dashboard/leads" />
       </div>
 
-      {pipelineSummary && (
+      {pipelineSummary && pipelineSummary.stages.length > 0 && (
         <div className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Pipeline — {pipelineSummary.pipelineName}</h2>
-          <Card className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
-            {pipelineSummary.stages.map((s) => (
-              <div key={s.id} className="p-4 text-center">
-                <p className="text-2xl font-semibold text-slate-900">{s.count}</p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{s.label}</p>
-              </div>
-            ))}
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Pipeline abierto — {pipelineSummary.pipelineName}</h2>
+            <Link href={`/dashboard/oportunidades?pipelineId=${pipelineSummary.pipelineId}`} className="text-xs font-medium text-brand-700 hover:underline">
+              Ver tablero
+            </Link>
+          </div>
+          <Card className="p-4">
+            {(() => {
+              const total = pipelineSummary.stages.reduce((n, s) => n + s.count, 0);
+              return (
+                <>
+                  <div className="flex h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden>
+                    {total > 0 &&
+                      pipelineSummary.stages.map((s) =>
+                        s.count > 0 ? <div key={s.id} className={resolveStatusColor(s.color).bar} style={{ width: `${(s.count / total) * 100}%` }} /> : null
+                      )}
+                  </div>
+                  <ul className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {pipelineSummary.stages.map((s) => (
+                      <li key={s.id} className="min-w-0">
+                        <p className="flex items-center gap-1.5 truncate text-xs text-slate-500">
+                          <StatusDot color={s.color} />
+                          {s.label}
+                        </p>
+                        <p className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">
+                          {s.count}
+                          {s.amount > 0 && <span className="ml-1.5 text-xs font-normal text-slate-500">${s.amount.toLocaleString("es-AR")}</span>}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              );
+            })()}
           </Card>
         </div>
       )}
@@ -64,7 +97,7 @@ export default async function DashboardHomePage() {
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Próximas actividades</h2>
-          <Link href="/dashboard/calendario" className="text-xs font-medium text-indigo-600 hover:underline">
+          <Link href="/dashboard/calendario" className="text-xs font-medium text-brand-700 hover:underline">
             Ver calendario
           </Link>
         </div>

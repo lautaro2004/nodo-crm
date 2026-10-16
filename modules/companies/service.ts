@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { listEntityIdsForTag } from "@/modules/tags/service";
+import { assertOptionalOwner } from "@/modules/business/members";
+import { assertValidStatus } from "@/modules/status-definitions/service";
 
 // Todo módulo de dominio del CRM recibe businessId como PRIMER argumento y
 // lo aplica en cada where — nunca se confía en un id sin scopear (ver
@@ -15,6 +17,8 @@ export interface CreateCompanyInput {
 export type UpdateCompanyInput = Partial<CreateCompanyInput>;
 
 export async function createCompany(businessId: string, data: CreateCompanyInput) {
+  await assertOptionalOwner(businessId, data.ownerId);
+  await assertValidStatus(businessId, "company", data.status);
   return prisma.company.create({
     data: {
       businessId,
@@ -74,6 +78,8 @@ export async function getCompany(businessId: string, id: string) {
 }
 
 export async function updateCompany(businessId: string, id: string, data: UpdateCompanyInput) {
+  await assertOptionalOwner(businessId, data.ownerId);
+  await assertValidStatus(businessId, "company", data.status);
   const result = await prisma.company.updateMany({ where: { id, businessId }, data });
   if (result.count === 0) return null;
   return getCompany(businessId, id);

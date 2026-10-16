@@ -29,9 +29,14 @@ export function Modal({
       <button
         aria-label="Cerrar"
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-slate-900/30 backdrop-blur-[3px]"
       />
-      <div className={`relative w-full ${maxWidth} rounded-2xl border border-slate-200 bg-white p-6 shadow-xl`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto ${maxWidth} rounded-[var(--radius-glass)] border border-white/70 bg-white/95 p-6 shadow-[var(--shadow-lift)] supports-[backdrop-filter]:bg-white/85 supports-[backdrop-filter]:backdrop-blur-xl`}
+      >
         <div className="mb-4 flex items-center justify-between">
           {title ? <h2 className="text-base font-semibold text-slate-900">{title}</h2> : <span />}
           <button

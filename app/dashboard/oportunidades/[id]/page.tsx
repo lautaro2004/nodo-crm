@@ -5,11 +5,12 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { getOpportunity } from "@/modules/opportunities/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
-import { Badge, Button, Card, PageHeader } from "@/components/ui/primitives";
+import { Button, Card, PageHeader } from "@/components/ui/primitives";
 import { ActivityFeed } from "@/components/activities/activity-feed";
 import { AddActivityForm } from "@/components/activities/add-activity-form";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { StatusSelect } from "@/components/shared/status-select";
+import { stageColorKey } from "@/lib/status-colors";
 import { OwnerAssign } from "@/components/shared/owner-assign";
 import { SendEmailAction } from "@/components/email/send-email-action";
 import { listTemplates } from "@/modules/email/templates";
@@ -71,7 +72,13 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
               <div>
                 <dt className="text-slate-500">Etapa</dt>
                 <dd className="mt-0.5">
-                  <Badge>{opportunity.stage.label}</Badge>
+                  <StatusSelect
+                    apiPath={`/api/opportunities/${id}`}
+                    field="stageId"
+                    label="Etapa"
+                    value={opportunity.stageId}
+                    options={opportunity.pipeline.stages.map((s) => ({ key: s.id, label: s.label, color: stageColorKey(s) }))}
+                  />
                 </dd>
               </div>
               <div>

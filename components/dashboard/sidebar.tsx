@@ -77,11 +77,15 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      aria-current={active ? "page" : undefined}
+      className={`group relative flex h-9 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors ${
+        active
+          ? "bg-white text-slate-900 shadow-[0_1px_2px_rgb(32_33_36/0.06),0_0_0_1px_rgb(32_33_36/0.05)]"
+          : "text-slate-600 hover:bg-slate-900/[0.04] hover:text-slate-900"
       }`}
     >
-      <span className={active ? "text-indigo-600" : "text-slate-400"}>{item.icon}</span>
+      {active && <span aria-hidden className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-brand-500" />}
+      <span className={`[&>svg]:h-[18px] [&>svg]:w-[18px] ${active ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"}`}>{item.icon}</span>
       {item.label}
     </Link>
   );
@@ -103,13 +107,20 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col" onClick={onNavigate}>
-      <div className="flex h-16 items-center border-b border-slate-100 px-5">
+      <div className="flex h-16 items-center px-5">
         <Logo />
       </div>
 
-      <div className="border-b border-slate-100 px-5 py-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Negocio</p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">{businessName}</p>
+      <div className="px-3 pb-2">
+        <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-semibold text-white">
+            {businessName.trim()[0]?.toUpperCase() ?? "·"}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espacio de trabajo</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{businessName}</p>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
@@ -119,7 +130,7 @@ function SidebarContent({
           return (
             <div key={group.label ?? `group-${i}`}>
               {group.label && (
-                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
+                <p className="mb-1 px-3 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</p>
               )}
               <div className="space-y-0.5">
                 {visibleItems.map((item) => (
@@ -131,7 +142,7 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="border-t border-slate-100 p-3">
+      <div className="border-t border-slate-200/70 p-3">
         <NavLink item={{ href: "/dashboard/configuracion", label: "Configuración", icon: <SettingsIcon /> }} pathname={pathname} />
       </div>
     </div>
@@ -153,7 +164,7 @@ export function Sidebar({
   opportunityLabel: ModuleLabel;
 }) {
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
+    <aside className="glass-bar hidden w-64 shrink-0 border-r border-slate-200/70 lg:block">
       <div className="sticky top-0 h-screen">
         <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} />
       </div>
@@ -178,8 +189,8 @@ export function MobileSidebarDrawer({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <button aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 bg-slate-900/40" />
-      <div className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl">
+      <button aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
+      <div className="glass relative m-2 flex h-[calc(100%-1rem)] w-72 max-w-[85vw] flex-col rounded-[var(--radius-glass)]">
         <button
           type="button"
           aria-label="Cerrar menú"

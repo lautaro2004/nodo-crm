@@ -42,7 +42,7 @@ async function assertPipelineBelongs(businessId: string, pipelineId: string) {
 export async function createStage(
   businessId: string,
   pipelineId: string,
-  data: { key: string; label: string; order?: number; isWon?: boolean; isLost?: boolean }
+  data: { key: string; label: string; order?: number; isWon?: boolean; isLost?: boolean; color?: string | null }
 ) {
   await assertPipelineBelongs(businessId, pipelineId);
   const maxOrder = await prisma.pipelineStage.aggregate({ where: { pipelineId }, _max: { order: true } });
@@ -54,6 +54,7 @@ export async function createStage(
       order: data.order ?? (maxOrder._max.order ?? -1) + 1,
       isWon: data.isWon ?? false,
       isLost: data.isLost ?? false,
+      color: data.color ?? null,
     },
   });
 }
@@ -62,7 +63,7 @@ export async function updateStage(
   businessId: string,
   pipelineId: string,
   stageId: string,
-  data: { label?: string; order?: number; isWon?: boolean; isLost?: boolean }
+  data: { label?: string; order?: number; isWon?: boolean; isLost?: boolean; color?: string | null }
 ) {
   await assertPipelineBelongs(businessId, pipelineId);
   const result = await prisma.pipelineStage.updateMany({ where: { id: stageId, pipelineId }, data });
@@ -79,8 +80,13 @@ export async function deleteStage(businessId: string, pipelineId: string, stageI
 
 export async function reorderStages(businessId: string, pipelineId: string, stageIds: string[]) {
   await assertPipelineBelongs(businessId, pipelineId);
+  // updateMany scopeado por pipelineId (antes: update({ where: { id } }),
+  // que permitía reordenar etapas de un pipeline ajeno — incluso de otro
+  // negocio — con solo conocer sus ids).
+  const owned = await prisma.pipelineStage.count({ where: { pipelineId, id: { in: stageIds } } });
+  if (owned !== new Set(stageIds).size) throw new Error("stage_not_found");
   await prisma.$transaction(
-    stageIds.map((id, order) => prisma.pipelineStage.update({ where: { id }, data: { order } }))
+    stageIds.map((id, order) => prisma.pipelineStage.updateMany({ where: { id, pipelineId }, data: { order } }))
   );
   return true;
 }

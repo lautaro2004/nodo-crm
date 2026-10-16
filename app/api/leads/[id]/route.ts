@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
 import { leadUpdateSchema } from "@/lib/schemas";
 import { getLead, updateLead, deleteLead } from "@/modules/leads/service";
 
@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!lead) return notFound();
     return NextResponse.json(lead);
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : "invalid_input" }, { status: 400 });
+    return domainErrorResponse(err);
   }
 }
 

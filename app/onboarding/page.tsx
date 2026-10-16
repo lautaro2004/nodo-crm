@@ -10,7 +10,7 @@ export default async function OnboardingPage() {
   if (ctx.status === "ok") redirect("/dashboard");
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <main className="app-backdrop flex min-h-screen items-center justify-center px-4">
       <OnboardingForm needsBusinessName={ctx.status === "no_business"} />
     </main>
   );

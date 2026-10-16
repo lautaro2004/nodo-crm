@@ -1,4 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { stageColorKey } from "@/lib/status-colors";
+
+// Una oportunidad abierta sin ningún cambio en este lapso se considera
+// "estancada" (dashboard + aviso en la tarjeta del Kanban).
+export const STALLED_DAYS = 14;
 
 // Estados que se consideran "cerrados" para un Lead a los fines del
 // dashboard — Lead.status es texto libre configurable por Workspace (ver
@@ -17,6 +22,7 @@ export interface DashboardMetrics {
   overdueTasksCount: number;
   dueTodayTasksCount: number;
   leadsFromNexoCount: number;
+  stalledOpportunitiesCount: number;
 }
 
 export async function getDashboardMetrics(businessId: string): Promise<DashboardMetrics> {
@@ -34,6 +40,7 @@ export async function getDashboardMetrics(businessId: string): Promise<Dashboard
     overdueTasksCount,
     dueTodayTasksCount,
     leadsFromNexoCount,
+    stalledOpportunitiesCount,
   ] = await Promise.all([
     prisma.company.count({ where: { businessId, status: { not: "archived" } } }),
     prisma.contact.count({ where: { businessId } }),
@@ -47,6 +54,9 @@ export async function getDashboardMetrics(businessId: string): Promise<Dashboard
     // Fase 4 — dato real (COUNT sobre Lead.source), no una métrica de
     // marketing inventada.
     prisma.lead.count({ where: { businessId, source: { in: ["nexo_appointment", "nexo_inquiry"] } } }),
+    prisma.opportunity.count({
+      where: { businessId, status: "open", updatedAt: { lt: new Date(now.getTime() - STALLED_DAYS * 86_400_000) } },
+    }),
   ]);
 
   return {
@@ -58,6 +68,7 @@ export async function getDashboardMetrics(businessId: string): Promise<Dashboard
     overdueTasksCount,
     dueTodayTasksCount,
     leadsFromNexoCount,
+    stalledOpportunitiesCount,
   };
 }
 
@@ -70,8 +81,9 @@ export async function getRecentActivity(businessId: string, limit = 10) {
 }
 
 export interface PipelineSummary {
+  pipelineId: string;
   pipelineName: string;
-  stages: { id: string; label: string; count: number }[];
+  stages: { id: string; label: string; count: number; amount: number; color: string }[];
 }
 
 // "Pipeline: oportunidades por etapa" del dashboard (fase de pulido UX) —
@@ -93,11 +105,21 @@ export async function getPipelineSummary(businessId: string): Promise<PipelineSu
     by: ["stageId"],
     where: { businessId, pipelineId: pipeline.id, status: "open" },
     _count: { _all: true },
+    _sum: { amount: true },
   });
-  const countByStage = new Map(counts.map((c) => [c.stageId, c._count._all]));
+  const byStage = new Map(counts.map((c) => [c.stageId, c]));
 
   return {
+    pipelineId: pipeline.id,
     pipelineName: pipeline.name,
-    stages: pipeline.stages.map((s) => ({ id: s.id, label: s.label, count: countByStage.get(s.id) ?? 0 })),
+    stages: pipeline.stages
+      .filter((s) => !s.isWon && !s.isLost)
+      .map((s) => ({
+        id: s.id,
+        label: s.label,
+        count: byStage.get(s.id)?._count._all ?? 0,
+        amount: byStage.get(s.id)?._sum.amount ?? 0,
+        color: stageColorKey(s),
+      })),
   };
 }

@@ -148,7 +148,7 @@ export default async function CalendarPage({
               key={v.key}
               href={href({ view: v.key })}
               className={`rounded-md px-3 py-1 text-xs font-medium ${
-                view === v.key ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:text-slate-700"
+                view === v.key ? "bg-brand-50 text-brand-800" : "text-slate-500 hover:text-slate-700"
               }`}
             >
               {v.label}

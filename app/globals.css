@@ -1,45 +1,123 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─────────────────────────────────────────────────────────────
+   Nodo — tokens visuales
+   Mismo lenguaje que Kodexa Studio (kodexa-studio/app/globals.css):
+   base clara y cálida, grafito para texto, naranja Kodexa como acento,
+   glassmorphism SOLO en superficies flotantes (navegación, overlays,
+   menús). Tablas, formularios y tarjetas de Kanban son sólidas: en una
+   herramienta de trabajo diario la legibilidad va primero.
 
-  /* Acento de marca de Nodo — indigo, consistente con un SaaS moderno.
-     Un solo acento (no una paleta completa todavía, ver
-     docs/architecture/crm-fase3-ui.md, "Decisiones de diseño") aplicado a
-     través de las clases utilitarias estándar de Tailwind (indigo-*) en
-     los componentes, no como tokens custom adicionales — mantiene esto
-     simple y 100% Tailwind. */
+   Decisión: en vez de renombrar cientos de clases, se redefinen dos
+   escalas de Tailwind:
+   - `slate-*`  → neutros cálidos (paper → ink). Toda la UI existente que
+     usa slate para fondos/bordes/texto hereda la paleta Kodexa sin tocar
+     cada componente. Los colores semánticos (emerald/amber/red/sky/…) NO
+     se tocan: siguen comunicando éxito, atención y error.
+   - `brand-*`  → naranja Kodexa (reemplaza al índigo previo).
+
+   Contraste: el naranja de logo (#fb6e1a, brand-500) NO alcanza 4.5:1
+   como texto sobre blanco. Reglas:
+   - Botón primario: fondo brand-500 + texto ink (slate-900) → 5.8:1.
+   - Texto/enlaces en naranja: brand-700 (#b9460a) → 5.8:1.
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-slate-50: #fafaf8;
+  --color-slate-100: #f2f2ef;
+  --color-slate-200: #e7e6e2;
+  --color-slate-300: #d5d4cf;
+  --color-slate-400: #a4a39e;
+  --color-slate-500: #75746f;
+  --color-slate-600: #55585d;
+  --color-slate-700: #3f4145;
+  --color-slate-800: #2c2d30;
+  --color-slate-900: #202124;
+  --color-slate-950: #141517;
+
+  --color-brand-50: #fff6ef;
+  --color-brand-100: #ffead9;
+  --color-brand-200: #ffd2b3;
+  --color-brand-300: #ffb98f;
+  --color-brand-400: #fd9452;
+  --color-brand-500: #fb6e1a;
+  --color-brand-600: #e45c0c;
+  --color-brand-700: #b9460a;
+  --color-brand-800: #933a0e;
+  --color-brand-900: #77310f;
+
+  --radius-glass: 1.25rem;
+  --shadow-glass: 0 1px 0 rgb(255 255 255 / 0.85) inset, 0 18px 40px -24px rgb(32 33 36 / 0.28), 0 2px 6px rgb(32 33 36 / 0.04);
+  --shadow-card: 0 1px 2px rgb(32 33 36 / 0.04), 0 1px 1px rgb(32 33 36 / 0.02);
+  --shadow-lift: 0 1px 0 rgb(255 255 255 / 0.9) inset, 0 24px 48px -20px rgb(32 33 36 / 0.3), 0 4px 10px rgb(32 33 36 / 0.06);
 }
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b1120;
-    --foreground: #e2e8f0;
+@layer base {
+  body {
+    background: var(--color-slate-50);
+    color: var(--color-slate-900);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-brand-200);
+    color: var(--color-slate-900);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-feature-settings: "cv11", "ss01";
+/* Fondo de la app: un brillo cálido muy suave arriba a la derecha. Le da
+   algo que "refractar" a las superficies de vidrio sin competir con el
+   contenido. Fijo, sin animación. */
+@utility app-backdrop {
+  background:
+    radial-gradient(60rem 28rem at 100% -10%, rgb(251 110 26 / 0.07), transparent 60%),
+    radial-gradient(40rem 24rem at -10% 0%, rgb(32 33 36 / 0.035), transparent 60%),
+    var(--color-slate-50);
+  background-attachment: fixed;
 }
 
-/* Scrollbar más discreta — detalle chico que ayuda a que la app se sienta
-   más cuidada, sin ninguna librería. */
+/* Vidrio: navegación, topbar, menús desplegables, modales. Sin soporte de
+   backdrop-filter se vuelve casi opaco para no perder legibilidad. */
+@utility glass {
+  background: rgb(255 255 255 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.7);
+  box-shadow: var(--shadow-glass);
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    background: rgb(255 255 255 / 0.66);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+    backdrop-filter: blur(18px) saturate(1.6);
+  }
+}
+
+/* Barra (topbar/sidebar): mismo vidrio pero sin radio ni sombra
+   flotante — se apoya en el borde. */
+@utility glass-bar {
+  background: rgb(250 250 248 / 0.94);
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    background: rgb(250 250 248 / 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    backdrop-filter: blur(16px) saturate(1.5);
+  }
+}
+
+/* Scrollbar discreta. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-slate-300);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;

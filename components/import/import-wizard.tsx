@@ -193,7 +193,7 @@ export function ImportWizard() {
                 key={m}
                 type="button"
                 onClick={() => chooseModule(m)}
-                className="rounded-xl border border-slate-200 p-4 text-left hover:border-indigo-300 hover:bg-indigo-50/50"
+                className="rounded-xl border border-slate-200 p-4 text-left hover:border-brand-300 hover:bg-brand-50/50"
               >
                 <p className="text-sm font-semibold text-slate-900">{IMPORT_MODULE_DEFS[m].label}</p>
                 <p className="mt-0.5 text-xs text-slate-500">Desde un archivo .csv o .xlsx</p>
@@ -207,7 +207,7 @@ export function ImportWizard() {
         <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold text-slate-900">2. Subí el archivo — {moduleDef.label}</h2>
           <p className="mb-4 text-xs text-slate-500">CSV o XLSX, hasta 5&nbsp;MB y 2000 filas.</p>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-10 text-center hover:border-indigo-300">
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 p-10 text-center hover:border-brand-300">
             <UploadIcon className="h-6 w-6 text-slate-400" />
             <span className="text-sm text-slate-600">{parsing ? "Leyendo archivo…" : "Hacé clic para elegir un archivo"}</span>
             <input
@@ -386,9 +386,9 @@ export function ImportWizard() {
               <p className="text-xl font-semibold text-emerald-700">{result.created}</p>
               <p className="text-xs text-emerald-700">creadas</p>
             </div>
-            <div className="rounded-lg bg-indigo-50 p-3">
-              <p className="text-xl font-semibold text-indigo-700">{result.updated}</p>
-              <p className="text-xs text-indigo-700">actualizadas</p>
+            <div className="rounded-lg bg-brand-50 p-3">
+              <p className="text-xl font-semibold text-brand-800">{result.updated}</p>
+              <p className="text-xs text-brand-800">actualizadas</p>
             </div>
             <div className="rounded-lg bg-red-50 p-3">
               <p className="text-xl font-semibold text-red-700">{result.errorCount}</p>

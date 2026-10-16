@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { STATUS_COLOR_KEYS } from "@/lib/status-colors";
+
 // Esquemas Zod de validación de entrada — un archivo central para esta
 // fase (Core). Crece acá en vez de un archivo por módulo por simplicidad;
 // se puede partir después si crece demasiado, mismo criterio que Nexo usa
@@ -70,9 +72,12 @@ export const pipelineCreateSchema = z.object({
 });
 export const pipelineUpdateSchema = pipelineCreateSchema.partial();
 
+export const statusColorSchema = z.enum(STATUS_COLOR_KEYS);
+
 export const pipelineStageCreateSchema = z.object({
   key: z.string().trim().min(1).max(60),
   label: z.string().trim().min(1).max(80),
+  color: statusColorSchema.optional().nullable(),
   order: z.number().int().min(0).optional(),
   isWon: z.boolean().optional(),
   isLost: z.boolean().optional(),
@@ -262,8 +267,14 @@ export const statusDefinitionCreateSchema = z.object({
     .max(60)
     .regex(/^[a-z][a-z0-9_]*$/, "Usá minúsculas, números y guión bajo, empezando con una letra"),
   label: z.string().trim().min(1).max(80),
-  color: z.string().trim().max(20).optional().nullable(),
+  // Clave de la paleta de 10 colores (lib/status-colors.ts). Los hex
+  // legacy ya guardados se siguen LEYENDO, pero no se aceptan nuevos.
+  color: statusColorSchema.optional().nullable(),
   order: z.number().int().min(0).optional(),
   isDefault: z.boolean().optional(),
 });
 export const statusDefinitionUpdateSchema = statusDefinitionCreateSchema.omit({ entityType: true, key: true }).partial();
+export const statusDefinitionReorderSchema = z.object({
+  entityType: z.enum(["lead", "company"]),
+  ids: z.array(z.string().trim().min(1)).min(1).max(100),
+});
