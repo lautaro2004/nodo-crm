@@ -17,6 +17,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
+  // El onboarding crea/configura el Workspace del negocio: solo el dueño.
+  // Un empleado invitado (o sin acceso a Nodo) nunca puede re-aplicar un
+  // template sobre el negocio de su empleador.
+  if (ctx.status === "no_access" || ((ctx.status === "ok" || ctx.status === "no_workspace") && ctx.role !== "owner")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const { data, response } = await parseBody(request, onboardingSchema);
   if (!data) return response;
 

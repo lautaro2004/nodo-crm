@@ -165,7 +165,7 @@ describe("convertLead — Responsable", () => {
       "user_1"
     );
 
-    expect(membershipFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", userId: "user_2" } }));
+    expect(membershipFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", userId: "user_2", products: { has: "crm" } } }));
     expect(opportunityCreate.mock.calls[0][0].data.ownerId).toBe("user_2");
   });
 

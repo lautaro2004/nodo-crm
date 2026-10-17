@@ -10,7 +10,7 @@ import { executeImport } from "@/modules/import/execute";
 // cualquier lógica de negocio, nunca se usa el string crudo para acceso
 // dinámico a un modelo de Prisma.
 export async function POST(request: Request, { params }: { params: Promise<{ module: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { module } = await params;

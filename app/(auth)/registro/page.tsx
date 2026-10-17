@@ -1,9 +1,12 @@
 import Link from "next/link";
 
 import { AuthForm } from "@/components/auth/auth-form";
+import { safeNext } from "@/lib/safe-next";
 import { Logo } from "@/components/ui/logo";
 
-export default function RegistroPage() {
+export default async function RegistroPage({ searchParams }: { searchParams: Promise<{ next?: string; email?: string }> }) {
+  const { next, email } = await searchParams;
+  const qs = new URLSearchParams(Object.entries({ next: safeNext(next) ?? "", email: email ?? "" }).filter(([, v]) => v)).toString();
   return (
     <main className="app-backdrop flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -16,12 +19,12 @@ export default function RegistroPage() {
             Misma identidad que Nexo — si ya tenés cuenta, iniciá sesión en vez de crear una nueva.
           </p>
           <div className="mt-6">
-            <AuthForm mode="registro" />
+            <AuthForm mode="registro" next={safeNext(next)} defaultEmail={email} />
           </div>
         </div>
         <p className="mt-6 text-center text-sm text-slate-500">
           ¿Ya tenés cuenta?{" "}
-          <Link href="/login" className="font-medium text-brand-700 hover:text-brand-800">
+          <Link href={qs ? `/login?${qs}` : "/login"} className="font-medium text-brand-700 hover:text-brand-800">
             Iniciar sesión
           </Link>
         </p>

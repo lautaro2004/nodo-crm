@@ -2,17 +2,22 @@ import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 
 import { resolveWorkspaceContext, type OkWorkspaceContext } from "@/lib/workspace";
+import { hasRole, type Role } from "@/lib/permissions";
 
 const STATUS_BY_ERROR = {
   unauthenticated: 401,
   no_business: 409,
   no_workspace: 409,
+  no_access: 403,
 } as const;
 
 // Envoltorio delgado para Route Handlers: resuelve el Workspace UNA vez,
 // nunca deja que la route reciba un businessId del cliente. Toda mutación
 // que necesite el negocio actual pasa por acá.
-export async function requireWorkspace(): Promise<
+//
+// `minRole`: acción restringida por rol (ver lib/permissions.ts). Un rol
+// insuficiente responde 403 { error: "forbidden" }.
+export async function requireWorkspace(options: { minRole?: Role } = {}): Promise<
   { ctx: OkWorkspaceContext; response: null } | { ctx: null; response: NextResponse }
 > {
   const ctx = await resolveWorkspaceContext();
@@ -21,6 +26,9 @@ export async function requireWorkspace(): Promise<
       ctx: null,
       response: NextResponse.json({ error: ctx.status }, { status: STATUS_BY_ERROR[ctx.status] }),
     };
+  }
+  if (options.minRole && !hasRole(ctx.role, options.minRole)) {
+    return { ctx: null, response: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   return { ctx, response: null };
 }
@@ -66,6 +74,15 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   status_in_use: 409,
   status_key_taken: 409,
   forbidden: 403,
+  already_member: 409,
+  email_in_other_business: 409,
+  products_required: 400,
+  product_not_available: 400,
+  invitation_invalid: 404,
+  invitation_expired: 410,
+  invitation_revoked: 410,
+  invitation_accepted: 409,
+  invitation_wrong_email: 403,
   invalid_config: 400,
   reason_required: 400,
   invalid_reason: 400,

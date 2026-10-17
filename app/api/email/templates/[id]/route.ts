@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
   const { id } = await params;
 
@@ -29,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
   const { id } = await params;
   return (await deleteTemplate(ctx.businessId, id)) ? NextResponse.json({ ok: true }) : notFound();

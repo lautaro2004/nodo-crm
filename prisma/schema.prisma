@@ -38,6 +38,7 @@ model User {
   memberships   Membership[]
   accounts      Account[]
   sessions      Session[]
+  invitationsSent Invitation[] @relation("InvitationInvitedBy")
 
   @@map("user")
   @@schema("public")
@@ -114,9 +115,48 @@ model Business {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   memberships Membership[]
+  invitations Invitation[]
   workspace   Workspace?
 
   @@schema("public")
+}
+
+// Espejo de public.Invitation (migración en Nexo). Invitaciones a un
+// negocio emitidas desde Nodo → Configuración → Equipo. Solo se guarda el
+// hash del token. Ver modules/team.
+model Invitation {
+  id           String    @id @default(cuid())
+  businessId   String
+  email        String
+  role         String    @default("member")
+  products     String[]  @default(["crm"])
+  tokenHash    String    @unique
+  invitedById  String?
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy User?    @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([email])
+  @@schema("public")
+}
+
+// Espejo MÍNIMO y de solo lectura de nexo.Subscription: el CRM solo
+// necesita saber si el negocio tiene Nexo (para ofrecer "acceso a Nexo" al
+// invitar). Única capa autorizada a usarlo: modules/nexo/.
+model NexoSubscription {
+  id         String @id
+  businessId String @unique
+  status     String
+
+  @@map("Subscription")
+  @@schema("nexo")
 }
 
 // Espejo de public.GoogleConnection (la migración vive en Nexo, dueño del schema
@@ -141,11 +181,16 @@ model GoogleConnection {
   @@schema("public")
 }
 
+// Espejo de public.Membership (la migración vive en Nexo, dueño del schema
+// public — ver nexo/prisma/migrations/20261017120000_team_roles_invitations).
+// role: owner | admin | member (ver lib/permissions.ts). products: productos
+// del ecosistema a los que accede este miembro ("crm", "nexo").
 model Membership {
   id         String   @id @default(cuid())
   userId     String
   businessId String
   role       String   @default("owner")
+  products   String[] @default(["nexo", "crm"])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)

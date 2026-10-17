@@ -5,7 +5,7 @@ import { statusDefinitionUpdateSchema } from "@/lib/schemas";
 import { updateStatusDefinition, deleteStatusDefinition } from "@/modules/status-definitions/service";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { id } = await params;
@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { id } = await params;

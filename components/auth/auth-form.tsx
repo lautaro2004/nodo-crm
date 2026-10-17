@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 import { signIn, signUp } from "@/lib/auth/auth-client";
 import { Button, Input, Label, Spinner } from "@/components/ui/primitives";
+import { safeNext } from "@/lib/safe-next";
 
-export function AuthForm({ mode }: { mode: "login" | "registro" }) {
+export function AuthForm({ mode, next, defaultEmail }: { mode: "login" | "registro"; next?: string | null; defaultEmail?: string | null }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(defaultEmail ?? "");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function AuthForm({ mode }: { mode: "login" | "registro" }) {
       setError(result.error.message ?? "No pudimos procesar la solicitud.");
       return;
     }
-    router.push("/dashboard");
+    router.push(safeNext(next) ?? "/dashboard");
     router.refresh();
   }
 

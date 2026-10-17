@@ -11,7 +11,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, moduleConfigUpdateSchema);
