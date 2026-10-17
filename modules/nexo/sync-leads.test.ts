@@ -18,6 +18,11 @@ vi.mock("@/modules/nexo/appointments", () => ({
   listNexoAppointments: (...args: unknown[]) => listNexoAppointments(...args),
 }));
 
+vi.mock("@/modules/automations/engine", () => ({
+  runLeadCreatedAutomations: vi.fn(),
+  runLeadStatusAutomations: vi.fn(),
+}));
+
 vi.mock("@/modules/activities/service", () => ({
   createActivity: (...args: unknown[]) => activityCreate(...args),
 }));

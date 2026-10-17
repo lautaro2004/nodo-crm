@@ -23,6 +23,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/modules/automations/engine", () => ({
+  runLeadCreatedAutomations: vi.fn(),
+  runLeadStatusAutomations: vi.fn(),
+}));
+
 vi.mock("@/modules/activities/service", () => ({
   createActivity: (...args: unknown[]) => activityCreate(...args),
 }));
@@ -96,7 +101,7 @@ describe("validaciones de integridad", () => {
     leadFindFirst.mockResolvedValue({ id: "lead_1", status: "new" });
     statusDefFindFirst.mockResolvedValue(null);
     await expect(updateLead("biz_1", "lead_1", { status: "inventado" })).rejects.toThrow("invalid_status");
-    expect(statusDefFindFirst).toHaveBeenCalledWith({ where: { businessId: "biz_1", entityType: "lead", key: "inventado" }, select: { id: true } });
+    expect(statusDefFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", entityType: "lead", key: "inventado" } }));
     expect(leadUpdate).not.toHaveBeenCalled();
   });
 
@@ -116,5 +121,40 @@ describe("validaciones de integridad", () => {
 
   it("no permite crear un lead directamente como 'converted'", async () => {
     await expect(createLead("biz_1", { name: "X", status: "converted" })).rejects.toThrow("use_convert_endpoint");
+  });
+});
+
+describe("motivo obligatorio en transiciones", () => {
+  it("rechaza pasar a un estado que exige motivo sin indicarlo (aplica igual desde Kanban o API)", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "contacted" });
+    statusDefFindFirst.mockResolvedValue({ label: "Descartado", requiresReason: true, reasonOptions: [], isRejection: true });
+    await expect(updateLead("biz_1", "lead_1", { status: "disqualified" })).rejects.toThrow("reason_required");
+    expect(leadUpdate).not.toHaveBeenCalled();
+  });
+
+  it("valida el motivo contra las opciones configuradas", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "contacted" });
+    statusDefFindFirst.mockResolvedValue({ label: "Descartado", requiresReason: true, reasonOptions: ["Precio", "Sin respuesta"], isRejection: true });
+    await expect(updateLead("biz_1", "lead_1", { status: "disqualified", statusReason: "Otro" })).rejects.toThrow("invalid_reason");
+  });
+
+  it("guarda el motivo, lo registra en el historial con el actor y dispara las reglas", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "contacted" });
+    statusDefFindFirst.mockResolvedValue({ label: "Descartado", requiresReason: true, reasonOptions: ["Precio"], isRejection: true });
+    leadUpdate.mockResolvedValue({ id: "lead_1" });
+    activityCreate.mockResolvedValue({ id: "act_9" });
+    await updateLead("biz_1", "lead_1", { status: "disqualified", statusReason: "Precio" }, "user_1");
+    expect(leadUpdate).toHaveBeenCalledWith({ where: { id: "lead_1" }, data: { status: "disqualified", statusReason: "Precio" } });
+    expect(activityCreate).toHaveBeenCalledWith("biz_1", expect.objectContaining({ type: "status_change", body: "contacted → disqualified · Motivo: Precio", ownerId: "user_1" }));
+    const { runLeadStatusAutomations } = await import("@/modules/automations/engine");
+    expect(runLeadStatusAutomations).toHaveBeenCalledWith("biz_1", { leadId: "lead_1", from: "contacted", to: "disqualified", eventId: "act_9" });
+  });
+
+  it("al salir de un estado con motivo, el motivo se limpia", async () => {
+    leadFindFirst.mockResolvedValue({ id: "lead_1", status: "disqualified" });
+    statusDefFindFirst.mockResolvedValue({ label: "Contactado", requiresReason: false, reasonOptions: [], isRejection: false });
+    leadUpdate.mockResolvedValue({ id: "lead_1" });
+    await updateLead("biz_1", "lead_1", { status: "contacted" });
+    expect(leadUpdate).toHaveBeenCalledWith({ where: { id: "lead_1" }, data: { status: "contacted", statusReason: null } });
   });
 });

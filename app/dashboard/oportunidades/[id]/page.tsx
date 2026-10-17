@@ -106,7 +106,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Responsable</p>
-                <OwnerAssign apiPath={`/api/opportunities/${id}`} ownerId={opportunity.ownerId} />
+                <OwnerAssign apiPath={`/api/opportunities/${id}`} ownerId={opportunity.ownerId} members={members} />
               </div>
             </div>
 

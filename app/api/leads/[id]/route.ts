@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!data) return badRequest;
 
   try {
-    const lead = await updateLead(ctx.businessId, id, data);
+    const lead = await updateLead(ctx.businessId, id, data, ctx.userId);
     if (!lead) return notFound();
     return NextResponse.json(lead);
   } catch (err) {

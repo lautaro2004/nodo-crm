@@ -28,7 +28,7 @@ export interface IndustryTemplate {
   moduleLabel: IndustryModuleLabel;
   pipelineName: string;
   pipelineStages: { key: string; label: string; isWon?: boolean; isLost?: boolean }[];
-  leadStatuses: { key: string; label: string; color: string }[];
+  leadStatuses: { key: string; label: string; color: string; isRejection?: boolean }[];
   companyStatuses: { key: string; label: string; color: string }[];
 }
 
@@ -52,7 +52,7 @@ const DEFAULT_LEAD_STATUSES: IndustryTemplate["leadStatuses"] = [
   // correctos apenas exista un Lead convertido, sin depender de que
   // ensureConvertedStatusDefinition() lo siembre después.
   { key: "converted", label: "Convertido", color: "emerald" },
-  { key: "disqualified", label: "Descartado", color: "red" },
+  { key: "disqualified", label: "Descartado", color: "red", isRejection: true },
 ];
 
 const DEFAULT_COMPANY_STATUSES: IndustryTemplate["companyStatuses"] = [

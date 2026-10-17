@@ -17,6 +17,9 @@ interface StatusDef {
   label: string;
   color: string | null;
   order: number;
+  requiresReason?: boolean;
+  reasonOptions?: string[];
+  isRejection?: boolean;
 }
 
 const ENTITY_TYPES = ["lead", "company"] as const;
@@ -44,6 +47,7 @@ export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }
   const [label, setLabel] = useState("");
   const [color, setColor] = useState<StatusColorKey>("sky");
   const [editing, setEditing] = useState<{ id: string; label: string } | null>(null);
+  const [rulesOpen, setRulesOpen] = useState<string | null>(null);
 
   async function call(url: string, init: RequestInit) {
     setError(null);
@@ -204,10 +208,28 @@ export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }
                         onChange={(next) => call(`/api/status-definitions/${s.id}`, { method: "PATCH", body: JSON.stringify({ color: next }) })}
                       />
 
+                      {t === "lead" && s.key !== "converted" && (
+                        <Button type="button" variant="ghost" size="sm" aria-expanded={rulesOpen === s.id} onClick={() => setRulesOpen(rulesOpen === s.id ? null : s.id)}>
+                          Reglas{s.requiresReason ? " · motivo" : ""}
+                          {s.isRejection ? " · rechazo" : ""}
+                        </Button>
+                      )}
+
                       {!isSystem && (
                         <Button type="button" variant="ghost" size="sm" onClick={() => deleteStatus(s)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
                           Borrar
                         </Button>
+                      )}
+
+                      {rulesOpen === s.id && (
+                        <StatusRules
+                          status={s}
+                          pending={pending}
+                          onSave={async (rules) => {
+                            const ok = await call(`/api/status-definitions/${s.id}`, { method: "PATCH", body: JSON.stringify(rules) });
+                            if (ok) setRulesOpen(null);
+                          }}
+                        />
                       )}
                     </li>
                   );
@@ -218,5 +240,72 @@ export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }
         );
       })}
     </div>
+  );
+}
+
+// Reglas de transición de un estado de Lead: estado de rechazo (para
+// informes y métricas de "abiertos") y motivo obligatorio con opciones.
+function StatusRules({
+  status,
+  pending,
+  onSave,
+}: {
+  status: StatusDef;
+  pending: boolean;
+  onSave: (rules: { isRejection: boolean; requiresReason: boolean; reasonOptions: string[] }) => void;
+}) {
+  const [isRejection, setIsRejection] = useState(!!status.isRejection);
+  const [requiresReason, setRequiresReason] = useState(!!status.requiresReason);
+  const [options, setOptions] = useState((status.reasonOptions ?? []).join("\n"));
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({
+          isRejection,
+          requiresReason,
+          reasonOptions: options
+            .split("\n")
+            .map((o) => o.trim())
+            .filter(Boolean)
+            .slice(0, 20),
+        });
+      }}
+      className="mt-1 w-full space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-sm"
+    >
+      <label className="flex items-start gap-2">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-500" checked={isRejection} onChange={(e) => setIsRejection(e.target.checked)} />
+        <span>
+          <span className="font-medium text-slate-800">Es un estado de rechazo / descarte</span>
+          <span className="block text-xs text-slate-500">Cuenta como “rechazado” en informes y deja de contarse como lead abierto.</span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-500" checked={requiresReason} onChange={(e) => setRequiresReason(e.target.checked)} />
+        <span>
+          <span className="font-medium text-slate-800">Exigir motivo al pasar a este estado</span>
+          <span className="block text-xs text-slate-500">Se valida en el servidor: aplica desde la ficha, el Kanban y la API.</span>
+        </span>
+      </label>
+      {requiresReason && (
+        <div>
+          <Label htmlFor={`reasons-${status.id}`}>Motivos posibles (uno por línea; vacío = texto libre)</Label>
+          <textarea
+            id={`reasons-${status.id}`}
+            value={options}
+            onChange={(e) => setOptions(e.target.value)}
+            rows={4}
+            placeholder={"Precio\nSin respuesta\nEligió a la competencia"}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15"
+          />
+        </div>
+      )}
+      <div className="flex justify-end">
+        <Button type="submit" size="sm" disabled={pending}>
+          Guardar reglas
+        </Button>
+      </div>
+    </form>
   );
 }

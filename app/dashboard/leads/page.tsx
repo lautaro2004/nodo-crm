@@ -2,47 +2,44 @@ import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listLeads } from "@/modules/leads/service";
-import { listStatusOptions, findStatusOption } from "@/modules/status-definitions/service";
-import { listWorkspaceMembers } from "@/modules/business/members";
-import { PageHeader, Card, Button, EmptyState, ViewToggle, Table, Th, Td } from "@/components/ui/primitives";
+import { parseLeadFilters } from "@/modules/leads/filters";
+import { findStatusOption } from "@/modules/status-definitions/service";
+import { getToolbarData, memberNames } from "@/modules/views/toolbar-data";
+import { PageHeader, Button, EmptyState } from "@/components/ui/primitives";
 import { PlusIcon, TargetIcon } from "@/components/ui/icons";
-import { StatusBadge } from "@/components/status/status-badge";
-import { SearchFilterBar } from "@/components/dashboard/search-filter-bar";
 import { SyncNexoButton } from "@/components/leads/sync-nexo-button";
 import { LeadBoard } from "@/components/leads/lead-board";
-import { LEAD_SOURCE_LABELS } from "@/lib/labels";
+import { LeadTable } from "@/components/leads/lead-table";
+import { ListToolbar } from "@/components/views/list-toolbar";
+import { LEAD_COLUMNS, LEAD_DEFAULT_COLUMNS, resolveColumns } from "@/lib/views/columns";
+import { LEAD_PRESETS } from "@/lib/views/presets";
 
 const SORT_OPTIONS = [
   { value: "recent", label: "Más recientes" },
   { value: "updated", label: "Última actualización" },
+  { value: "followup", label: "Seguimiento más antiguo" },
   { value: "name", label: "Nombre (A–Z)" },
 ];
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; status?: string; ownerId?: string; sort?: string; display?: string }>;
-}) {
+type SP = Record<string, string | string[] | undefined>;
+
+export default async function LeadsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
-  const { q, status, ownerId, sort, display } = await searchParams;
-  const isKanban = display === "kanban";
-  const [leads, statuses, members] = await Promise.all([
-    // En Kanban el estado ES la columna: el filtro por estado no aplica.
-    listLeads(ctx.businessId, { search: q, status: isKanban ? undefined : status, ownerId, sort }),
-    listStatusOptions(ctx.businessId, "lead"),
-    listWorkspaceMembers(ctx.businessId),
-  ]);
-  const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
-  const params = new URLSearchParams(Object.entries({ q, status, ownerId, sort }).filter((e): e is [string, string] => !!e[1]));
-  const hasFilters = !!(q || ownerId || (!isKanban && status));
+  const sp = await searchParams;
+  const display = sp.display === "kanban" ? "kanban" : "list";
+  const filters = parseLeadFilters(sp, ctx.userId);
+  const [leads, toolbar] = await Promise.all([listLeads(ctx.businessId, filters), getToolbarData(ctx, "lead")]);
+  const names = memberNames(toolbar.members);
+  const columns = resolveColumns(LEAD_COLUMNS, LEAD_DEFAULT_COLUMNS, typeof sp.cols === "string" ? sp.cols : undefined);
+  const hasFilters = Object.keys(sp).some((k) => !["display", "cols", "sort", "view"].includes(k));
 
   return (
     <div>
       <PageHeader
         title="Leads"
-        description="Prospectos de tu negocio: calificalos y convertilos en contactos y oportunidades."
+        description={`${leads.length} ${leads.length === 1 ? "lead" : "leads"}${hasFilters ? " con estos filtros" : ""}`}
         actions={
           <>
             <SyncNexoButton />
@@ -56,32 +53,24 @@ export default async function LeadsPage({
         }
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-x-3">
-        <div className="min-w-[16rem] flex-1">
-          <SearchFilterBar
-            key={`${params.toString()}|${display ?? ""}`}
-            searchPlaceholder="Buscar por nombre, email o teléfono…"
-            statusOptions={isKanban ? undefined : statuses.map((s) => ({ value: s.key, label: s.label }))}
-            ownerOptions={members.length > 1 ? members.map((m) => ({ value: m.userId, label: m.name || m.email })) : undefined}
-            sortOptions={isKanban ? undefined : SORT_OPTIONS}
-          />
-        </div>
-        <div className="mb-4">
-          <ViewToggle basePath="/dashboard/leads" params={params} value={isKanban ? "kanban" : "list"} />
-        </div>
-      </div>
+      <ListToolbar
+        entity="lead"
+        searchPlaceholder="Buscar por nombre, email o teléfono…"
+        filters={toolbar.filters}
+        columns={LEAD_COLUMNS}
+        defaultColumns={LEAD_DEFAULT_COLUMNS}
+        sortOptions={SORT_OPTIONS}
+        presets={LEAD_PRESETS}
+        savedViews={toolbar.savedViews}
+        canShare={toolbar.canShare}
+        display={display}
+        defaultDisplay="list"
+        exportPath="/api/export/leads"
+      />
 
       {leads.length === 0 ? (
         hasFilters ? (
-          <EmptyState
-            title="Ningún lead coincide con estos filtros"
-            description="Probá con otra búsqueda o quitá los filtros."
-            action={
-              <Link href={isKanban ? "/dashboard/leads?display=kanban" : "/dashboard/leads"}>
-                <Button variant="secondary">Quitar filtros</Button>
-              </Link>
-            }
-          />
+          <EmptyState title="Ningún lead coincide con estos filtros" description="Probá con otra búsqueda o quitá algún filtro." />
         ) : (
           <EmptyState
             icon={<TargetIcon className="h-5 w-5" />}
@@ -102,9 +91,9 @@ export default async function LeadsPage({
             }
           />
         )
-      ) : isKanban ? (
+      ) : display === "kanban" ? (
         <LeadBoard
-          statuses={statuses}
+          statuses={toolbar.leadStatuses}
           leads={leads.map((l) => ({
             id: l.id,
             name: l.name,
@@ -113,68 +102,18 @@ export default async function LeadsPage({
             status: l.status,
             source: l.source,
             company: l.company,
-            ownerName: l.ownerId ? (memberNameById.get(l.ownerId) ?? null) : null,
+            ownerName: l.ownerId ? (names.get(l.ownerId) ?? null) : null,
             createdAt: l.createdAt,
+            lastFollowUpAt: l.lastFollowUpAt,
           }))}
         />
       ) : (
-        <Card className="overflow-hidden">
-          <Table>
-            <thead>
-              <tr className="border-b border-slate-100">
-                <Th>Nombre</Th>
-                <Th>Contacto</Th>
-                <Th>Estado</Th>
-                <Th>Responsable</Th>
-                <Th>Origen</Th>
-                <Th>Actualizado</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((l) => {
-                const s = findStatusOption(statuses, l.status);
-                return (
-                  <tr key={l.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
-                    <Td>
-                      <Link href={`/dashboard/leads/${l.id}`} className="font-medium text-slate-900 hover:text-brand-700">
-                        {l.name}
-                      </Link>
-                      {l.company && <p className="text-xs text-slate-500">{l.company.name}</p>}
-                    </Td>
-                    <Td className="text-slate-600">
-                      {l.email || l.phone ? (
-                        <div className="max-w-56 truncate">
-                          {l.email && <span className="block truncate">{l.email}</span>}
-                          {l.phone && <span className="block text-xs text-slate-500">{l.phone}</span>}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <StatusBadge label={s.label} color={s.color} />
-                    </Td>
-                    <Td className="text-slate-600">
-                      {l.ownerId ? (memberNameById.get(l.ownerId) ?? "—") : <span className="text-slate-400">Sin asignar</span>}
-                    </Td>
-                    <Td>
-                      {l.source?.startsWith("nexo_") ? (
-                        <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
-                          {LEAD_SOURCE_LABELS[l.source]}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">{LEAD_SOURCE_LABELS[l.source ?? "manual"] ?? l.source}</span>
-                      )}
-                    </Td>
-                    <Td className="whitespace-nowrap text-slate-500" title={`Creado el ${l.createdAt.toLocaleDateString("es-AR")}`}>
-                      {l.updatedAt.toLocaleDateString("es-AR")}
-                    </Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        </Card>
+        <LeadTable
+          leads={leads}
+          columns={columns}
+          statusOf={(key) => findStatusOption(toolbar.leadStatuses, key)}
+          ownerName={(id) => names.get(id)}
+        />
       )}
     </div>
   );

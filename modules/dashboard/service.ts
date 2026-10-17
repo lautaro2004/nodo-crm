@@ -1,16 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { stageColorKey } from "@/lib/status-colors";
+import { getClosedLeadStatusKeys } from "@/modules/status-definitions/service";
 
-// Una oportunidad abierta sin ningún cambio en este lapso se considera
-// "estancada" (dashboard + aviso en la tarjeta del Kanban).
-export const STALLED_DAYS = 14;
+import { STALLED_DAYS } from "@/modules/opportunities/filters";
+export { STALLED_DAYS };
 
-// Estados que se consideran "cerrados" para un Lead a los fines del
-// dashboard — Lead.status es texto libre configurable por Workspace (ver
-// StatusDefinition), así que esto es una heurística razonable, no una
-// regla de dominio dura: cualquier status que no sea uno de estos cuenta
-// como "abierto".
-const CLOSED_LEAD_STATUSES = ["disqualified", "converted", "lost"];
+// Leads "abiertos" = no convertidos ni en un estado de rechazo
+// (StatusDefinition.isRejection) — misma definición que filtros e informes.
 const OPEN_TASK_STATUSES = ["todo", "in_progress"];
 
 export interface DashboardMetrics {
@@ -44,7 +40,7 @@ export async function getDashboardMetrics(businessId: string): Promise<Dashboard
   ] = await Promise.all([
     prisma.company.count({ where: { businessId, status: { not: "archived" } } }),
     prisma.contact.count({ where: { businessId } }),
-    prisma.lead.count({ where: { businessId, status: { notIn: CLOSED_LEAD_STATUSES } } }),
+    getClosedLeadStatusKeys(businessId).then((closed) => prisma.lead.count({ where: { businessId, status: { notIn: closed } } })),
     prisma.opportunity.count({ where: { businessId, status: "open" } }),
     prisma.task.count({ where: { businessId, status: { in: OPEN_TASK_STATUSES } } }),
     prisma.task.count({ where: { businessId, status: { in: OPEN_TASK_STATUSES }, dueAt: { lt: startOfToday } } }),

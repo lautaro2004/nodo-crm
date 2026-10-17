@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
 import { assertOptionalOwner } from "@/modules/business/members";
-import { assertValidStatus } from "@/modules/status-definitions/service";
+import { assertValidStatus, resolveStatusRules, validateStatusReason } from "@/modules/status-definitions/service";
+import { runLeadCreatedAutomations, runLeadStatusAutomations } from "@/modules/automations/engine";
+import { buildLeadWhere, leadOrderBy, type LeadFilters } from "@/modules/leads/filters";
 
 // crm.Lead — prospecto propio de CADA NEGOCIO que usa el CRM. NO es
 // public.Lead (pipeline comercial de Kodexa) — ver
@@ -23,6 +25,7 @@ export interface CreateLeadInput {
   companyId?: string | null;
   ownerId?: string | null;
   status?: string;
+  statusReason?: string | null;
   source?: string;
 }
 export type UpdateLeadInput = Partial<CreateLeadInput>;
@@ -37,7 +40,9 @@ export async function createLead(businessId: string, data: CreateLeadInput) {
   await assertCompanyBelongs(businessId, data.companyId);
   await assertOptionalOwner(businessId, data.ownerId);
   if (data.status === "converted") throw new Error("use_convert_endpoint");
-  await assertValidStatus(businessId, "lead", data.status);
+  let statusReason: string | null = null;
+  if (data.status) statusReason = validateStatusReason(await resolveStatusRules(businessId, "lead", data.status), data.statusReason);
+  else await assertValidStatus(businessId, "lead", data.status);
   const lead = await prisma.lead.create({
     data: {
       businessId,
@@ -47,45 +52,26 @@ export async function createLead(businessId: string, data: CreateLeadInput) {
       companyId: data.companyId ?? null,
       ownerId: data.ownerId ?? null,
       status: data.status ?? "new",
+      statusReason,
       source: data.source ?? "manual",
     },
   });
   await createActivity(businessId, { relatedType: "lead", relatedId: lead.id, type: "note", body: "Lead creado" });
+  // Asignación automática (solo si quedó sin responsable). Nunca rompe la
+  // creación: el motor registra su propio resultado/error.
+  await runLeadCreatedAutomations(businessId, lead.id);
   return lead;
 }
 
-export interface ListLeadsFilters {
-  search?: string;
-  status?: string;
-  /** userId, o "none" para los que no tienen responsable. */
-  ownerId?: string;
-  sort?: string;
-}
-
-const LEAD_ORDER = {
-  recent: { createdAt: "desc" },
-  updated: { updatedAt: "desc" },
-  name: { name: "asc" },
-} as const;
+// Filtros: ver modules/leads/filters.ts (misma definición para lista,
+// Kanban, vistas guardadas, exportación e informes).
+export type ListLeadsFilters = LeadFilters;
 
 export async function listLeads(businessId: string, filters: ListLeadsFilters = {}) {
   return prisma.lead.findMany({
-    where: {
-      businessId,
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.ownerId ? { ownerId: filters.ownerId === "none" ? null : filters.ownerId } : {}),
-      ...(filters.search
-        ? {
-            OR: [
-              { name: { contains: filters.search, mode: "insensitive" } },
-              { email: { contains: filters.search, mode: "insensitive" } },
-              { phone: { contains: filters.search } },
-            ],
-          }
-        : {}),
-    },
+    where: await buildLeadWhere(businessId, filters),
     include: { company: { select: { id: true, name: true } } },
-    orderBy: LEAD_ORDER[(filters.sort ?? "recent") as keyof typeof LEAD_ORDER] ?? LEAD_ORDER.recent,
+    orderBy: leadOrderBy(filters.sort),
   });
 }
 
@@ -111,7 +97,7 @@ export async function getLead(businessId: string, id: string) {
 // Opportunity real detrás, rompiendo el invariante "convertedAt implica
 // convertedContactId" que el resto de la UI asume. Ver
 // docs/architecture/crm-fase5-lead-conversion.md, "Estado del Lead".
-export async function updateLead(businessId: string, id: string, data: UpdateLeadInput) {
+export async function updateLead(businessId: string, id: string, data: UpdateLeadInput, actorUserId?: string | null) {
   await assertCompanyBelongs(businessId, data.companyId);
   const current = await prisma.lead.findFirst({ where: { id, businessId } });
   if (!current) return null;
@@ -121,17 +107,36 @@ export async function updateLead(businessId: string, id: string, data: UpdateLea
     throw new Error("lead_already_converted");
   }
   await assertOptionalOwner(businessId, data.ownerId);
-  if (data.status && data.status !== current.status) await assertValidStatus(businessId, "lead", data.status);
 
-  const updated = await prisma.lead.update({ where: { id }, data });
+  // Regla de transición validada en el servidor (aplica igual desde el
+  // detalle, el Kanban o la API): un estado con motivo obligatorio exige
+  // `statusReason` válido; al salir de él, el motivo se limpia.
+  const statusChanged = !!data.status && data.status !== current.status;
+  const { statusReason: requestedReason, ...rest } = data;
+  let statusReason: string | null | undefined;
+  let rules: Awaited<ReturnType<typeof resolveStatusRules>> | null = null;
+  if (statusChanged) {
+    rules = await resolveStatusRules(businessId, "lead", data.status!);
+    statusReason = validateStatusReason(rules, requestedReason);
+  } else if (requestedReason !== undefined) {
+    // Editar el motivo sin cambiar de estado: mismas reglas del estado actual.
+    statusReason = validateStatusReason(await resolveStatusRules(businessId, "lead", current.status), requestedReason);
+  }
 
-  if (data.status && data.status !== current.status) {
-    await createActivity(businessId, {
+  const updated = await prisma.lead.update({
+    where: { id },
+    data: { ...rest, ...(statusReason !== undefined ? { statusReason } : {}) },
+  });
+
+  if (statusChanged) {
+    const activity = await createActivity(businessId, {
       relatedType: "lead",
       relatedId: id,
       type: "status_change",
-      body: `${current.status} → ${data.status}`,
+      body: `${current.status} → ${data.status}${statusReason ? ` · Motivo: ${statusReason}` : ""}`,
+      ownerId: actorUserId ?? null,
     });
+    await runLeadStatusAutomations(businessId, { leadId: id, from: current.status, to: data.status!, eventId: activity?.id ?? `${Date.now()}` });
   }
 
   return updated;

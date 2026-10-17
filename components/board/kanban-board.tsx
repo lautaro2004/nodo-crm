@@ -96,7 +96,7 @@ export function KanbanBoard<T extends BoardItem>({
 
     if (!result.ok) {
       clearOverride(item.id);
-      setError(result.error);
+      if (result.error) setError(result.error); // "" = cancelado por el usuario, sin aviso
       return;
     }
     // El override se limpia en la misma transición que el refresh: la

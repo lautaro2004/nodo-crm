@@ -45,7 +45,7 @@ export interface CreateActivityInput {
 // modules/opportunities/service.ts, modules/leads/service.ts) pasan por
 // acá, nunca por un create() directo repetido en cada lugar.
 export async function createActivity(businessId: string, input: CreateActivityInput) {
-  return prisma.activity.create({
+  const activity = await prisma.activity.create({
     data: {
       businessId,
       relatedType: input.relatedType,
@@ -55,6 +55,25 @@ export async function createActivity(businessId: string, input: CreateActivityIn
       ownerId: input.ownerId ?? null,
     },
   });
+  if (input.relatedType === "lead" && isFollowUp(input)) {
+    // Scopeado por businessId: una actividad sobre un id ajeno no toca nada.
+    await prisma.lead.updateMany({
+      where: { id: input.relatedId, businessId },
+      data: { lastFollowUpAt: activity.createdAt },
+    });
+  }
+  return activity;
+}
+
+// "Seguimiento real" de un lead: interacción registrada POR UNA PERSONA
+// (ownerId presente). Abrir la ficha no genera actividad, y los eventos
+// automáticos ("Lead creado", sync de Nexo, cambios de estado/etapa,
+// asignaciones) no cuentan. Misma definición que usa el backfill de la
+// migración 20261017090000_views_automations.
+export const FOLLOW_UP_TYPES: ActivityType[] = ["call", "email", "meeting", "note", "comment", "event_completed"];
+
+export function isFollowUp(input: { type: string; ownerId?: string | null }) {
+  return !!input.ownerId && (FOLLOW_UP_TYPES as string[]).includes(input.type);
 }
 
 export async function listActivitiesForEntity(businessId: string, relatedType: RelatedType, relatedId: string) {

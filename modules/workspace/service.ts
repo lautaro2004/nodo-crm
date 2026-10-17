@@ -86,6 +86,7 @@ export async function applyIndustryTemplate(businessId: string, industry: Indust
         color: s.color,
         order,
         isDefault: order === 0,
+        isRejection: s.isRejection ?? false,
       })),
     });
   }
