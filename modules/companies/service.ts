@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { listEntityIdsForTag } from "@/modules/tags/service";
 import { assertOptionalOwner } from "@/modules/business/members";
 import { assertValidStatus } from "@/modules/status-definitions/service";
+import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 
 // Todo módulo de dominio del CRM recibe businessId como PRIMER argumento y
 // lo aplica en cada where — nunca se confía en un id sin scopear (ver
@@ -99,5 +100,6 @@ export async function archiveCompany(businessId: string, id: string) {
 
 export async function deleteCompany(businessId: string, id: string) {
   const result = await prisma.company.deleteMany({ where: { id, businessId } });
+  if (result.count > 0) await cleanupDeletedRecord(businessId, "company", id);
   return result.count > 0;
 }

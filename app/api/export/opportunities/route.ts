@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { csvResponse, toCsv, todayStamp } from "@/lib/csv";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
-import { OPPORTUNITY_COLUMNS, resolveColumns } from "@/lib/views/columns";
+import { OPPORTUNITY_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
+import { formatCustomValue } from "@/lib/custom-fields";
+import { listCustomFieldDefinitions } from "@/modules/custom-fields/service";
+import { loadCustomCells } from "@/modules/custom-fields/columns";
 import { listOpportunities } from "@/modules/opportunities/service";
 import { parseOpportunityFilters } from "@/modules/opportunities/filters";
 import { listWorkspaceMembers } from "@/modules/business/members";
@@ -19,12 +22,16 @@ export async function GET(request: Request) {
     listWorkspaceMembers(ctx.businessId),
   ]);
   const names = new Map(members.map((m) => [m.userId, m.name || m.email]));
-  const cols = resolveColumns(OPPORTUNITY_COLUMNS, OPPORTUNITY_COLUMNS.map((c) => c.key), sp.get("cols"));
+  // Sin `cols` se exporta todo, incluidos los campos personalizados.
+  const definitions = await listCustomFieldDefinitions(ctx.businessId, "opportunity");
+  const allColumns = [...OPPORTUNITY_COLUMNS, ...customColumns(definitions)];
+  const cols = resolveColumns(allColumns, allColumns.map((c) => c.key), sp.get("cols"));
+  const custom = await loadCustomCells(ctx.businessId, definitions, cols, opportunities.map((x) => x.id));
 
   const header: string[] = [];
   for (const c of cols) {
     if (c === "account") header.push("Empresa", "Contacto");
-    else header.push(OPPORTUNITY_COLUMNS.find((x) => x.key === c)!.label);
+    else header.push(allColumns.find((x) => x.key === c)!.label);
   }
   header.push("Pipeline");
   const rows = opportunities.map((o) => [
@@ -48,8 +55,10 @@ export async function GET(request: Request) {
           return [o.updatedAt];
         case "closed":
           return [o.closedAt];
-        default:
-          return [""];
+        default: {
+          const column = custom.columns.get(c);
+          return [column ? formatCustomValue(column.type, custom.values.get(o.id)?.get(column.definitionId)) : ""];
+        }
       }
     }),
     o.pipeline.name,

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { CustomCell } from "@/components/custom-fields/custom-cell";
+import type { CustomCells } from "@/modules/custom-fields/columns";
+
 import { Badge, Table, Th, Td, Card } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/status/status-badge";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
@@ -31,7 +34,15 @@ const day = (d: Date) => d.toLocaleDateString("es-AR");
 
 // Lista de Oportunidades con columnas configurables (orden y visibilidad
 // desde la URL, ver lib/views/columns.ts).
-export function OpportunityTable({ opportunities, columns = OPPORTUNITY_DEFAULT_COLUMNS }: { opportunities: OpportunityRow[]; columns?: string[] }) {
+export function OpportunityTable({
+  opportunities,
+  columns = OPPORTUNITY_DEFAULT_COLUMNS,
+  custom,
+}: {
+  opportunities: OpportunityRow[];
+  columns?: string[];
+  custom?: CustomCells;
+}) {
   const cell: Record<string, (o: OpportunityRow) => ReactNode> = {
     title: (o) => (
       <Link href={`/dashboard/oportunidades/${o.id}`} className="font-medium text-slate-900 hover:text-brand-700">
@@ -47,7 +58,7 @@ export function OpportunityTable({ opportunities, columns = OPPORTUNITY_DEFAULT_
     updated: (o) => <span className="whitespace-nowrap text-slate-500">{day(o.updatedAt)}</span>,
     closed: (o) => <span className="whitespace-nowrap text-slate-500">{o.closedAt ? day(o.closedAt) : "—"}</span>,
   };
-  const label = (key: string) => OPPORTUNITY_COLUMNS.find((c) => c.key === key)?.label ?? key;
+  const label = (key: string) => OPPORTUNITY_COLUMNS.find((c) => c.key === key)?.label ?? custom?.columns.get(key)?.label ?? key;
 
   return (
     <Card className="overflow-hidden">
@@ -65,7 +76,7 @@ export function OpportunityTable({ opportunities, columns = OPPORTUNITY_DEFAULT_
           {opportunities.map((o) => (
             <tr key={o.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
               {columns.map((c) => (
-                <Td key={c}>{cell[c]?.(o)}</Td>
+                <Td key={c}>{cell[c] ? cell[c](o) : custom ? <CustomCell custom={custom} columnKey={c} entityId={o.id} /> : null}</Td>
               ))}
             </tr>
           ))}

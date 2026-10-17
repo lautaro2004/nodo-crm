@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 const cfFindMany = vi.fn();
-vi.mock("@/lib/prisma", () => ({ prisma: { customFieldValue: { findMany: (...a: unknown[]) => cfFindMany(...a) } } }));
+const defFindFirst = vi.fn();
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    customFieldValue: { findMany: (...a: unknown[]) => cfFindMany(...a) },
+    customFieldDefinition: { findFirst: (...a: unknown[]) => defFindFirst(...a) },
+  },
+}));
 vi.mock("@/modules/tags/service", () => ({ listEntityIdsForTag: async () => ["l_tag"] }));
 vi.mock("@/modules/status-definitions/service", () => ({ getClosedLeadStatusKeys: async () => ["converted", "disqualified"] }));
 
@@ -20,6 +26,7 @@ describe("filtros de leads (fuente única para lista, Kanban, vistas, CSV e info
 
   it("combina filtros con AND y siempre scopea por businessId", async () => {
     cfFindMany.mockResolvedValue([{ entityId: "l1" }]);
+    defFindFirst.mockResolvedValue({ type: "text" });
     const now = new Date("2026-10-17T12:00:00Z");
     const where = await buildLeadWhere("biz", { status: ["new"], ownerId: "none", openOnly: true, noFollowUpDays: 3, tagId: "t1", customFields: [{ definitionId: "def1", value: "Gold" }] }, now);
     expect(where.businessId).toBe("biz");
@@ -34,7 +41,16 @@ describe("filtros de leads (fuente única para lista, Kanban, vistas, CSV e info
       ])
     );
     // El campo personalizado se busca solo en definiciones de este negocio y de Lead.
-    expect(cfFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ definition: { id: "def1", businessId: "biz", entityType: "lead" } }) }));
+    expect(defFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "def1", businessId: "biz", entityType: "lead" } }));
+    expect(cfFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ definitionId: "def1" }) }));
+  });
+
+  it("un campo personalizado de otro negocio o módulo no matchea nada", async () => {
+    cfFindMany.mockClear();
+    defFindFirst.mockResolvedValue(null);
+    const where = await buildLeadWhere("biz", { customFields: [{ definitionId: "ajeno", value: "x" }] });
+    expect(where.AND).toEqual([{ id: { in: [] } }]);
+    expect(cfFindMany).not.toHaveBeenCalled();
   });
 
   it("nofollowup=0 significa 'nunca tuvo seguimiento'", async () => {

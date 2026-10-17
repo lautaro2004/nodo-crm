@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { CustomCell } from "@/components/custom-fields/custom-cell";
+import type { CustomCells } from "@/modules/custom-fields/columns";
+
 import { Card, Table, Th, Td } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/status/status-badge";
 import { LEAD_COLUMNS } from "@/lib/views/columns";
@@ -35,8 +38,10 @@ export function LeadTable({
   columns,
   statusOf,
   ownerName,
+  custom,
 }: {
   leads: LeadRow[];
+  custom?: CustomCells;
   columns: string[];
   statusOf: (key: string) => { label: string; color: string | null };
   ownerName: (id: string) => string | undefined;
@@ -87,7 +92,7 @@ export function LeadTable({
     created: (l) => <span className="whitespace-nowrap text-slate-500">{day(l.createdAt)}</span>,
     updated: (l) => <span className="whitespace-nowrap text-slate-500">{day(l.updatedAt)}</span>,
   };
-  const label = (key: string) => LEAD_COLUMNS.find((c) => c.key === key)?.label ?? key;
+  const label = (key: string) => LEAD_COLUMNS.find((c) => c.key === key)?.label ?? custom?.columns.get(key)?.label ?? key;
 
   return (
     <Card className="overflow-hidden">
@@ -103,7 +108,7 @@ export function LeadTable({
           {leads.map((l) => (
             <tr key={l.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
               {columns.map((c) => (
-                <Td key={c}>{cell[c]?.(l)}</Td>
+                <Td key={c}>{cell[c] ? cell[c](l) : custom ? <CustomCell custom={custom} columnKey={c} entityId={l.id} /> : null}</Td>
               ))}
             </tr>
           ))}

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { hasRole } from "@/lib/permissions";
+import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
+import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { getLead } from "@/modules/leads/service";
 import { listStatusDefinitions } from "@/modules/status-definitions/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
@@ -32,7 +35,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const lead = await getLead(ctx.businessId, id);
   if (!lead) notFound();
 
-  const [statuses, activities, assignedTags, allTags, nexoAppointment, contacts, pipelines, members, upcomingEvents, emailTemplates] = await Promise.all([
+  const [statuses, activities, assignedTags, allTags, nexoAppointment, contacts, pipelines, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
     listStatusDefinitions(ctx.businessId, "lead"),
     listActivitiesForEntity(ctx.businessId, "lead", id),
     listTagsForEntity(ctx.businessId, "lead", id),
@@ -54,6 +57,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     listWorkspaceMembers(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { leadId: id }),
     listTemplates(ctx.businessId),
+    getCustomFieldsForEntity(ctx.businessId, "lead", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -157,6 +161,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <TagPicker entityType="lead" entityId={id} assigned={assignedTags} allTags={allTags} />
             </div>
           </Card>
+
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
 
           {nexoAppointment && (
             <Card className="p-4">

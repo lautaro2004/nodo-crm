@@ -11,7 +11,8 @@ export async function POST(request: Request) {
   const { data, response: badRequest } = await parseBody(request, customFieldValueSetSchema);
   if (!data) return badRequest;
 
-  const value = await setCustomFieldValue(ctx.businessId, data.definitionId, data.entityId, data.value ?? null);
-  if (!value) return notFound();
-  return NextResponse.json(value);
+  const result = await setCustomFieldValue(ctx.businessId, data.definitionId, data.entityId, data.value ?? null);
+  if (!result.ok && result.error === "not_found") return notFound();
+  if (!result.ok) return NextResponse.json({ error: "invalid_value", message: result.message }, { status: 400 });
+  return NextResponse.json({ value: result.value });
 }

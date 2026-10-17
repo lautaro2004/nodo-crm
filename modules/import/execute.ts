@@ -156,7 +156,11 @@ export async function executeImport(
         continue;
       }
       for (const [definitionId, value] of Object.entries(cleanCustom)) {
-        await setCustomFieldValue(businessId, definitionId, entityId, value);
+        // El registro es de este negocio (recién creado o encontrado por
+        // findExisting, ambos scopeados): no hace falta re-chequearlo.
+        // setCustomFieldValue normaliza el valor (fechas dd/mm → ISO,
+        // "sí" → true, "1.234,5" → 1234.5) igual que el editor del registro.
+        await setCustomFieldValue(businessId, definitionId, entityId, value, { skipEntityCheck: true });
       }
     } catch (err) {
       // Una fila que falla en la escritura (ej. constraint de base) no
