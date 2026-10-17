@@ -65,7 +65,7 @@ export function OpportunityBoard({
         const idle = o.status === "open" ? daysSince(o.updatedAt) : 0;
         return (
           <div>
-            <Link href={`/dashboard/oportunidades/${o.id}`} className="block text-sm font-medium leading-snug text-slate-900 hover:text-brand-700" draggable={false}>
+            <Link href={`/dashboard/oportunidades/${o.id}`} className="block text-sm font-medium leading-snug text-slate-900 hover:text-brand-700">
               {o.title}
             </Link>
             {(o.company || o.contact) && (

@@ -65,6 +65,10 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   lead_already_converted: 409,
   status_in_use: 409,
   status_key_taken: 409,
+  forbidden: 403,
+  invalid_config: 400,
+  reason_required: 400,
+  invalid_reason: 400,
   pipeline_in_use: 409,
   stage_in_use: 409,
 };

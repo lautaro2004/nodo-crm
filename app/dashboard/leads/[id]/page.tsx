@@ -90,6 +90,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Información</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div>
+                <dt className="text-slate-500">Último seguimiento</dt>
+                <dd className={`mt-0.5 ${lead.lastFollowUpAt ? "text-slate-900" : "text-amber-700"}`}>
+                  {lead.lastFollowUpAt ? lead.lastFollowUpAt.toLocaleDateString("es-AR") : "Sin seguimiento registrado"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Creado</dt>
+                <dd className="mt-0.5 text-slate-900">{lead.createdAt.toLocaleDateString("es-AR")}</dd>
+              </div>
+              <div>
                 <dt className="text-slate-500">Email</dt>
                 <dd className="mt-0.5 text-slate-900">{lead.email ?? "—"}</dd>
               </div>
@@ -125,16 +135,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                     apiPath={`/api/leads/${id}`}
                     value={lead.status}
                     label="Estado del lead"
-                    options={statuses.filter((s) => s.key !== "converted").map((s) => ({ key: s.key, label: s.label, color: s.color }))}
+                    options={statuses
+                      .filter((s) => s.key !== "converted")
+                      .map((s) => ({ key: s.key, label: s.label, color: s.color, requiresReason: s.requiresReason, reasonOptions: s.reasonOptions }))}
                   />
                 )}
+                {lead.statusReason && <p className="mt-1 text-xs text-slate-500">Motivo: {lead.statusReason}</p>}
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Responsable</p>
                 {lead.convertedAt ? (
                   <p className="text-sm text-slate-500">Un Lead convertido no se reasigna — el responsable ahora vive en el Contacto/Oportunidad resultante.</p>
                 ) : (
-                  <OwnerAssign apiPath={`/api/leads/${id}`} ownerId={lead.ownerId} />
+                  <OwnerAssign apiPath={`/api/leads/${id}`} ownerId={lead.ownerId} members={members} />
                 )}
               </div>
             </div>

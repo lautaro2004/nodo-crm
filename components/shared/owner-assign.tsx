@@ -1,33 +1,83 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/primitives";
+import { Select } from "@/components/ui/primitives";
 import { useSession } from "@/lib/auth/auth-client";
+import { readApiError } from "@/lib/error-messages";
 
-// "Asignar usuario" mínimo para esta fase: sin invitar miembros ni un
-// roster de usuarios todavía (no existe esa funcionalidad — ver Fase 3Q,
-// "no construir permisos granulares completos"), la única acción posible
-// hoy es asignarse/desasignarse a uno mismo. Cuando exista invitación de
-// equipo, este componente se reemplaza por un selector real de usuarios
-// del Workspace — el campo ownerId ya está listo para eso desde ahora.
-export function OwnerAssign({ apiPath, ownerId }: { apiPath: string; ownerId: string | null }) {
+// Selector de responsable entre los miembros del Workspace (los recibe del
+// servidor vía listWorkspaceMembers — nunca se escribe un userId libre).
+// El backend vuelve a validar la membresía (assertOptionalOwner), así que
+// un id manipulado se rechaza igual. Optimista con reversión y mensaje.
+export function OwnerAssign({
+  apiPath,
+  ownerId,
+  members,
+}: {
+  apiPath: string;
+  ownerId: string | null;
+  members: { userId: string; name: string; email: string }[];
+}) {
   const router = useRouter();
   const { data } = useSession();
-  const isMine = ownerId === data?.user.id;
+  const [, startTransition] = useTransition();
+  const [value, setValue] = useState(ownerId ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function toggle() {
-    await fetch(apiPath, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId: isMine ? null : data?.user.id }),
-    });
-    router.refresh();
+  useEffect(() => setValue(ownerId ?? ""), [ownerId]);
+
+  async function save(next: string) {
+    const previous = value;
+    setValue(next);
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(apiPath, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId: next || null }),
+      });
+      if (!res.ok) {
+        setValue(previous);
+        setError(await readApiError(res));
+        return;
+      }
+      startTransition(() => router.refresh());
+    } catch {
+      setValue(previous);
+      setError("Sin conexión. El cambio no se guardó.");
+    } finally {
+      setSaving(false);
+    }
   }
 
+  const me = data?.user.id;
   return (
-    <Button type="button" variant="secondary" onClick={toggle}>
-      {isMine ? "Quitarme como responsable" : ownerId ? "Reasignarme" : "Asignarme"}
-    </Button>
+    <div>
+      <div className="flex items-center gap-2">
+        <Select aria-label="Responsable" value={value} disabled={saving} onChange={(e) => save(e.target.value)} className="w-auto min-w-48">
+          <option value="">Sin asignar</option>
+          {members.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.name || m.email}
+              {m.userId === me ? " (vos)" : ""}
+            </option>
+          ))}
+        </Select>
+        {me && value !== me && members.some((m) => m.userId === me) && (
+          <button type="button" disabled={saving} onClick={() => save(me)} className="text-xs font-medium text-brand-700 hover:underline">
+            Asignarme
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

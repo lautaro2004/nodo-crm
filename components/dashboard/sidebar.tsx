@@ -17,6 +17,7 @@ import {
   SearchIcon,
   UploadIcon,
   XIcon,
+  BarChartIcon,
 } from "@/components/ui/icons";
 import { ModuleIcon } from "@/components/ui/module-icon";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
@@ -60,6 +61,7 @@ function buildNavGroups(opportunityLabel: ModuleLabel): { label: string | null; 
         { href: "/dashboard/tareas", label: "Tareas", icon: <CheckSquareIcon />, module: "tasks" },
         { href: "/dashboard/calendario", label: "Calendario", icon: <CalendarIcon /> },
         { href: "/dashboard/actividades", label: "Actividad", icon: <ActivityIcon /> },
+        { href: "/dashboard/informes", label: "Informes", icon: <BarChartIcon /> },
       ],
     },
     {

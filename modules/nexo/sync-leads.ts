@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { listNexoAppointments } from "@/modules/nexo/appointments";
 import { listNexoInquiries } from "@/modules/nexo/inquiries";
 import { createActivity } from "@/modules/activities/service";
+import { runLeadCreatedAutomations } from "@/modules/automations/engine";
 
 const SOURCE = "nexo_appointment";
 
@@ -79,6 +80,7 @@ export async function syncLeadsFromNexoAppointments(businessId: string): Promise
       type: "note",
       body: `Lead creado desde una reserva en Nexo (${appointment.serviceName}, ${appointment.date} ${appointment.startTime})`,
     });
+    await runLeadCreatedAutomations(businessId, lead.id);
     created++;
   }
 
@@ -125,6 +127,7 @@ export async function syncLeadsFromNexoInquiries(businessId: string): Promise<Sy
       type: "note",
       body: `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
     });
+    await runLeadCreatedAutomations(businessId, lead.id);
     created++;
   }
 

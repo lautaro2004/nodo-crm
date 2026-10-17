@@ -21,6 +21,7 @@ export default async function SettingsPage() {
     { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas" },
     { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados" },
     { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
+    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (asignación, alertas, reglas por estado)" },
     { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
     { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")` },
     { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)" },

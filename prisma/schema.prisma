@@ -199,6 +199,8 @@ model Workspace {
   pipelines               Pipeline[]
   tags                    Tag[]
   statusDefinitions       StatusDefinition[]
+  savedViews              SavedView[]
+  automationRules         AutomationRule[]
   customFieldDefinitions  CustomFieldDefinition[]
 
   @@schema("crm")
@@ -295,6 +297,14 @@ model Lead {
   // Opportunity reales (ver docs/architecture/crm-fase5-lead-conversion.md,
   // "Eliminaciones").
   convertedAt           DateTime?
+  // Último seguimiento REAL (llamada, email, reunión, nota o actividad
+  // completada registrada por una persona). Abrir el registro o un cambio
+  // automático NO cuenta. Mantenido por modules/activities/service.ts;
+  // base de "Leads sin seguimiento" y de la alerta de lead sin atención.
+  lastFollowUpAt         DateTime?
+  // Motivo del estado actual cuando ese estado lo exige
+  // (StatusDefinition.requiresReason, ej. "Descartado").
+  statusReason           String?
   convertedContactId     String?
   convertedOpportunityId String?  @unique
 
@@ -307,6 +317,7 @@ model Lead {
 
   @@unique([businessId, source, sourceRef])
   @@index([businessId])
+  @@index([businessId, status])
   @@index([convertedContactId])
   @@schema("crm")
 }
@@ -664,6 +675,12 @@ model StatusDefinition {
   color      String?
   order      Int     @default(0)
   isDefault  Boolean @default(false)
+  // Transición con campo obligatorio: pasar a este estado exige motivo.
+  requiresReason Boolean  @default(false)
+  // Opciones de motivo; vacío = texto libre.
+  reasonOptions  String[] @default([])
+  // Estado de rechazo/descarte (informes "rechazados", métricas de abiertos).
+  isRejection    Boolean  @default(false)
 
   workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
 
@@ -793,4 +810,75 @@ model Inquiry {
   updatedAt        DateTime
 
   @@schema("nexo")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Vistas guardadas (Leads / Oportunidades). `params` es el query string de
+// la lista (filtros, columnas, orden, Lista/Kanban): la vista guardada NO
+// es una segunda fuente de datos, solo recuerda cómo leer la misma.
+// Personal (shared = false) o compartida con todo el Workspace.
+// ═══════════════════════════════════════════════════════════════════════
+model SavedView {
+  id         String   @id @default(cuid())
+  businessId String
+  entityType String
+  name       String
+  params     String
+  shared     Boolean  @default(false)
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@index([businessId, entityType])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Automatizaciones (ver modules/automations). `type`:
+//   assign_lead        asignación automática de leads nuevos
+//   lead_unattended    alerta de lead sin seguimiento tras N horas
+//   lead_status_change acciones al pasar un lead a un estado
+// `config` es JSON validado con Zod en el servidor. `cursor` es el estado
+// de la asignación rotativa (incremento atómico).
+// ═══════════════════════════════════════════════════════════════════════
+model AutomationRule {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  type       String
+  enabled    Boolean  @default(true)
+  config     Json
+  cursor     Int      @default(0)
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  runs      AutomationRun[]
+
+  @@index([businessId, type, enabled])
+  @@schema("crm")
+}
+
+// Registro de ejecuciones. (ruleId, dedupeKey) único: una regla nunca se
+// ejecuta dos veces para el mismo evento (reintentos del cron, requests
+// simultáneos, etc.).
+model AutomationRun {
+  id         String   @id @default(cuid())
+  businessId String
+  ruleId     String
+  dedupeKey  String
+  entityType String
+  entityId   String
+  status     String
+  message    String?
+  createdAt  DateTime @default(now())
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, dedupeKey])
+  @@index([businessId, createdAt])
+  @@schema("crm")
 }

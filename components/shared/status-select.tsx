@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Select } from "@/components/ui/primitives";
 import { readApiError } from "@/lib/error-messages";
 import { resolveStatusColor } from "@/lib/status-colors";
+import { useReasonPrompt } from "@/components/status/reason-prompt";
 
 // Select de estado/etapa que persiste al cambiar (PATCH a `apiPath`).
 // - Muestra el color configurado del valor actual (punto a la izquierda).
@@ -21,7 +22,7 @@ export function StatusSelect({
 }: {
   apiPath: string;
   value: string;
-  options: { key: string; label: string; color?: string | null }[];
+  options: { key: string; label: string; color?: string | null; requiresReason?: boolean; reasonOptions?: string[] }[];
   field?: string;
   label?: string;
 }) {
@@ -30,6 +31,7 @@ export function StatusSelect({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [, startTransition] = useTransition();
+  const reason = useReasonPrompt();
 
   useEffect(() => setCurrent(value), [value]);
 
@@ -38,6 +40,12 @@ export function StatusSelect({
 
   async function handleChange(next: string) {
     const previous = current;
+    const target = options.find((o) => o.key === next);
+    let statusReason: string | null = null;
+    if (target?.requiresReason) {
+      statusReason = await reason.ask(target.label, target.reasonOptions ?? []);
+      if (!statusReason) return; // canceló: no se cambia nada
+    }
     setCurrent(next);
     setError(null);
     setSaving(true);
@@ -45,7 +53,7 @@ export function StatusSelect({
       const res = await fetch(apiPath, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: next }),
+        body: JSON.stringify({ [field]: next, ...(statusReason ? { statusReason } : {}) }),
       });
       if (!res.ok) {
         setCurrent(previous);
@@ -90,6 +98,7 @@ export function StatusSelect({
           {error}
         </p>
       )}
+      {reason.element}
     </div>
   );
 }

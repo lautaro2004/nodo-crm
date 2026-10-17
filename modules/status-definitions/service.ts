@@ -10,6 +10,9 @@ export interface CreateStatusDefinitionInput {
   color?: string | null;
   order?: number;
   isDefault?: boolean;
+  requiresReason?: boolean;
+  reasonOptions?: string[];
+  isRejection?: boolean;
 }
 
 export async function createStatusDefinition(businessId: string, data: CreateStatusDefinitionInput) {
@@ -33,6 +36,9 @@ export async function createStatusDefinition(businessId: string, data: CreateSta
       color: data.color ?? null,
       order: data.order ?? (max._max.order ?? -1) + 1,
       isDefault: data.isDefault ?? false,
+      requiresReason: data.requiresReason ?? false,
+      reasonOptions: data.reasonOptions ?? [],
+      isRejection: data.isRejection ?? false,
     },
   });
 }
@@ -71,6 +77,36 @@ export async function assertValidStatus(businessId: string, entityType: StatusEn
   if (!exists) throw new Error("invalid_status");
 }
 
+export interface StatusRules {
+  label: string;
+  requiresReason: boolean;
+  reasonOptions: string[];
+  isRejection: boolean;
+}
+
+// Reglas de transición de un estado (campo obligatorio "motivo", opciones
+// válidas, si es de rechazo). Lanza invalid_status si el estado no existe
+// (salvo las claves del sistema, que no exigen nada si no están definidas).
+export async function resolveStatusRules(businessId: string, entityType: StatusEntityType, key: string): Promise<StatusRules> {
+  const def = await prisma.statusDefinition.findFirst({
+    where: { businessId, entityType, key },
+    select: { label: true, requiresReason: true, reasonOptions: true, isRejection: true },
+  });
+  if (def) return { label: def.label, requiresReason: !!def.requiresReason, reasonOptions: def.reasonOptions ?? [], isRejection: !!def.isRejection };
+  if (BUILTIN_STATUS_KEYS[entityType].includes(key)) return { label: key, requiresReason: false, reasonOptions: [], isRejection: false };
+  throw new Error("invalid_status");
+}
+
+// Valida el motivo contra las reglas del estado destino. Devuelve el
+// motivo normalizado (o null si el estado no lo usa).
+export function validateStatusReason(rules: StatusRules, reason: string | null | undefined): string | null {
+  const value = reason?.trim() || null;
+  if (!rules.requiresReason) return value && rules.reasonOptions.length === 0 ? value : value && rules.reasonOptions.includes(value) ? value : null;
+  if (!value) throw new Error("reason_required");
+  if (rules.reasonOptions.length > 0 && !rules.reasonOptions.includes(value)) throw new Error("invalid_reason");
+  return value;
+}
+
 // No se borra un estado que todavía usan registros reales: dejaría Leads/
 // Empresas con un estado huérfano (sin label ni color, invisibles para los
 // filtros y fuera de toda columna del Kanban).
@@ -99,6 +135,9 @@ export interface StatusOption {
   key: string;
   label: string;
   color: string | null;
+  requiresReason?: boolean;
+  reasonOptions?: string[];
+  isRejection?: boolean;
 }
 
 // Opciones de estado listas para la UI (badges, selects, columnas Kanban),
@@ -108,7 +147,14 @@ export interface StatusOption {
 // lista fija.
 export async function listStatusOptions(businessId: string, entityType: StatusEntityType): Promise<StatusOption[]> {
   const defs = await listStatusDefinitions(businessId, entityType);
-  const options: StatusOption[] = defs.map((d) => ({ key: d.key, label: d.label, color: d.color }));
+  const options: StatusOption[] = defs.map((d) => ({
+    key: d.key,
+    label: d.label,
+    color: d.color,
+    requiresReason: !!d.requiresReason,
+    reasonOptions: d.reasonOptions ?? [],
+    isRejection: !!d.isRejection,
+  }));
   if (entityType === "company") {
     for (const [key, label] of Object.entries(COMPANY_STATUS_LABELS)) {
       if (!options.some((o) => o.key === key)) options.push({ key, label, color: null });
@@ -124,4 +170,23 @@ export async function listStatusOptions(businessId: string, entityType: StatusEn
 // se muestra el key crudo en gris, nunca se rompe la pantalla.
 export function findStatusOption(options: StatusOption[], key: string): StatusOption {
   return options.find((o) => o.key === key) ?? { key, label: key, color: null };
+}
+
+// Estados de lead "cerrados": convertido + los marcados como rechazo
+// (isRejection). Definición única para filtros ("abiertos"), dashboard,
+// automatizaciones e informes.
+export async function getClosedLeadStatusKeys(businessId: string): Promise<string[]> {
+  const rejection = await prisma.statusDefinition.findMany({
+    where: { businessId, entityType: "lead", isRejection: true },
+    select: { key: true },
+  });
+  return ["converted", ...rejection.map((r) => r.key)];
+}
+
+export async function getRejectionLeadStatusKeys(businessId: string): Promise<string[]> {
+  const rejection = await prisma.statusDefinition.findMany({
+    where: { businessId, entityType: "lead", isRejection: true },
+    select: { key: true },
+  });
+  return rejection.map((r) => r.key);
 }

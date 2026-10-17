@@ -42,6 +42,7 @@ export const leadCreateSchema = z.object({
   companyId: z.string().trim().max(60).optional().nullable(),
   ownerId: z.string().trim().max(60).optional().nullable(),
   status: z.string().trim().min(1).max(40).optional(),
+  statusReason: z.string().trim().max(200).optional().nullable(),
   source: z.string().trim().max(40).optional(),
 });
 export const leadUpdateSchema = leadCreateSchema.partial();
@@ -272,9 +273,20 @@ export const statusDefinitionCreateSchema = z.object({
   color: statusColorSchema.optional().nullable(),
   order: z.number().int().min(0).optional(),
   isDefault: z.boolean().optional(),
+  requiresReason: z.boolean().optional(),
+  reasonOptions: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  isRejection: z.boolean().optional(),
 });
 export const statusDefinitionUpdateSchema = statusDefinitionCreateSchema.omit({ entityType: true, key: true }).partial();
 export const statusDefinitionReorderSchema = z.object({
   entityType: z.enum(["lead", "company"]),
   ids: z.array(z.string().trim().min(1)).min(1).max(100),
 });
+
+export const savedViewCreateSchema = z.object({
+  entityType: z.enum(["lead", "opportunity"]),
+  name: z.string().trim().min(1, "Poné un nombre").max(60),
+  params: z.string().max(2000),
+  shared: z.boolean().optional(),
+});
+export const savedViewUpdateSchema = savedViewCreateSchema.omit({ entityType: true }).partial();

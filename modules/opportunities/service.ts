@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
 import { assertOptionalOwner } from "@/modules/business/members";
+import { buildOpportunityWhere, opportunityOrderBy, type OpportunityFilters } from "@/modules/opportunities/filters";
 
 export interface CreateOpportunityInput {
   title: string;
@@ -79,42 +80,19 @@ export async function createOpportunity(businessId: string, data: CreateOpportun
   return opportunity;
 }
 
-export interface ListOpportunitiesFilters {
-  search?: string;
-  pipelineId?: string;
-  stageId?: string;
-  status?: string;
-  ownerId?: string;
-  /** Solo abiertas sin cambios desde esta fecha (oportunidades estancadas). */
-  stalledBefore?: Date;
-  sort?: string;
-}
-
-const OPPORTUNITY_ORDER = {
-  recent: { createdAt: "desc" },
-  updated: { updatedAt: "desc" },
-  amount: { amount: { sort: "desc", nulls: "last" } },
-  title: { title: "asc" },
-} as const;
+// Filtros: ver modules/opportunities/filters.ts.
+export type ListOpportunitiesFilters = OpportunityFilters;
 
 export async function listOpportunities(businessId: string, filters: ListOpportunitiesFilters = {}) {
   return prisma.opportunity.findMany({
-    where: {
-      businessId,
-      ...(filters.pipelineId ? { pipelineId: filters.pipelineId } : {}),
-      ...(filters.stageId ? { stageId: filters.stageId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.ownerId ? { ownerId: filters.ownerId === "none" ? null : filters.ownerId } : {}),
-      ...(filters.search ? { title: { contains: filters.search, mode: "insensitive" } } : {}),
-      ...(filters.stalledBefore ? { status: "open", updatedAt: { lt: filters.stalledBefore } } : {}),
-    },
+    where: await buildOpportunityWhere(businessId, filters),
     include: {
       company: { select: { id: true, name: true } },
       contact: { select: { id: true, name: true } },
       stage: true,
       pipeline: { select: { id: true, name: true } },
     },
-    orderBy: OPPORTUNITY_ORDER[(filters.sort ?? "recent") as keyof typeof OPPORTUNITY_ORDER] ?? OPPORTUNITY_ORDER.recent,
+    orderBy: opportunityOrderBy(filters.sort),
   });
 }
 

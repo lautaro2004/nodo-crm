@@ -36,7 +36,7 @@ export function TaskBoard({ tasks }: { tasks: TaskCard[] }) {
       onMove={(t, status) => patchMove(`/api/tasks/${t.id}`, { status })}
       renderCard={(t) => (
         <div>
-          <Link href={`/dashboard/tareas/${t.id}`} draggable={false} className="flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:text-brand-700">
+          <Link href={`/dashboard/tareas/${t.id}`} className="flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:text-brand-700">
             {t.hasReminder && <BellIcon className="h-3.5 w-3.5 shrink-0 text-brand-500" aria-label="Con recordatorio" />}
             <span className="truncate">{t.title}</span>
           </Link>
