@@ -6,6 +6,7 @@ import { getModuleLabel } from "@/modules/workspace/module-config";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { ModulesToggle } from "@/components/configuracion/modules-toggle";
 import { INDUSTRY_TEMPLATES, type IndustryKey } from "@/lib/industry-templates";
+import { hasRole, ROLE_LABELS } from "@/lib/permissions";
 
 export default async function SettingsPage() {
   const ctx = await resolveWorkspaceContext();
@@ -17,17 +18,22 @@ export default async function SettingsPage() {
   ]);
   if (!workspace) return null;
 
-  const SETTINGS_LINKS = [
-    { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas" },
-    { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados" },
-    { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)" },
-    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (asignación, alertas, reglas por estado)" },
-    { href: "/dashboard/oportunidades/pipelines", label: "Pipelines" },
-    { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")` },
-    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)" },
-    { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)" },
-    { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email" },
+  const isAdmin = hasRole(ctx.role, "admin");
+  const ALL_LINKS = [
+    { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", admin: true },
+    { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", admin: true },
+    { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", admin: true },
+    { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)", admin: true },
+    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (asignación, alertas, reglas por estado)", admin: true },
+    { href: "/dashboard/oportunidades/pipelines", label: "Pipelines", admin: true },
+    { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")`, admin: true },
+    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)", admin: false },
+    { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)", admin: true },
+    { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email", admin: true },
   ];
+  // Un miembro solo ve lo personal (su conexión de Google); el resto lo
+  // configuran dueño/administradores (las APIs lo exigen igual).
+  const SETTINGS_LINKS = ALL_LINKS.filter((l) => isAdmin || !l.admin);
 
   return (
     <div>
@@ -37,6 +43,7 @@ export default async function SettingsPage() {
         <Card className="p-4">
           <h2 className="mb-1 text-sm font-semibold text-slate-900">Tu negocio</h2>
           <p className="text-sm text-slate-600">{workspace.business.name}</p>
+          <p className="mt-1 text-xs text-slate-500">Tu rol: {ROLE_LABELS[ctx.role]}</p>
           <p className="mt-1 text-xs text-slate-400">
             Rubro: {workspace.industryTemplate ? INDUSTRY_TEMPLATES[workspace.industryTemplate as IndustryKey]?.label : "Genérico"}
           </p>
@@ -44,7 +51,11 @@ export default async function SettingsPage() {
 
         <Card className="p-4">
           <h2 className="mb-2 text-sm font-semibold text-slate-900">Módulos activos</h2>
-          <ModulesToggle activeModules={workspace.activeModules} opportunityLabelPlural={moduleLabel.labelPlural} />
+          {isAdmin ? (
+            <ModulesToggle activeModules={workspace.activeModules} opportunityLabelPlural={moduleLabel.labelPlural} />
+          ) : (
+            <p className="text-sm text-slate-500">Los módulos los activa el dueño o un administrador.</p>
+          )}
         </Card>
 
         <Card className="p-4 lg:col-span-2">

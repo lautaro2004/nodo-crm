@@ -25,7 +25,7 @@ describe("listWorkspaceMembers", () => {
       { role: "owner", user: { id: "user_1", name: "Lautaro", email: "lautaro@test.com" } },
     ]);
     const members = await listWorkspaceMembers("biz_1");
-    expect(membershipFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1" } }));
+    expect(membershipFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", products: { has: "crm" } } }));
     expect(members).toEqual([{ userId: "user_1", name: "Lautaro", email: "lautaro@test.com", role: "owner" }]);
   });
 });
@@ -34,7 +34,7 @@ describe("assertUserBelongsToBusiness", () => {
   it("no lanza si el usuario tiene Membership en ese Business", async () => {
     membershipFindFirst.mockResolvedValue({ id: "membership_1" });
     await expect(assertUserBelongsToBusiness("biz_1", "user_1")).resolves.toBeUndefined();
-    expect(membershipFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", userId: "user_1" } }));
+    expect(membershipFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { businessId: "biz_1", userId: "user_1", products: { has: "crm" } } }));
   });
 
   it("lanza 'user_not_in_business' si no hay Membership en ese Business", async () => {

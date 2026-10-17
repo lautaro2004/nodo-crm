@@ -5,6 +5,7 @@ import { getWorkspaceWithBusiness } from "@/modules/workspace/service";
 import { getModuleLabel } from "@/modules/workspace/module-config";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
+import { RoleProvider } from "@/components/dashboard/role-context";
 
 // Único lugar que decide "explícitamente" qué pasa cuando falta Business o
 // Workspace (nunca se crean solos, ver docs/architecture/crm-fase3-core.md,
@@ -15,6 +16,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (ctx.status === "unauthenticated") redirect("/login");
   if (ctx.status === "no_business" || ctx.status === "no_workspace") redirect("/onboarding");
+  if (ctx.status === "no_access") {
+    return (
+      <main className="app-backdrop flex min-h-screen items-center justify-center px-4">
+        <div className="glass max-w-md rounded-[var(--radius-glass)] p-8 text-center">
+          <h1 className="text-lg font-semibold text-slate-900">No tenés acceso a Nodo</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Sos parte de <strong>{ctx.businessName}</strong>, pero todavía no te habilitaron Nodo. Pedile acceso al dueño o a un
+            administrador del negocio.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   const workspace = await getWorkspaceWithBusiness(ctx.businessId);
   if (!workspace) redirect("/onboarding");
@@ -26,6 +40,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const opportunityLabel = await getModuleLabel(ctx.businessId, "opportunity");
 
   return (
+    <RoleProvider role={ctx.role}>
     <div className="app-backdrop flex min-h-screen">
       <Sidebar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -35,5 +50,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </main>
       </div>
     </div>
+    </RoleProvider>
   );
 }

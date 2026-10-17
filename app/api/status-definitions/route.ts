@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, statusDefinitionCreateSchema);
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
 // Reordenar: PATCH con { entityType, ids: [...] } en el orden final.
 export async function PATCH(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, statusDefinitionReorderSchema);

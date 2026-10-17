@@ -81,7 +81,7 @@ describe("createTask", () => {
     taskCreate.mockResolvedValue({ id: "task_1" });
     await createTask("biz_1", { title: "Tarea", ownerId: "user_2" }, "user_1");
     expect(membershipFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { businessId: "biz_1", userId: "user_2" } })
+      expect.objectContaining({ where: { businessId: "biz_1", userId: "user_2", products: { has: "crm" } } })
     );
     expect(taskCreate.mock.calls[0][0].data.ownerId).toBe("user_2");
     expect(activityCreate).toHaveBeenCalledWith(

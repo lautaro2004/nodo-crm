@@ -7,7 +7,7 @@ import { updateWorkspaceModules } from "@/modules/workspace/service";
 const bodySchema = z.object({ activeModules: z.array(z.string()) });
 
 export async function PATCH(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, bodySchema);

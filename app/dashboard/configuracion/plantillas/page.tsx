@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { hasRole } from "@/lib/permissions";
+import { AdminOnly } from "@/components/team/admin-only";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listTemplates } from "@/modules/email/templates";
@@ -7,6 +9,7 @@ import { Button, Card, EmptyState, PageHeader } from "@/components/ui/primitives
 export default async function TemplatesPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
+  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
 
   const templates = await listTemplates(ctx.businessId);
 

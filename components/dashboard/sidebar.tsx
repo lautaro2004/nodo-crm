@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/icons";
 import { ModuleIcon } from "@/components/ui/module-icon";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
+import { hasRole, ROLE_LABELS, type Role } from "@/lib/permissions";
+import { useRole } from "@/components/dashboard/role-context";
 
 interface NavItem {
   href: string;
   label: string;
   icon: ReactNode;
   module?: string; // si está seteado, el item se oculta cuando el módulo no está activo
+  minRole?: Role; // rol mínimo para verlo (ver lib/permissions.ts)
 }
 
 // Agrupado en secciones (pedido explícito de la fase de pulido UX: "el
@@ -68,7 +71,7 @@ function buildNavGroups(opportunityLabel: ModuleLabel): { label: string | null; 
       label: "Herramientas",
       items: [
         { href: "/dashboard/buscar", label: "Búsqueda", icon: <SearchIcon /> },
-        { href: "/dashboard/importar", label: "Importar", icon: <UploadIcon /> },
+        { href: "/dashboard/importar", label: "Importar", icon: <UploadIcon />, minRole: "admin" },
       ],
     },
   ];
@@ -105,6 +108,7 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const role = useRole();
   const navGroups = buildNavGroups(opportunityLabel);
 
   return (
@@ -119,7 +123,7 @@ function SidebarContent({
             {businessName.trim()[0]?.toUpperCase() ?? "·"}
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espacio de trabajo</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espacio de trabajo · {ROLE_LABELS[role]}</p>
             <p className="truncate text-sm font-semibold text-slate-900">{businessName}</p>
           </div>
         </div>
@@ -127,7 +131,9 @@ function SidebarContent({
 
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {navGroups.map((group, i) => {
-          const visibleItems = group.items.filter((item) => !item.module || activeModules.includes(item.module));
+          const visibleItems = group.items.filter(
+            (item) => (!item.module || activeModules.includes(item.module)) && (!item.minRole || hasRole(role, item.minRole))
+          );
           if (visibleItems.length === 0) return null;
           return (
             <div key={group.label ?? `group-${i}`}>

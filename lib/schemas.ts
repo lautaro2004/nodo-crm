@@ -290,3 +290,16 @@ export const savedViewCreateSchema = z.object({
   shared: z.boolean().optional(),
 });
 export const savedViewUpdateSchema = savedViewCreateSchema.omit({ entityType: true }).partial();
+
+export const invitationCreateSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Email inválido").max(160),
+  role: z.enum(["admin", "member"]),
+  products: z.array(z.enum(["crm", "nexo"])).min(1, "Elegí al menos un producto").max(2),
+});
+export const memberUpdateSchema = z
+  .object({
+    role: z.enum(["admin", "member"]).optional(),
+    products: z.array(z.enum(["crm", "nexo"])).min(1).max(2).optional(),
+  })
+  .refine((d) => d.role !== undefined || d.products !== undefined, { message: "Nada para actualizar" });
+export const invitationAcceptSchema = z.object({ token: z.string().trim().min(20).max(200) });

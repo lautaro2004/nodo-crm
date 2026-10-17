@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { hasRole } from "@/lib/permissions";
 import { getModuleLabel } from "@/modules/workspace/module-config";
 import { listPipelines } from "@/modules/pipelines/service";
 import { listOpportunities } from "@/modules/opportunities/service";
@@ -74,9 +75,11 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         }
         actions={
           <>
-            <Link href="/dashboard/oportunidades/pipelines">
-              <Button variant="secondary">Gestionar pipelines</Button>
-            </Link>
+            {hasRole(ctx.role, "admin") && (
+              <Link href="/dashboard/oportunidades/pipelines">
+                <Button variant="secondary">Gestionar pipelines</Button>
+              </Link>
+            )}
             {pipeline && (
               <Link href="/dashboard/oportunidades/nueva">
                 <Button>

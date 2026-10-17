@@ -4,7 +4,7 @@ import { requireWorkspace, notFound } from "@/lib/api-guard";
 import { deleteTag } from "@/modules/tags/service";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
   if (!ctx) return response;
 
   const { id } = await params;

@@ -25,8 +25,10 @@ export interface WorkspaceMember {
 // todavía invitación de equipo, ver Fase 1 de diseño del CRM), pero la
 // función ya es correcta para cuando exista más de uno.
 export async function listWorkspaceMembers(businessId: string): Promise<WorkspaceMember[]> {
+  // Solo quienes tienen acceso a Nodo: un empleado solo-Nexo no aparece
+  // como responsable asignable en el CRM.
   const memberships = await prisma.membership.findMany({
-    where: { businessId },
+    where: { businessId, products: { has: "crm" } },
     include: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -38,7 +40,7 @@ export async function listWorkspaceMembers(businessId: string): Promise<Workspac
 // NUNCA confiar en que un userId enviado por el cliente pertenece a este
 // negocio — se verifica contra Membership antes de guardar.
 export async function assertUserBelongsToBusiness(businessId: string, userId: string, client: PrismaOrTx = prisma): Promise<void> {
-  const membership = await client.membership.findFirst({ where: { businessId, userId }, select: { id: true } });
+  const membership = await client.membership.findFirst({ where: { businessId, userId, products: { has: "crm" } }, select: { id: true } });
   if (!membership) throw new Error("user_not_in_business");
 }
 
