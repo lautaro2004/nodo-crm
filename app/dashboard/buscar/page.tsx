@@ -16,7 +16,7 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
     getModuleLabel(ctx.businessId, "opportunity"),
   ]);
   const total =
-    results.companies.length + results.contacts.length + results.leads.length + results.opportunities.length + results.tasks.length;
+    results.companies.length + results.contacts.length + results.leads.length + results.opportunities.length + results.tasks.length + results.records.length;
 
   return (
     <div>
@@ -41,6 +41,17 @@ export default async function GlobalSearchPage({ searchParams }: { searchParams:
             basePath="/dashboard/oportunidades"
           />
           <ResultSection title="Tareas" items={results.tasks.map((t) => ({ id: t.id, label: t.title }))} basePath="/dashboard/tareas" />
+          {Array.from(new Set(results.records.map((r) => r.module.key))).map((key) => {
+            const items = results.records.filter((r) => r.module.key === key);
+            return (
+              <ResultSection
+                key={key}
+                title={items[0].module.labelPlural}
+                items={items.map((r) => ({ id: r.id, label: r.title }))}
+                basePath={`/dashboard/m/${key}`}
+              />
+            );
+          })}
         </div>
       )}
     </div>

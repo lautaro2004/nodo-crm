@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guard";
 import { customFieldDefinitionCreateSchema } from "@/lib/schemas";
-import { createCustomFieldDefinition, listCustomFieldDefinitions } from "@/modules/custom-fields/service";
+import { createCustomFieldDefinition, listCustomFieldDefinitions, type CreateCustomFieldDefinitionInput } from "@/modules/custom-fields/service";
 
 export async function GET(request: Request) {
   const { ctx, response } = await requireWorkspace();
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   if (!data) return badRequest;
 
   try {
-    const definition = await createCustomFieldDefinition(ctx.businessId, data);
+    const definition = await createCustomFieldDefinition(ctx.businessId, data as CreateCustomFieldDefinitionInput);
     // 200 si ya existía (mismo nombre y tipo): el cliente lo reutiliza.
     return NextResponse.json(definition, { status: definition.existing ? 200 : 201 });
   } catch (err) {

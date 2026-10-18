@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeViewParams } from "@/lib/views/presets";
 
-export type ViewEntityType = "lead" | "opportunity";
+import { moduleIdFromEntityType } from "@/lib/custom-modules";
+
+export type ViewEntityType = "lead" | "opportunity" | `cm:${string}`;
 
 // Permisos de vistas:
 // - Cualquier miembro crea vistas personales y ve las compartidas.
@@ -29,6 +31,8 @@ export async function createView(
   data: { entityType: ViewEntityType; name: string; params: string; shared?: boolean }
 ) {
   if (data.shared && !canManageSharedViews(actor.role)) throw new Error("forbidden");
+  const moduleId = moduleIdFromEntityType(data.entityType);
+  if (moduleId && !(await prisma.customModule.count({ where: { id: moduleId, businessId } }))) throw new Error("module_not_found");
   return prisma.savedView.create({
     data: {
       businessId,

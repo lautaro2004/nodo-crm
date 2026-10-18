@@ -21,6 +21,7 @@ export default async function SettingsPage() {
   const isAdmin = hasRole(ctx.role, "admin");
   const ALL_LINKS = [
     { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", admin: true },
+    { href: "/dashboard/configuracion/modulos", label: "Módulos (productos, citas, propiedades… propios del negocio)", admin: true },
     { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", admin: true },
     { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", admin: true },
     { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)", admin: true },

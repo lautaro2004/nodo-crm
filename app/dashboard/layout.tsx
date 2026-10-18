@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { getWorkspaceWithBusiness } from "@/modules/workspace/service";
 import { getModuleLabel } from "@/modules/workspace/module-config";
+import { listModules } from "@/modules/custom-modules/service";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { RoleProvider } from "@/components/dashboard/role-context";
@@ -37,14 +38,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // depende del Workspace (ver modules/workspace/module-config.ts) — se
   // resuelve acá, una sola vez, y se pasa hacia abajo en vez de que cada
   // ítem de navegación lo vuelva a resolver.
-  const opportunityLabel = await getModuleLabel(ctx.businessId, "opportunity");
+  const [opportunityLabel, modules] = await Promise.all([getModuleLabel(ctx.businessId, "opportunity"), listModules(ctx.businessId)]);
+  const customModules = modules.map((m) => ({ key: m.key, label: m.labelPlural, icon: m.icon }));
 
   return (
     <RoleProvider role={ctx.role}>
     <div className="app-backdrop flex min-h-screen">
-      <Sidebar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} />
+      <Sidebar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} />
+        <Topbar businessName={workspace.business.name} activeModules={workspace.activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
         <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>

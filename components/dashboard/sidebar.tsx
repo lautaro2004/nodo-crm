@@ -23,6 +23,13 @@ import { ModuleIcon } from "@/components/ui/module-icon";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
 import { hasRole, ROLE_LABELS, type Role } from "@/lib/permissions";
 import { useRole } from "@/components/dashboard/role-context";
+import { CustomModuleIcon } from "@/components/custom-modules/custom-module-icon";
+
+export interface CustomModuleNav {
+  key: string;
+  label: string;
+  icon: string | null;
+}
 
 interface NavItem {
   href: string;
@@ -100,16 +107,26 @@ function SidebarContent({
   businessName,
   activeModules,
   opportunityLabel,
+  customModules,
   onNavigate,
 }: {
   businessName: string;
   activeModules: string[];
   opportunityLabel: ModuleLabel;
+  customModules: CustomModuleNav[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const role = useRole();
   const navGroups = buildNavGroups(opportunityLabel);
+  // Módulos creados por el negocio (Productos, Citas…), después del núcleo
+  // del CRM. La URL usa la key estable del módulo.
+  if (customModules.length > 0) {
+    navGroups.splice(2, 0, {
+      label: "Módulos",
+      items: customModules.map((m) => ({ href: `/dashboard/m/${m.key}`, label: m.label, icon: <CustomModuleIcon iconName={m.icon} /> })),
+    });
+  }
 
   return (
     <div className="flex h-full flex-col" onClick={onNavigate}>
@@ -166,15 +183,17 @@ export function Sidebar({
   businessName,
   activeModules,
   opportunityLabel,
+  customModules,
 }: {
   businessName: string;
   activeModules: string[];
   opportunityLabel: ModuleLabel;
+  customModules: CustomModuleNav[];
 }) {
   return (
     <aside className="glass-bar hidden w-64 shrink-0 border-r border-slate-200/70 lg:block">
       <div className="sticky top-0 h-screen">
-        <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} />
+        <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
       </div>
     </aside>
   );
@@ -184,12 +203,14 @@ export function MobileSidebarDrawer({
   businessName,
   activeModules,
   opportunityLabel,
+  customModules,
   open,
   onClose,
 }: {
   businessName: string;
   activeModules: string[];
   opportunityLabel: ModuleLabel;
+  customModules: CustomModuleNav[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -207,7 +228,13 @@ export function MobileSidebarDrawer({
         >
           <XIcon className="h-5 w-5" />
         </button>
-        <SidebarContent businessName={businessName} activeModules={activeModules} opportunityLabel={opportunityLabel} onNavigate={onClose} />
+        <SidebarContent
+          businessName={businessName}
+          activeModules={activeModules}
+          opportunityLabel={opportunityLabel}
+          customModules={customModules}
+          onNavigate={onClose}
+        />
       </div>
     </div>
   );

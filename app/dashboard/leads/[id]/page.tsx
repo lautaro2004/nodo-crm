@@ -5,6 +5,8 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
+import { RelatedGroups } from "@/components/custom-modules/related-groups";
+import { incomingLinks } from "@/modules/records/links";
 import { getLead } from "@/modules/leads/service";
 import { listStatusDefinitions } from "@/modules/status-definitions/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
@@ -35,7 +37,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const lead = await getLead(ctx.businessId, id);
   if (!lead) notFound();
 
-  const [statuses, activities, assignedTags, allTags, nexoAppointment, contacts, pipelines, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
+  const [statuses, activities, assignedTags, allTags, nexoAppointment, contacts, pipelines, members, upcomingEvents, emailTemplates, customFields, relatedGroups] = await Promise.all([
     listStatusDefinitions(ctx.businessId, "lead"),
     listActivitiesForEntity(ctx.businessId, "lead", id),
     listTagsForEntity(ctx.businessId, "lead", id),
@@ -58,6 +60,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     listUpcomingEvents(ctx.businessId, { leadId: id }),
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "lead", id),
+    incomingLinks(ctx.businessId, "lead", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -163,6 +166,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </Card>
 
           <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+
+          <RelatedGroups groups={relatedGroups} emptyText={null} />
 
           {nexoAppointment && (
             <Card className="p-4">

@@ -233,10 +233,23 @@ export const customFieldTypes = [
   "email",
   "phone",
   "url",
+  "image",
+  "relation",
 ] as const;
 
+// Módulos estándar o personalizados ("cm:<moduleId>"). Que el módulo sea
+// del negocio se valida en el servicio, nunca acá.
+const fieldEntityTypeSchema = z.union([
+  z.enum(["lead", "contact", "company", "opportunity"]),
+  z.string().regex(/^cm:[a-z0-9]{10,40}$/, "Módulo inválido"),
+]);
+const relationTargetSchema = z.union([
+  z.enum(["lead", "contact", "company", "opportunity"]),
+  z.string().regex(/^cm:[a-z0-9]{10,40}$/),
+]);
+
 export const customFieldDefinitionCreateSchema = z.object({
-  entityType: z.enum(["lead", "contact", "company", "opportunity"]),
+  entityType: fieldEntityTypeSchema,
   key: z
     .string()
     .trim()
@@ -248,10 +261,48 @@ export const customFieldDefinitionCreateSchema = z.object({
   options: z.array(z.string().trim().min(1)).optional(),
   required: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
+  targetEntity: relationTargetSchema.optional().nullable(),
+  multiple: z.boolean().optional(),
 });
+// El tipo y el destino de una relación no se cambian después de crear el
+// campo (reinterpretaría los valores ya cargados).
 export const customFieldDefinitionUpdateSchema = customFieldDefinitionCreateSchema
-  .omit({ entityType: true, key: true })
+  .omit({ entityType: true, key: true, type: true, targetEntity: true })
   .partial();
+
+export const customFieldReorderSchema = z.object({
+  entityType: fieldEntityTypeSchema,
+  ids: z.array(z.string().trim().min(1)).min(1).max(200),
+});
+
+export const customModuleCreateSchema = z.object({
+  labelSingular: z.string().trim().min(1, "Poné un nombre").max(40),
+  labelPlural: z.string().trim().min(1, "Poné un nombre").max(40),
+  description: z.string().trim().max(300).optional().nullable(),
+  icon: z.string().trim().max(20).optional().nullable(),
+  templateId: z.string().trim().max(40).optional().nullable(),
+});
+export const customModuleUpdateSchema = customModuleCreateSchema
+  .omit({ templateId: true })
+  .partial()
+  .extend({
+    priceFieldId: z.string().trim().min(1).nullable().optional(),
+    imageFieldId: z.string().trim().min(1).nullable().optional(),
+    codeFieldId: z.string().trim().min(1).nullable().optional(),
+    archived: z.boolean().optional(),
+  });
+
+// values: definitionId → valor (texto; las relaciones son una lista de ids
+// separada por coma). Se validan contra las definiciones REALES del
+// módulo en el servicio.
+export const customRecordCreateSchema = z.object({
+  title: z.string().trim().min(1, "El nombre es obligatorio").max(200),
+  ownerId: z.string().trim().min(1).nullable().optional(),
+  values: z.record(z.string(), z.string().max(2000).nullable()).optional(),
+});
+export const customRecordUpdateSchema = customRecordCreateSchema.partial().extend({
+  archived: z.boolean().optional(),
+});
 
 export const customFieldValueSetSchema = z.object({
   definitionId: z.string().trim().min(1),
@@ -284,7 +335,7 @@ export const statusDefinitionReorderSchema = z.object({
 });
 
 export const savedViewCreateSchema = z.object({
-  entityType: z.enum(["lead", "opportunity"]),
+  entityType: z.union([z.enum(["lead", "opportunity"]), z.string().regex(/^cm:[a-z0-9]{10,40}$/)]),
   name: z.string().trim().min(1, "Poné un nombre").max(60),
   params: z.string().max(2000),
   shared: z.boolean().optional(),
@@ -303,3 +354,10 @@ export const memberUpdateSchema = z
   })
   .refine((d) => d.role !== undefined || d.products !== undefined, { message: "Nada para actualizar" });
 export const invitationAcceptSchema = z.object({ token: z.string().trim().min(20).max(200) });
+
+export const opportunityItemCreateSchema = z.object({
+  recordId: z.string().trim().min(1),
+  quantity: z.number().positive().max(1_000_000).optional(),
+  unitPrice: z.number().min(0).max(1_000_000_000).optional(),
+});
+export const opportunityItemUpdateSchema = opportunityItemCreateSchema.omit({ recordId: true });

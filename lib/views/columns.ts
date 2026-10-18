@@ -64,3 +64,16 @@ export function customColumns(definitions: { id: string; label: string; type: st
 export function isCustomColumn(key: string) {
   return key.startsWith(CUSTOM_COLUMN_PREFIX);
 }
+
+// Módulos personalizados: columnas fijas + sus campos (cf_<id>).
+export const RECORD_COLUMNS: ColumnDef[] = [
+  { key: "title", label: "Nombre", locked: true },
+  { key: "owner", label: "Responsable" },
+  { key: "created", label: "Creado" },
+  { key: "updated", label: "Actualizado" },
+];
+
+/** Por defecto: Nombre + los primeros 4 campos del módulo + Actualizado. */
+export function recordDefaultColumns(fieldColumns: ColumnDef[]): string[] {
+  return ["title", ...fieldColumns.slice(0, 4).map((c) => c.key), "updated"];
+}

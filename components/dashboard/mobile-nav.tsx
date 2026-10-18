@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { MenuIcon } from "@/components/ui/icons";
-import { MobileSidebarDrawer } from "@/components/dashboard/sidebar";
+import { MobileSidebarDrawer, type CustomModuleNav } from "@/components/dashboard/sidebar";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
 
 // Botón hamburguesa + drawer, autocontenido (dueño de su propio estado
@@ -15,10 +15,12 @@ export function MobileNav({
   businessName,
   activeModules,
   opportunityLabel,
+  customModules,
 }: {
   businessName: string;
   activeModules: string[];
   opportunityLabel: ModuleLabel;
+  customModules: CustomModuleNav[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -36,6 +38,7 @@ export function MobileNav({
         businessName={businessName}
         activeModules={activeModules}
         opportunityLabel={opportunityLabel}
+        customModules={customModules}
         open={open}
         onClose={() => setOpen(false)}
       />

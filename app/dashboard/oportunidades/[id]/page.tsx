@@ -5,6 +5,10 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
+import { RelatedGroups } from "@/components/custom-modules/related-groups";
+import { incomingLinks } from "@/modules/records/links";
+import { OpportunityItemsCard } from "@/components/opportunities/opportunity-items-card";
+import { loadOpportunityItemsView } from "@/modules/opportunity-items/view";
 import { getOpportunity } from "@/modules/opportunities/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
@@ -31,7 +35,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const opportunity = await getOpportunity(ctx.businessId, id);
   if (!opportunity) notFound();
 
-  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
+  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields, itemsView, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "opportunity", id),
     listTagsForEntity(ctx.businessId, "opportunity", id),
     listTags(ctx.businessId),
@@ -39,6 +43,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     listUpcomingEvents(ctx.businessId, { opportunityId: id }),
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "opportunity", id),
+    loadOpportunityItemsView(ctx.businessId, id),
+    incomingLinks(ctx.businessId, "opportunity", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -120,7 +126,17 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             </div>
           </Card>
 
+          <OpportunityItemsCard
+            opportunityId={id}
+            open={opportunity.status === "open"}
+            amount={opportunity.amount}
+            items={itemsView.items}
+            modules={itemsView.modules}
+          />
+
           <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+
+          <RelatedGroups groups={relatedGroups} emptyText={null} />
 
           {opportunity.convertedFromLead && (
             <Card className="p-4">

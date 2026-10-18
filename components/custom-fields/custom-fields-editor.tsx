@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button, Input, Label, Select } from "@/components/ui/primitives";
-import { BOOLEAN_TRUE, BOOLEAN_FALSE, toIsoDate } from "@/lib/custom-fields";
+import { Button, Label } from "@/components/ui/primitives";
+import { FieldInput, toInputValue } from "@/components/custom-fields/field-input";
 
 interface FieldWithValue {
   definitionId: string;
@@ -15,34 +15,6 @@ interface FieldWithValue {
   required?: boolean;
   value: string | null;
 }
-
-// Valor guardado (forma canónica, o el texto crudo de datos viejos) → lo
-// que espera cada input. Así un "15/03/2026" importado antes de normalizar
-// igual aparece en el selector de fecha.
-function toInputValue(type: string, value: string | null): string {
-  if (!value) return "";
-  if (type === "date") return toIsoDate(value) ?? value;
-  if (type === "datetime") {
-    const date = toIsoDate(value.split(/[T ]/)[0] ?? "");
-    const time = value.match(/[T ](\d{1,2}):(\d{2})/);
-    return date ? `${date}T${time ? `${time[1].padStart(2, "0")}:${time[2]}` : "00:00"}` : value;
-  }
-  if (type === "boolean") {
-    const v = value.toLowerCase();
-    return BOOLEAN_TRUE.has(v) ? "true" : BOOLEAN_FALSE.has(v) ? "false" : "";
-  }
-  return value;
-}
-
-const INPUT_TYPE: Record<string, string> = {
-  number: "number",
-  currency: "number",
-  date: "date",
-  datetime: "datetime-local",
-  email: "email",
-  phone: "tel",
-  url: "url",
-};
 
 export function CustomFieldsEditor({ entityId, fields }: { entityId: string; fields: FieldWithValue[] }) {
   const router = useRouter();
@@ -79,69 +51,17 @@ export function CustomFieldsEditor({ entityId, fields }: { entityId: string; fie
         const dirty = value !== (saved[f.definitionId] ?? "");
         const set = (v: string) => setValues((prev) => ({ ...prev, [f.definitionId]: v }));
         const id = `cf-${f.definitionId}`;
-        const options = f.options ?? [];
-        const selected = value ? value.split(",").map((p) => p.trim()).filter(Boolean) : [];
-
-        let control;
-        if (f.type === "boolean") {
-          control = (
-            <Select id={id} value={value} onChange={(e) => set(e.target.value)}>
-              <option value="">—</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </Select>
-          );
-        } else if (f.type === "select" && options.length > 0) {
-          control = (
-            <Select id={id} value={value} onChange={(e) => set(e.target.value)}>
-              <option value="">—</option>
-              {/* Un valor viejo que ya no está entre las opciones se sigue viendo. */}
-              {value && !options.includes(value) && <option value={value}>{value}</option>}
-              {options.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </Select>
-          );
-        } else if (f.type === "multiselect" && options.length > 0) {
-          control = (
-            <div id={id} role="group" aria-label={f.label} className="flex flex-wrap gap-1.5 pt-0.5">
-              {options.map((o) => {
-                const on = selected.includes(o);
-                return (
-                  <button
-                    key={o}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => set((on ? selected.filter((s) => s !== o) : [...selected, o]).join(", "))}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors ${
-                      on ? "bg-brand-50 text-brand-800 ring-brand-300" : "bg-white text-slate-600 ring-slate-200 hover:ring-slate-300"
-                    }`}
-                  >
-                    {o}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        } else {
-          control = (
-            <Input
-              id={id}
-              type={INPUT_TYPE[f.type] ?? "text"}
-              step={f.type === "number" || f.type === "currency" ? "any" : undefined}
-              value={value}
-              onChange={(e) => set(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && dirty) {
-                  e.preventDefault();
-                  void save(f.definitionId);
-                }
-              }}
-            />
-          );
-        }
+        const control = (
+          <FieldInput
+            id={id}
+            label={f.label}
+            type={f.type}
+            options={f.options ?? []}
+            value={value}
+            onChange={set}
+            onEnter={dirty ? () => void save(f.definitionId) : undefined}
+          />
+        );
 
         return (
           <div key={f.definitionId}>

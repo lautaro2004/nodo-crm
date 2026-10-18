@@ -5,6 +5,8 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
+import { RelatedGroups } from "@/components/custom-modules/related-groups";
+import { incomingLinks } from "@/modules/records/links";
 import { getContact } from "@/modules/contacts/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
@@ -28,7 +30,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const contact = await getContact(ctx.businessId, id);
   if (!contact) notFound();
 
-  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
+  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "contact", id),
     listTagsForEntity(ctx.businessId, "contact", id),
     listTags(ctx.businessId),
@@ -36,6 +38,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     listUpcomingEvents(ctx.businessId, { contactId: id }),
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "contact", id),
+    incomingLinks(ctx.businessId, "contact", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -88,6 +91,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+
+          <RelatedGroups groups={relatedGroups} emptyText={null} />
 
           {contact.convertedFromLeads.length > 0 && (
             <Card className="p-4">
