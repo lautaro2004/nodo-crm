@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { createCompany } from "@/modules/companies/service";
 import { createContact } from "@/modules/contacts/service";
 import { createLead } from "@/modules/leads/service";
-import { listCustomFieldDefinitions, setCustomFieldValue } from "@/modules/custom-fields/service";
+import { listCustomFieldDefinitions, setCustomFieldValue, type CustomFieldEntityType } from "@/modules/custom-fields/service";
+import { getModuleById, listModuleFields } from "@/modules/custom-modules/service";
 import {
   IMPORT_MODULE_DEFS,
+  customModuleImportDef,
   validateStandardValue,
+  type ImportModuleDef,
   validateCustomValue,
   type ImportModule,
 } from "@/modules/import/shared";
@@ -89,16 +92,75 @@ async function updateEntity(businessId: string, module: ImportModule, id: string
   else await prisma.lead.updateMany({ where: { id, businessId }, data: standard });
 }
 
+interface ImportAdapter {
+  moduleDef: ImportModuleDef;
+  findExisting(standard: Record<string, string>, custom: Record<string, string>): Promise<{ id: string } | null>;
+  create(standard: Record<string, string> & { name: string }): Promise<{ id: string }>;
+  update(id: string, standard: Record<string, string>): Promise<void>;
+  /** Campos personalizados que no pueden quedar vacíos al crear. */
+  requiredCustom?: { id: string; label: string }[];
+}
+
 export async function executeImport(
   businessId: string,
   module: ImportModule,
   rows: ImportRowInput[]
 ): Promise<ImportResult> {
-  const moduleDef = IMPORT_MODULE_DEFS[module];
+  return runImport(businessId, rows, {
+    moduleDef: IMPORT_MODULE_DEFS[module],
+    findExisting: (standard) => findExisting(businessId, module, standard),
+    create: (standard) => createEntity(businessId, module, standard),
+    update: (id, standard) => updateEntity(businessId, module, id, standard),
+  });
+}
+
+// Módulos personalizados: mismo motor (mapeo, validación por fila,
+// importación parcial). "Nombre" → CustomRecord.title. Si el módulo tiene
+// campo "Código", se usa como identificador: reimportar el mismo archivo
+// actualiza esos registros (ej. precios) en vez de duplicarlos. Sin código,
+// siempre crea (nunca se deduplica por nombre).
+export async function executeCustomModuleImport(
+  businessId: string,
+  moduleId: string,
+  userId: string,
+  rows: ImportRowInput[]
+): Promise<ImportResult> {
+  const mod = await getModuleById(businessId, moduleId);
+  if (!mod) throw new Error("module_not_found");
+  if (mod.archivedAt) throw new Error("module_archived");
+  const fields = await listModuleFields(businessId, moduleId);
+  return runImport(businessId, rows, {
+    moduleDef: customModuleImportDef(mod),
+    requiredCustom: fields.filter((f) => f.required && f.type !== "image" && f.type !== "relation").map((f) => ({ id: f.id, label: f.label })),
+    findExisting: async (_standard, custom) => {
+      const code = mod.codeFieldId ? custom[mod.codeFieldId] : undefined;
+      if (!code) return null;
+      const match = await prisma.customFieldValue.findFirst({
+        where: { definitionId: mod.codeFieldId!, value: { equals: code, mode: "insensitive" }, definition: { businessId } },
+        select: { entityId: true },
+      });
+      if (!match) return null;
+      return prisma.customRecord.findFirst({ where: { id: match.entityId, businessId, moduleId }, select: { id: true } });
+    },
+    create: (standard) => prisma.customRecord.create({ data: { businessId, moduleId, title: standard.name, createdById: userId }, select: { id: true } }),
+    update: async (id, standard) => {
+      await prisma.customRecord.updateMany({
+        where: { id, businessId, moduleId },
+        data: { ...(standard.name ? { title: standard.name } : {}), updatedAt: new Date() },
+      });
+    },
+  });
+}
+
+async function runImport(businessId: string, rows: ImportRowInput[], adapter: ImportAdapter): Promise<ImportResult> {
+  const { moduleDef } = adapter;
 
   // Autoritativo: se relee acá, nunca se confía en type/options/label que
   // pudo haber mandado el cliente para un definitionId (Fase 8).
-  const definitions = await listCustomFieldDefinitions(businessId, moduleDef.entityType);
+  // Relación e imagen no se importan desde un archivo (tienen su propio flujo).
+  const definitions = (await listCustomFieldDefinitions(businessId, moduleDef.entityType as CustomFieldEntityType)).filter(
+    (d) => d.type !== "image" && d.type !== "relation"
+  );
   const definitionById = new Map(definitions.map((d) => [d.id, d]));
 
   let created = 0;
@@ -138,14 +200,19 @@ export async function executeImport(
     }
 
     try {
-      const existing = await findExisting(businessId, module, cleanStandard);
+      const existing = await adapter.findExisting(cleanStandard, cleanCustom);
+      const missing = existing ? [] : (adapter.requiredCustom ?? []).filter((f) => !cleanCustom[f.id]);
+      if (missing.length > 0) {
+        errors.push({ row: fileRow, messages: missing.map((f) => `Falta "${f.label}"`) });
+        continue;
+      }
       let entityId: string;
       if (existing) {
-        await updateEntity(businessId, module, existing.id, cleanStandard);
+        await adapter.update(existing.id, cleanStandard);
         entityId = existing.id;
         updated++;
       } else if (cleanStandard.name) {
-        const created_ = await createEntity(businessId, module, cleanStandard as Record<string, string> & { name: string });
+        const created_ = await adapter.create(cleanStandard as Record<string, string> & { name: string });
         entityId = created_.id;
         created++;
       } else {

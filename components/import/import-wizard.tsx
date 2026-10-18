@@ -11,6 +11,7 @@ import { ImportParseError, parseSpreadsheetFile, type ParsedSheet } from "@/lib/
 import {
   IMPORT_MODULE_DEFS,
   applyMapping,
+  customModuleImportDef,
   guessColumnType,
   slugifyKey,
   suggestCustomField,
@@ -47,9 +48,18 @@ interface ImportResultDto {
   errors: { row: number; messages: string[] }[];
 }
 
-export function ImportWizard() {
+interface CustomModuleOption {
+  id: string;
+  key: string;
+  labelPlural: string;
+  labelSingular: string;
+}
+
+type ModuleChoice = ImportModule | `cm:${string}`;
+
+export function ImportWizard({ customModules = [] }: { customModules?: CustomModuleOption[] }) {
   const [step, setStep] = useState<Step>("module");
-  const [module, setModule] = useState<ImportModule | null>(null);
+  const [module, setModule] = useState<ModuleChoice | null>(null);
   const [definitions, setDefinitions] = useState<CustomFieldDef[]>([]);
   const [sheet, setSheet] = useState<ParsedSheet | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping[]>([]);
@@ -62,13 +72,18 @@ export function ImportWizard() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const moduleDef = module ? IMPORT_MODULE_DEFS[module] : null;
+  const customModule = module?.startsWith("cm:") ? customModules.find((m) => `cm:${m.id}` === module) : undefined;
+  const moduleDef = !module ? null : customModule ? customModuleImportDef(customModule) : IMPORT_MODULE_DEFS[module as ImportModule] ?? null;
+  const listPath = customModule ? `/dashboard/m/${customModule.key}` : module ? MODULE_LIST_PATH[module as ImportModule] : "/dashboard";
   const customLabelByDefinitionId = useMemo(() => new Map(definitions.map((d) => [d.id, d.label])), [definitions]);
 
-  async function chooseModule(next: ImportModule) {
+  async function chooseModule(next: ModuleChoice) {
     setModule(next);
-    const res = await fetch(`/api/custom-field-definitions?entityType=${IMPORT_MODULE_DEFS[next].entityType}`);
-    setDefinitions(res.ok ? await res.json() : []);
+    const entityType = next.startsWith("cm:") ? next : IMPORT_MODULE_DEFS[next as ImportModule].entityType;
+    const res = await fetch(`/api/custom-field-definitions?entityType=${encodeURIComponent(entityType)}`);
+    // Imagen y relación no se cargan desde un archivo.
+    const defs: CustomFieldDef[] = res.ok ? await res.json() : [];
+    setDefinitions(defs.filter((d) => d.type !== "image" && d.type !== "relation"));
     setStep("upload");
   }
 
@@ -154,7 +169,7 @@ export function ImportWizard() {
     setSubmitting(true);
     setSubmitError(null);
     const rows = preview.valid.map((r) => ({ standard: r.standard, custom: r.custom }));
-    const res = await fetch(`/api/import/${module}/execute`, {
+    const res = await fetch(`/api/import/${encodeURIComponent(module)}/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rows }),
@@ -205,6 +220,17 @@ export function ImportWizard() {
               >
                 <p className="text-sm font-semibold text-slate-900">{IMPORT_MODULE_DEFS[m].label}</p>
                 <p className="mt-0.5 text-xs text-slate-500">Desde un archivo .csv o .xlsx</p>
+              </button>
+            ))}
+            {customModules.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => chooseModule(`cm:${m.id}`)}
+                className="rounded-xl border border-slate-200 p-4 text-left hover:border-brand-300 hover:bg-brand-50/50"
+              >
+                <p className="text-sm font-semibold text-slate-900">{m.labelPlural}</p>
+                <p className="mt-0.5 text-xs text-slate-500">Módulo propio · .csv o .xlsx</p>
               </button>
             ))}
           </div>
@@ -434,9 +460,9 @@ export function ImportWizard() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            {module && (
-              <a href={MODULE_LIST_PATH[module]}>
-                <Button variant="secondary">Ver {IMPORT_MODULE_DEFS[module].label.toLowerCase()}</Button>
+            {module && moduleDef && (
+              <a href={listPath}>
+                <Button variant="secondary">Ver {moduleDef.label.toLowerCase()}</Button>
               </a>
             )}
             <Button onClick={reset}>Importar otro archivo</Button>
@@ -481,7 +507,7 @@ function NewFieldForm({
         <div>
           <Label htmlFor={`type-${column}`}>Tipo</Label>
           <Select id={`type-${column}`} value={type} onChange={(e) => setType(e.target.value)}>
-            {customFieldTypes.map((t) => (
+            {customFieldTypes.filter((t) => t !== "image" && t !== "relation").map((t) => (
               <option key={t} value={t}>
                 {CUSTOM_FIELD_TYPE_LABELS[t]}
               </option>

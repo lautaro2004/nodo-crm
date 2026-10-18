@@ -88,7 +88,8 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
           <div>
             <Label>Tipo</Label>
             <Select value={type} onChange={(e) => setType(e.target.value)}>
-              {customFieldTypes.map((t) => (
+              {/* Imagen y relación: por ahora solo en módulos personalizados. */}
+              {customFieldTypes.filter((t) => t !== "image" && t !== "relation").map((t) => (
                 <option key={t} value={t}>
                   {CUSTOM_FIELD_TYPE_LABELS[t] ?? t}
                 </option>

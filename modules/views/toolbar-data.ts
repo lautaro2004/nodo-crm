@@ -10,20 +10,30 @@ import type { FilterConfig, SavedViewItem } from "@/components/views/list-toolba
 // Datos que necesita la barra de lista (opciones de filtros + vistas
 // guardadas visibles para este usuario). Server-only.
 export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntityType) {
-  const [members, tags, customFields, views, leadStatuses] = await Promise.all([
+  const isCustomModule = entity.startsWith("cm:");
+  const [members, tags, allCustomFields, views, leadStatuses] = await Promise.all([
     listWorkspaceMembers(ctx.businessId),
-    listTags(ctx.businessId),
+    isCustomModule ? Promise.resolve([]) : listTags(ctx.businessId),
     listCustomFieldDefinitions(ctx.businessId, entity),
     listViews(ctx.businessId, entity, ctx),
     entity === "lead" ? listStatusOptions(ctx.businessId, "lead") : Promise.resolve([] as StatusOption[]),
   ]);
   const canShare = canManageSharedViews(ctx.role);
+  // Imagen y relación no se filtran por texto (ni son columnas de texto).
+  const customFields = allCustomFields.filter((c) => c.type !== "image" && c.type !== "relation");
 
   const filters: FilterConfig = {
     owners: members.map((m) => ({ value: m.userId, label: m.name || m.email })),
     tags: tags.map((t) => ({ value: t.id, label: t.name })),
     customFields: customFields.map((c) => ({ id: c.id, label: c.label, type: c.type, options: c.options })),
-    ...(entity === "lead"
+    ...(isCustomModule
+      ? {
+          dateFields: [
+            { value: "created", label: "Fecha de creación" },
+            { value: "updated", label: "Última actualización" },
+          ],
+        }
+      : entity === "lead"
       ? {
           statuses: leadStatuses.map((s) => ({ value: s.key, label: s.label })),
           sources: Object.entries(LEAD_SOURCE_LABELS).map(([value, label]) => ({ value, label })),

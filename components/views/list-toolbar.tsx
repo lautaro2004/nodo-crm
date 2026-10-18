@@ -63,8 +63,9 @@ export function ListToolbar({
   display,
   defaultDisplay,
   exportPath,
+  displays = ["list", "kanban"],
 }: {
-  entity: "lead" | "opportunity";
+  entity: string;
   searchPlaceholder: string;
   filters: FilterConfig;
   columns: ColumnDef[];
@@ -76,6 +77,8 @@ export function ListToolbar({
   display: "list" | "kanban";
   defaultDisplay: "list" | "kanban";
   exportPath: string;
+  /** Vistas disponibles (los módulos personalizados solo tienen Lista). */
+  displays?: ("list" | "kanban")[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -89,6 +92,8 @@ export function ListToolbar({
   }
   function setParams(changes: Record<string, string | undefined>) {
     const next = new URLSearchParams(sp.toString());
+    // Cualquier cambio de filtros/orden vuelve a la primera página.
+    next.delete("page");
     for (const [k, v] of Object.entries(changes)) {
       if (v) next.set(k, v);
       else next.delete(k);
@@ -202,8 +207,9 @@ export function ListToolbar({
           <span className="hidden sm:inline">CSV</span>
         </a>
 
+        {displays.length > 1 && (
         <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200/80 bg-slate-100/80 p-0.5" role="group" aria-label="Vista">
-          {(["list", "kanban"] as const).map((d) => (
+          {displays.map((d) => (
             <Link
               key={d}
               href={displayHref(d)}
@@ -217,6 +223,7 @@ export function ListToolbar({
             </Link>
           ))}
         </div>
+        )}
       </div>
 
       {(chips.length > 0 || activeView) && (
@@ -596,7 +603,7 @@ function ViewsMenu({
   currentParams,
   onSaved,
 }: {
-  entity: "lead" | "opportunity";
+  entity: string;
   presets: ViewPreset[];
   savedViews: SavedViewItem[];
   canShare: boolean;

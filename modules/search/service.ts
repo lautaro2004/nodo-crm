@@ -6,9 +6,9 @@ import { prisma } from "@/lib/prisma";
 // acá para las 4 entidades pedidas en un solo request.
 export async function globalSearch(businessId: string, query: string, limitPerEntity = 5) {
   const q = query.trim();
-  if (!q) return { companies: [], contacts: [], leads: [], opportunities: [], tasks: [] };
+  if (!q) return { companies: [], contacts: [], leads: [], opportunities: [], tasks: [], records: [] };
 
-  const [companies, contacts, leads, opportunities, tasks] = await Promise.all([
+  const [companies, contacts, leads, opportunities, tasks, records] = await Promise.all([
     prisma.company.findMany({
       where: { businessId, name: { contains: q, mode: "insensitive" } },
       take: limitPerEntity,
@@ -32,7 +32,13 @@ export async function globalSearch(businessId: string, query: string, limitPerEn
       where: { businessId, title: { contains: q, mode: "insensitive" } },
       take: limitPerEntity,
     }),
+    // Registros de módulos personalizados (activos, de módulos no archivados).
+    prisma.customRecord.findMany({
+      where: { businessId, archivedAt: null, module: { archivedAt: null }, title: { contains: q, mode: "insensitive" } },
+      select: { id: true, title: true, module: { select: { key: true, labelPlural: true } } },
+      take: limitPerEntity * 2,
+    }),
   ]);
 
-  return { companies, contacts, leads, opportunities, tasks };
+  return { companies, contacts, leads, opportunities, tasks, records };
 }

@@ -247,6 +247,10 @@ model Workspace {
   savedViews              SavedView[]
   automationRules         AutomationRule[]
   customFieldDefinitions  CustomFieldDefinition[]
+  customModules           CustomModule[]
+  customRecords           CustomRecord[]
+  recordLinks             RecordLink[]
+  opportunityItems        OpportunityItem[]
 
   @@schema("crm")
 }
@@ -431,6 +435,7 @@ model Opportunity {
   // del lado del Lead, así que nunca hay dos Leads apuntando a la misma
   // Opportunity.
   convertedFromLead Lead? @relation("LeadConvertedOpportunity")
+  items             OpportunityItem[]
 
   @@index([businessId])
   @@schema("crm")
@@ -749,11 +754,21 @@ model CustomFieldDefinition {
   options    String[]
   required   Boolean  @default(false)
   order      Int      @default(0)
+  // Módulos personalizados: entityType = "cm:<moduleId>" y moduleId con FK
+  // (borrar el módulo borra sus campos). Null en los módulos estándar.
+  moduleId     String?
+  // Solo type "relation": a qué apunta ("contact" | "company" |
+  // "opportunity" | "cm:<moduleId>") y si admite varios registros.
+  targetEntity String?
+  multiple     Boolean  @default(false)
 
   workspace Workspace          @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  module    CustomModule?      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   values    CustomFieldValue[]
+  links     RecordLink[]
 
   @@unique([businessId, entityType, key])
+  @@index([moduleId])
   @@schema("crm")
 }
 
@@ -766,6 +781,108 @@ model CustomFieldValue {
   definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
 
   @@unique([definitionId, entityId])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MÓDULOS PERSONALIZADOS (metadatos). Un "Productos" o "Propiedades" es
+// una fila de CustomModule; sus registros son CustomRecord y sus campos
+// son CustomFieldDefinition con entityType "cm:<moduleId>" — el mismo
+// sistema de campos de los módulos estándar (sin tablas por módulo). Ver
+// docs/campos-y-modulos-personalizados.md.
+// ═══════════════════════════════════════════════════════════════════════
+model CustomModule {
+  id            String    @id @default(cuid())
+  businessId    String
+  key           String
+  labelSingular String
+  labelPlural   String
+  description   String?
+  icon          String?
+  order         Int       @default(0)
+  // Campos con rol especial (ids de CustomFieldDefinition del módulo):
+  // precio para los productos de una oportunidad, imagen/código para el
+  // selector. Opcionales.
+  priceFieldId  String?
+  imageFieldId  String?
+  codeFieldId   String?
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace Workspace               @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  records   CustomRecord[]
+  fields    CustomFieldDefinition[]
+
+  @@unique([businessId, key])
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model CustomRecord {
+  id          String    @id @default(cuid())
+  businessId  String
+  moduleId    String
+  // "Nombre" del registro: búsqueda, selectores y listas sin pasar por EAV.
+  title       String
+  ownerId     String?
+  createdById String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace        Workspace         @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  module           CustomModule      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  opportunityItems OpportunityItem[]
+
+  @@index([businessId, moduleId, archivedAt])
+  @@index([moduleId, title])
+  @@schema("crm")
+}
+
+// Valores de los campos "relation" (de cualquier módulo hacia cualquier
+// otro). Explícita y consultable desde los dos lados: el índice por
+// (businessId, toType, toId) resuelve "¿qué apunta a este contacto?".
+model RecordLink {
+  id           String   @id @default(cuid())
+  businessId   String
+  definitionId String
+  fromType     String
+  fromId       String
+  toType       String
+  toId         String
+  createdAt    DateTime @default(now())
+
+  workspace  Workspace             @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@unique([definitionId, fromId, toId])
+  @@index([businessId, toType, toId])
+  @@index([businessId, fromType, fromId])
+  @@schema("crm")
+}
+
+// Productos (registros de un módulo personalizado) agregados a una
+// oportunidad. nameSnapshot/unitPrice son HISTÓRICOS: se copian al
+// agregarlos y no cambian si el catálogo cambia. El valor de la
+// oportunidad sigue siendo manual ("Usar total de productos").
+model OpportunityItem {
+  id            String   @id @default(cuid())
+  businessId    String
+  opportunityId String
+  recordId      String?
+  nameSnapshot  String
+  unitPrice     Float
+  quantity      Float    @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace   Workspace     @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  opportunity Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  record      CustomRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId])
+  @@index([businessId, recordId])
   @@schema("crm")
 }
 

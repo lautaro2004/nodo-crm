@@ -48,6 +48,9 @@ describe("createCustomFieldDefinition", () => {
         options: [],
         required: false,
         order: 5,
+        moduleId: null,
+        targetEntity: null,
+        multiple: false,
       },
     });
     expect(result.existing).toBe(false);

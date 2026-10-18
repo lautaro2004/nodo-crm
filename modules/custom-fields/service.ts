@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { customValueFilterVariants, normalizeCustomValue, validateCustomValue } from "@/lib/custom-fields";
+import { MAX_FIELDS_PER_MODULE, moduleIdFromEntityType } from "@/lib/custom-modules";
+import { removeImagesForValues } from "@/modules/records/images";
 
-export type CustomFieldEntityType = "lead" | "contact" | "company" | "opportunity" | "task";
+export type CustomFieldEntityType = "lead" | "contact" | "company" | "opportunity" | "task" | `cm:${string}`;
+
+/** Tipos cuyos valores NO viven en CustomFieldValue como texto libre. */
+const STRUCTURED_TYPES = new Set(["relation", "image"]);
 
 export interface CreateCustomFieldDefinitionInput {
   entityType: CustomFieldEntityType;
@@ -11,6 +16,18 @@ export interface CreateCustomFieldDefinitionInput {
   options?: string[];
   required?: boolean;
   order?: number;
+  targetEntity?: string | null;
+  multiple?: boolean;
+}
+
+// Un módulo personalizado (o el destino de una relación) tiene que ser de
+// ESTE negocio y no estar archivado. Devuelve el moduleId o lanza.
+async function assertModuleOfBusiness(businessId: string, entityType: string): Promise<string | null> {
+  const moduleId = moduleIdFromEntityType(entityType);
+  if (!moduleId) return null;
+  const mod = await prisma.customModule.findFirst({ where: { id: moduleId, businessId }, select: { id: true } });
+  if (!mod) throw new Error("module_not_found");
+  return mod.id;
 }
 
 // Idempotente por (negocio, módulo, key): si ya existe un campo con esa
@@ -25,6 +42,16 @@ export async function createCustomFieldDefinition(businessId: string, data: Crea
   if (existing) {
     if (existing.type !== data.type) throw new Error("field_key_taken");
     return { ...existing, existing: true as const };
+  }
+  const moduleId = await assertModuleOfBusiness(businessId, data.entityType);
+  if (moduleId && (await prisma.customFieldDefinition.count({ where: { moduleId } })) >= MAX_FIELDS_PER_MODULE) {
+    throw new Error("too_many_fields");
+  }
+  let targetEntity: string | null = null;
+  if (data.type === "relation") {
+    if (!data.targetEntity) throw new Error("relation_target_required");
+    await assertModuleOfBusiness(businessId, data.targetEntity);
+    targetEntity = data.targetEntity;
   }
   // Nuevo campo al final del orden (así no se "cuela" arriba de los que
   // el negocio ya ordenó).
@@ -43,6 +70,9 @@ export async function createCustomFieldDefinition(businessId: string, data: Crea
       options: data.options ?? [],
       required: data.required ?? false,
       order: data.order ?? (last ? last.order + 1 : 0),
+      moduleId,
+      targetEntity,
+      multiple: data.type === "relation" ? !!data.multiple : false,
     },
   });
   return { ...created, existing: false as const };
@@ -58,16 +88,25 @@ export async function listCustomFieldDefinitions(businessId: string, entityType?
 export async function updateCustomFieldDefinition(
   businessId: string,
   id: string,
-  data: Partial<Omit<CreateCustomFieldDefinitionInput, "entityType" | "key">>
+  data: { label?: string; options?: string[]; required?: boolean; order?: number; multiple?: boolean }
 ) {
   const result = await prisma.customFieldDefinition.updateMany({ where: { id, businessId }, data });
   return result.count > 0;
+}
+
+// Reordena los campos de UN módulo: solo toca definiciones de este negocio
+// y de ese entityType (ids ajenos se ignoran).
+export async function reorderCustomFieldDefinitions(businessId: string, entityType: CustomFieldEntityType, ids: string[]) {
+  await prisma.$transaction(
+    ids.map((id, order) => prisma.customFieldDefinition.updateMany({ where: { id, businessId, entityType }, data: { order } }))
+  );
 }
 
 // Borra la definición Y sus valores — evita dejar CustomFieldValue
 // huérfanos apuntando a una definición que ya no existe (la FK ya lo hace
 // cumplir con CASCADE a nivel de base; esto solo lo hace explícito acá).
 export async function deleteCustomFieldDefinition(businessId: string, id: string) {
+  await removeImagesForValues(businessId, { definitionId: id });
   const result = await prisma.customFieldDefinition.deleteMany({ where: { id, businessId } });
   return result.count > 0;
 }
@@ -76,7 +115,7 @@ export async function deleteCustomFieldDefinition(businessId: string, id: string
 // definición (un valor de "Rubro de lead" no se puede colgar de una
 // empresa, ni de un lead de otro negocio). CustomFieldValue no guarda
 // businessId: el aislamiento depende de este chequeo + el de la definición.
-async function entityBelongsToBusiness(businessId: string, entityType: string, entityId: string) {
+export async function entityBelongsToBusiness(businessId: string, entityType: string, entityId: string) {
   const where = { id: entityId, businessId };
   switch (entityType) {
     case "lead":
@@ -89,8 +128,10 @@ async function entityBelongsToBusiness(businessId: string, entityType: string, e
       return (await prisma.opportunity.count({ where })) > 0;
     case "task":
       return (await prisma.task.count({ where })) > 0;
-    default:
-      return false;
+    default: {
+      const moduleId = moduleIdFromEntityType(entityType);
+      return moduleId ? (await prisma.customRecord.count({ where: { ...where, moduleId } })) > 0 : false;
+    }
   }
 }
 
@@ -109,10 +150,15 @@ export async function setCustomFieldValue(
   definitionId: string,
   entityId: string,
   raw: string | null,
-  options: { skipEntityCheck?: boolean } = {}
+  options: { skipEntityCheck?: boolean; allowStructured?: boolean } = {}
 ): Promise<SetCustomFieldValueResult> {
   const definition = await prisma.customFieldDefinition.findFirst({ where: { id: definitionId, businessId } });
   if (!definition) return { ok: false, error: "not_found" };
+  // Relaciones (RecordLink) e imágenes (ruta en Storage) tienen su propio
+  // flujo validado: nunca se escriben como texto libre desde el cliente.
+  if (STRUCTURED_TYPES.has(definition.type) && !options.allowStructured) {
+    return { ok: false, error: "invalid_value", message: `"${definition.label}" se edita con su propio control.` };
+  }
   if (!options.skipEntityCheck && !(await entityBelongsToBusiness(businessId, definition.entityType, entityId))) {
     return { ok: false, error: "not_found" };
   }

@@ -1,6 +1,6 @@
 # Campos personalizados y módulos personalizados — auditoría y propuesta
 
-Estado: **etapas 1 y 2 implementadas** (PR `nodo/campos-importacion`). **Etapas 3 a 7 propuestas, pendientes de aprobación.** No se tocó el esquema de la base.
+Estado: etapas 1–2 en PR `nodo/campos-importacion`. Arquitectura **aprobada** (opción B para importes, imágenes en Storage) e **implementada** en `nodo/modulos-personalizados` — ver la sección 4.
 
 ---
 
@@ -209,3 +209,58 @@ Uno a uno no hace falta todavía: se modela como relación a uno.
 ### Alternativa evaluada y descartada
 - **JSONB en `CustomRecord.data`:** filtra y ordena mejor con índice GIN, pero obligaría a mantener dos sistemas de campos (EAV para los módulos estándar y JSONB para los personalizados) y a duplicar validación, importador y filtros. Si el volumen lo pide más adelante, se puede agregar una columna JSONB "cache" sin cambiar la API.
 - **Tabla SQL por módulo:** DDL en producción por cada cliente, migraciones divergentes y riesgo de seguridad. Sin justificación para este volumen.
+
+---
+
+## 4. Implementación (aprobada)
+
+### Migración `20261018120000_custom_modules`
+- Solo esquema `crm`, 100% aditiva e idempotente: tablas `CustomModule`, `CustomRecord`, `RecordLink`, `OpportunityItem`; columnas nuevas opcionales `moduleId`, `targetEntity`, `multiple` en `CustomFieldDefinition`.
+- Validada en una base local de pruebas (Postgres 16 con las migraciones de Nexo y Nodo). Se aplicó dos veces (idempotente) y se comparó antes/después:
+  - el `pg_dump` de esquema de `public` + `nexo`, que quedó idéntico;
+  - los datos de `public` + `nexo`, también idénticos;
+  - `prisma migrate diff` sin drift nuevo en `crm`.
+
+### Qué hay
+- **Configuración → Módulos** (admin): crear desde plantillas opcionales (Productos, Citas, Propiedades, Contratos) o en blanco, renombrar, ícono, descripción, archivar/restaurar y borrar definitivo (solo archivado, con confirmación).
+- **Campos por módulo**: mismo sistema de campos personalizados (`entityType = "cm:<id>"`) con alta, edición (nombre, opciones, obligatorio, "permite varios"), orden y baja. Tipos nuevos `image` y `relation` (por ahora solo en módulos personalizados). Campos con rol: precio, código e imagen.
+- **Registros** (`/dashboard/m/<key>`):
+  - lista paginada (50) con búsqueda, filtros por campo/responsable/fecha, columnas configurables, vistas guardadas, CSV y archivados;
+  - alta/edición con validación por campo (los obligatorios se hacen cumplir);
+  - archivar (miembros) y borrar (admin);
+  - el módulo aparece en la navegación (también en móvil) y en la búsqueda global.
+- **Imágenes**: bucket privado `record-images` (mismo mecanismo que los adjuntos de tareas).
+  - Ruta `{negocio}/{módulo}/{registro}/{campo}-{uuid}.{ext}`.
+  - Validación en el servidor:
+    - permiso;
+    - que módulo, registro y campo sean del negocio;
+    - tamaño ≤ 5 MB;
+    - tipo JPG/PNG/WebP/GIF verificado por *magic bytes*.
+  - Se ven con URLs firmadas de 1 h, y nunca se expone la ruta.
+  - Reemplazar, quitar o borrar el registro, el campo o el módulo limpia los archivos.
+- **Productos en oportunidades** (opción B):
+  - tarjeta "Productos" con buscador (nombre, código, precio, imagen) y cantidad y precio aplicado editables;
+  - nombre y precio se copian al agregar, como **snapshot**;
+  - se muestra el total y el aviso si el catálogo cambió;
+  - "Usar total de productos" actualiza el valor solo cuando el usuario lo pide;
+  - en oportunidades cerradas no se agregan ni editan productos y nada se recalcula;
+  - el detalle del producto lista sus oportunidades.
+- **Relaciones genéricas**: campo `relation` (a uno o a muchos) hacia Contactos, Empresas, Leads, Oportunidades u otro módulo. Se guarda en `RecordLink` y se ve del otro lado ("Citas · Contacto" en el contacto).
+- **Importación/exportación**:
+  - el importador existente se extendió (no se duplicó) a módulos personalizados: "Nombre" pasa a ser el título, los campos se crean en el momento y, si el módulo tiene "Código", reimportar actualiza por código;
+  - CSV por módulo con filtros, columnas y relaciones (nombres).
+
+### Pruebas
+- `tsc`, `eslint`, `next build`. `vitest`: 430 tests.
+- E2E de API, 79 verificaciones, contra Postgres local y un mock local de Supabase Storage. Cubren módulos, campos, registros, paginación, filtros, CSV, imágenes (tipos, tamaño, reemplazo, aislamiento), productos e importes históricos, relaciones, importación y borrados.
+- Más 8 verificaciones de permisos por rol.
+- Playwright: plantilla → campo relación → alta con imagen y relación → lista con miniatura → productos en oportunidad + "Usar total" → importar CSV → móvil sin scroll horizontal.
+- Rendimiento (servidor de desarrollo, 20.000 registros): lista, búsqueda y filtro entre 0,3 y 0,8 s; CSV de 5.000 filas en 1,4 s.
+
+### Pendientes técnicos
+- Actividades/notas y etiquetas en registros de módulos personalizados.
+- Campos `relation`/`image` en los módulos estándar.
+- Ordenar por un campo personalizado.
+- Columnas configurables en Contactos/Empresas.
+- El CSV de un módulo tiene un tope de 5.000 filas.
+- Los registros importados no validan relaciones (las relaciones no se importan desde archivo).

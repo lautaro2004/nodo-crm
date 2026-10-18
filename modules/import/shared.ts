@@ -26,11 +26,12 @@ export interface StandardFieldDef {
 }
 
 export interface ImportModuleDef {
-  module: ImportModule;
+  /** Módulo estándar o "cm:<moduleId>" (módulo personalizado). */
+  module: ImportModule | `cm:${string}`;
   label: string;
   // Mismo string que ya usa CustomFieldDefinition.entityType/CustomFieldValue
   // en el resto del CRM — se reutiliza tal cual, no se inventa un tipo nuevo.
-  entityType: "contact" | "company" | "lead";
+  entityType: "contact" | "company" | "lead" | `cm:${string}`;
   standardFields: StandardFieldDef[];
   // Identificadores usados para detectar duplicados, en orden de
   // prioridad (Fase 6). Documentado explícitamente: si una fila no trae
@@ -76,6 +77,21 @@ export const IMPORT_MODULE_DEFS: Record<ImportModule, ImportModuleDef> = {
     ],
   },
 };
+
+// Definición de importación de un módulo personalizado: su único campo
+// estándar es "Nombre" (→ título del registro); el resto son sus campos.
+export function customModuleImportDef(mod: { id: string; labelPlural: string; labelSingular: string }): ImportModuleDef {
+  const singular = normalizeHeader(mod.labelSingular);
+  return {
+    module: `cm:${mod.id}`,
+    label: mod.labelPlural,
+    entityType: `cm:${mod.id}`,
+    identifierFields: [],
+    standardFields: [
+      { key: "name", label: "Nombre", required: true, kind: "text", synonyms: ["nombre", "name", "titulo", "título", "descripcion corta", singular] },
+    ],
+  };
+}
 
 export function normalizeHeader(s: string): string {
   return s

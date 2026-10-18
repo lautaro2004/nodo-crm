@@ -22,7 +22,7 @@ export const OPPORTUNITY_PRESETS: ViewPreset[] = [
 ];
 
 // Parámetros que NO forman parte de una vista (navegación/estado efímero).
-const EPHEMERAL = new Set(["view"]);
+const EPHEMERAL = new Set(["view", "page"]);
 
 /** Normaliza un query string para guardarlo/compararlo (orden estable). */
 export function normalizeViewParams(input: string | URLSearchParams): string {
