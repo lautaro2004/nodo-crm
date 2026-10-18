@@ -11,7 +11,8 @@ import { Button, Card, PageHeader } from "@/components/ui/primitives";
 import { ActivityFeed } from "@/components/activities/activity-feed";
 import { AddActivityForm } from "@/components/activities/add-activity-form";
 import { TagPicker } from "@/components/tags/tag-picker";
-import { CustomFieldsEditor } from "@/components/custom-fields/custom-fields-editor";
+import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
+import { hasRole } from "@/lib/permissions";
 import { RelatedEventsList } from "@/components/calendar/related-events-list";
 import { listUpcomingEvents } from "@/modules/calendar/service";
 import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
@@ -75,13 +76,9 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Etiquetas</p>
               <TagPicker entityType="company" entityId={id} assigned={assignedTags} allTags={allTags} />
             </div>
-            {customFields.length > 0 && (
-              <div className="mt-4 border-t border-slate-100 pt-4">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Campos personalizados</p>
-                <CustomFieldsEditor entityId={id} fields={customFields} />
-              </div>
-            )}
           </Card>
+
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
 
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Relaciones</h2>

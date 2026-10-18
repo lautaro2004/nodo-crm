@@ -12,7 +12,8 @@ import { PlusIcon, TrendingUpIcon } from "@/components/ui/icons";
 import { OpportunityBoard } from "@/components/opportunities/opportunity-board";
 import { OpportunityTable } from "@/components/opportunities/opportunity-table";
 import { ListToolbar } from "@/components/views/list-toolbar";
-import { OPPORTUNITY_COLUMNS, OPPORTUNITY_DEFAULT_COLUMNS, resolveColumns } from "@/lib/views/columns";
+import { OPPORTUNITY_COLUMNS, OPPORTUNITY_DEFAULT_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
+import { loadCustomCells } from "@/modules/custom-fields/columns";
 import { OPPORTUNITY_PRESETS } from "@/lib/views/presets";
 
 const SORT_OPTIONS = [
@@ -43,7 +44,10 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   const filters = { ...parseOpportunityFilters(sp, ctx.userId), pipelineId: pipeline?.id };
   const opportunities = pipeline ? await listOpportunities(ctx.businessId, filters) : [];
   const names = memberNames(toolbar.members);
-  const columns = resolveColumns(OPPORTUNITY_COLUMNS, OPPORTUNITY_DEFAULT_COLUMNS, typeof sp.cols === "string" ? sp.cols : undefined);
+  const allColumns = [...OPPORTUNITY_COLUMNS, ...customColumns(toolbar.customFieldDefs)];
+  const columns = resolveColumns(allColumns, OPPORTUNITY_DEFAULT_COLUMNS, typeof sp.cols === "string" ? sp.cols : undefined);
+  const custom =
+    display === "list" ? await loadCustomCells(ctx.businessId, toolbar.customFieldDefs, columns, opportunities.map((o) => o.id)) : undefined;
   const hasFilters = Object.keys(sp).some((k) => !["display", "cols", "sort", "view", "pipelineId"].includes(k));
   const singular = moduleLabel.labelSingular.toLowerCase();
   const plural = moduleLabel.labelPlural.toLowerCase();
@@ -132,7 +136,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
             entity="opportunity"
             searchPlaceholder="Buscar por título…"
             filters={toolbar.filters}
-            columns={OPPORTUNITY_COLUMNS}
+            columns={allColumns}
             defaultColumns={OPPORTUNITY_DEFAULT_COLUMNS}
             sortOptions={SORT_OPTIONS}
             presets={OPPORTUNITY_PRESETS}
@@ -164,7 +168,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
           ) : display === "kanban" ? (
             <OpportunityBoard stalledDays={STALLED_DAYS} stages={pipeline.stages} opportunities={rows} />
           ) : (
-            <OpportunityTable opportunities={rows} columns={columns} />
+            <OpportunityTable opportunities={rows} columns={columns} custom={custom} />
           )}
         </>
       )}

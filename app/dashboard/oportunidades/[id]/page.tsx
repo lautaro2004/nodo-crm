@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { hasRole } from "@/lib/permissions";
+import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
+import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { getOpportunity } from "@/modules/opportunities/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
@@ -28,13 +31,14 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const opportunity = await getOpportunity(ctx.businessId, id);
   if (!opportunity) notFound();
 
-  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates] = await Promise.all([
+  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "opportunity", id),
     listTagsForEntity(ctx.businessId, "opportunity", id),
     listTags(ctx.businessId),
     listWorkspaceMembers(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { opportunityId: id }),
     listTemplates(ctx.businessId),
+    getCustomFieldsForEntity(ctx.businessId, "opportunity", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -115,6 +119,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
               <TagPicker entityType="opportunity" entityId={id} assigned={assignedTags} allTags={allTags} />
             </div>
           </Card>
+
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
 
           {opportunity.convertedFromLead && (
             <Card className="p-4">

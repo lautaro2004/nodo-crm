@@ -22,7 +22,7 @@ export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntity
   const filters: FilterConfig = {
     owners: members.map((m) => ({ value: m.userId, label: m.name || m.email })),
     tags: tags.map((t) => ({ value: t.id, label: t.name })),
-    customFields: customFields.map((c) => ({ id: c.id, label: c.label, options: c.options })),
+    customFields: customFields.map((c) => ({ id: c.id, label: c.label, type: c.type, options: c.options })),
     ...(entity === "lead"
       ? {
           statuses: leadStatuses.map((s) => ({ value: s.key, label: s.label })),
@@ -53,7 +53,7 @@ export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntity
     canEdit: v.shared ? canShare : v.createdBy === ctx.userId,
   }));
 
-  return { filters, savedViews, canShare, members, leadStatuses };
+  return { filters, savedViews, canShare, members, leadStatuses, customFieldDefs: customFields };
 }
 
 export function memberNames(members: WorkspaceMember[]) {

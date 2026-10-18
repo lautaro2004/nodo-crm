@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Select } from "@/components/ui/primitives";
 import { customFieldTypes } from "@/lib/schemas";
 import { RELATED_TYPE_LABELS } from "@/lib/labels";
+import { CUSTOM_FIELD_TYPE_LABELS } from "@/lib/custom-fields";
+import { errorMessage } from "@/lib/error-messages";
 
 interface Definition {
   id: string;
@@ -24,6 +26,7 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
   const [label, setLabel] = useState("");
   const [type, setType] = useState<string>("text");
   const [options, setOptions] = useState("");
+  const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
 
   async function createDefinition() {
     if (!label.trim()) return;
@@ -34,7 +37,8 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
 
-    await fetch("/api/custom-field-definitions", {
+    setNotice(null);
+    const res = await fetch("/api/custom-field-definitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -45,6 +49,12 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
         options: type === "select" || type === "multiselect" ? options.split(",").map((o) => o.trim()).filter(Boolean) : [],
       }),
     });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ tone: "error", text: errorMessage(body.error) });
+      return;
+    }
+    if (body.existing) setNotice({ tone: "info", text: `"${body.label}" ya existía en ${RELATED_TYPE_LABELS[entityType]}.` });
     setLabel("");
     setOptions("");
     router.refresh();
@@ -80,7 +90,7 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
             <Select value={type} onChange={(e) => setType(e.target.value)}>
               {customFieldTypes.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {CUSTOM_FIELD_TYPE_LABELS[t] ?? t}
                 </option>
               ))}
             </Select>
@@ -95,6 +105,7 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
         <Button type="button" className="mt-3" onClick={createDefinition}>
           Agregar campo
         </Button>
+        {notice && <p className={`mt-2 text-sm ${notice.tone === "error" ? "text-red-600" : "text-slate-600"}`}>{notice.text}</p>}
       </Card>
 
       {ENTITY_TYPES.map((t) => {
@@ -107,7 +118,7 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
               {items.map((d) => (
                 <li key={d.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm">
                   <span>
-                    {d.label} <span className="text-slate-400">({d.type})</span>
+                    {d.label} <span className="text-slate-400">({CUSTOM_FIELD_TYPE_LABELS[d.type] ?? d.type})</span>
                   </span>
                   <button type="button" onClick={() => deleteDefinition(d.id)} className="text-red-400 hover:text-red-600">
                     Borrar

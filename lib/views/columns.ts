@@ -4,6 +4,8 @@
 // (`cols=name,status,owner`), igual que los filtros, y por eso se guardan
 // con las vistas guardadas sin persistencia adicional.
 
+import { CUSTOM_COLUMN_PREFIX } from "@/lib/custom-fields";
+
 export interface ColumnDef {
   key: string;
   label: string;
@@ -45,4 +47,20 @@ export function resolveColumns(all: ColumnDef[], defaults: string[], raw: string
   const locked = all.filter((c) => c.locked).map((c) => c.key);
   const rest = Array.from(new Set(requested)).filter((k) => !locked.includes(k));
   return [...locked, ...rest];
+}
+
+// Columnas de campos personalizados (`cf_<definitionId>`). Nunca son
+// default: el usuario las suma desde "Columnas" y quedan en la URL / vista
+// guardada como cualquier otra.
+export interface CustomColumnDef extends ColumnDef {
+  definitionId: string;
+  type: string;
+}
+
+export function customColumns(definitions: { id: string; label: string; type: string }[]): CustomColumnDef[] {
+  return definitions.map((d) => ({ key: `${CUSTOM_COLUMN_PREFIX}${d.id}`, label: d.label, definitionId: d.id, type: d.type }));
+}
+
+export function isCustomColumn(key: string) {
+  return key.startsWith(CUSTOM_COLUMN_PREFIX);
 }

@@ -1,8 +1,8 @@
 import type { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
 import { endOfDay, getCustomFieldFilters, getDay, getInt, getList, getParam, type SearchParamsLike } from "@/lib/filters/params";
 import { listEntityIdsForTag } from "@/modules/tags/service";
+import { entityIdsMatchingCustomFilter } from "@/modules/custom-fields/service";
 
 // Una oportunidad abierta sin ningún cambio en este lapso se considera
 // "estancada" (dashboard, vista guardada, aviso en la tarjeta del Kanban).
@@ -67,14 +67,9 @@ export async function buildOpportunityWhere(businessId: string, f: OpportunityFi
   if (f.minAmount !== undefined) and.push({ amount: { gte: f.minAmount } });
   if (f.tagId) and.push({ id: { in: await listEntityIdsForTag(businessId, f.tagId, "opportunity") } });
   for (const cf of f.customFields ?? []) {
-    const values = await prisma.customFieldValue.findMany({
-      where: {
-        definition: { id: cf.definitionId, businessId, entityType: "opportunity" },
-        value: { contains: cf.value, mode: "insensitive" },
-      },
-      select: { entityId: true },
-    });
-    and.push({ id: { in: values.map((v) => v.entityId) } });
+    // Valida negocio + módulo y tolera formatos equivalentes ("sí"/"true",
+    // fechas dd/mm o ISO) — ver entityIdsMatchingCustomFilter.
+    and.push({ id: { in: await entityIdsMatchingCustomFilter(businessId, "opportunity", cf.definitionId, cf.value) } });
   }
   return { businessId, ...(and.length ? { AND: and } : {}) };
 }

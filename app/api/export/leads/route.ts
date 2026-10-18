@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { csvResponse, toCsv, todayStamp } from "@/lib/csv";
 import { LEAD_SOURCE_LABELS } from "@/lib/labels";
-import { LEAD_COLUMNS, resolveColumns } from "@/lib/views/columns";
+import { LEAD_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
+import { formatCustomValue } from "@/lib/custom-fields";
+import { listCustomFieldDefinitions } from "@/modules/custom-fields/service";
+import { loadCustomCells } from "@/modules/custom-fields/columns";
 import { listLeads } from "@/modules/leads/service";
 import { parseLeadFilters } from "@/modules/leads/filters";
 import { findStatusOption, listStatusOptions } from "@/modules/status-definitions/service";
@@ -23,13 +26,17 @@ export async function GET(request: Request) {
     listWorkspaceMembers(ctx.businessId),
   ]);
   const names = new Map(members.map((m) => [m.userId, m.name || m.email]));
-  const cols = resolveColumns(LEAD_COLUMNS, LEAD_COLUMNS.map((c) => c.key), sp.get("cols"));
+  // Sin `cols` se exporta todo, incluidos los campos personalizados.
+  const definitions = await listCustomFieldDefinitions(ctx.businessId, "lead");
+  const allColumns = [...LEAD_COLUMNS, ...customColumns(definitions)];
+  const cols = resolveColumns(allColumns, allColumns.map((c) => c.key), sp.get("cols"));
+  const custom = await loadCustomCells(ctx.businessId, definitions, cols, leads.map((x) => x.id));
 
   // "contact" se separa en dos columnas en el CSV (email y teléfono).
   const header: string[] = [];
   for (const c of cols) {
     if (c === "contact") header.push("Email", "Teléfono");
-    else header.push(LEAD_COLUMNS.find((x) => x.key === c)!.label);
+    else header.push(allColumns.find((x) => x.key === c)!.label);
   }
   const rows = leads.map((l) =>
     cols.flatMap((c): unknown[] => {
@@ -54,8 +61,10 @@ export async function GET(request: Request) {
           return [l.createdAt];
         case "updated":
           return [l.updatedAt];
-        default:
-          return [""];
+        default: {
+          const column = custom.columns.get(c);
+          return [column ? formatCustomValue(column.type, custom.values.get(l.id)?.get(column.definitionId)) : ""];
+        }
       }
     })
   );

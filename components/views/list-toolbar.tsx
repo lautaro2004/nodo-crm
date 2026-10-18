@@ -10,6 +10,7 @@ import { BookmarkIcon, ColumnsIcon, DownloadIcon, FilterIcon, KanbanIcon, ListIc
 import { readApiError } from "@/lib/error-messages";
 import { normalizeViewParams, type ViewPreset } from "@/lib/views/presets";
 import type { ColumnDef } from "@/lib/views/columns";
+import { formatCustomValue } from "@/lib/custom-fields";
 
 export interface Option {
   value: string;
@@ -18,6 +19,7 @@ export interface Option {
 export interface CustomFieldOption {
   id: string;
   label: string;
+  type?: string;
   options: string[];
 }
 export interface SavedViewItem {
@@ -291,7 +293,7 @@ function buildChips(sp: URLSearchParams, f: FilterConfig): { key: string; label:
   for (const [k, v] of sp.entries()) {
     if (k.startsWith("cf.") && v) {
       const def = f.customFields?.find((c) => c.id === k.slice(3));
-      chips.push({ key: k, label: `${def?.label ?? "Campo"}: ${v}`, params: [k] });
+      chips.push({ key: k, label: `${def?.label ?? "Campo"}: ${def?.type ? formatCustomValue(def.type, v) || v : v}`, params: [k] });
     }
   }
   return chips;
@@ -461,7 +463,15 @@ function FilterPanel({
 
       {(config.customFields ?? []).map((c) => (
         <Field key={c.id} label={c.label}>
-          {c.options.length > 0 ? (
+          {c.type === "boolean" ? (
+            <Select value={cf[c.id] ?? ""} onChange={(e) => setCf({ ...cf, [c.id]: e.target.value })}>
+              <option value="">Cualquiera</option>
+              <option value="true">Sí</option>
+              <option value="false">No</option>
+            </Select>
+          ) : c.type === "date" ? (
+            <Input type="date" value={cf[c.id] ?? ""} onChange={(e) => setCf({ ...cf, [c.id]: e.target.value })} />
+          ) : c.options.length > 0 ? (
             <Select value={cf[c.id] ?? ""} onChange={(e) => setCf({ ...cf, [c.id]: e.target.value })}>
               <option value="">Cualquiera</option>
               {c.options.map((o) => (

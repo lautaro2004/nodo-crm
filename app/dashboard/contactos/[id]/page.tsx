@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { hasRole } from "@/lib/permissions";
+import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
+import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { getContact } from "@/modules/contacts/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
@@ -25,13 +28,14 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const contact = await getContact(ctx.businessId, id);
   if (!contact) notFound();
 
-  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates] = await Promise.all([
+  const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "contact", id),
     listTagsForEntity(ctx.businessId, "contact", id),
     listTags(ctx.businessId),
     listWorkspaceMembers(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { contactId: id }),
     listTemplates(ctx.businessId),
+    getCustomFieldsForEntity(ctx.businessId, "contact", id),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -82,6 +86,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               <TagPicker entityType="contact" entityId={id} assigned={assignedTags} allTags={allTags} />
             </div>
           </Card>
+
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
 
           {contact.convertedFromLeads.length > 0 && (
             <Card className="p-4">

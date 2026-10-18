@@ -1,3 +1,5 @@
+import { BOOLEAN_FALSE, BOOLEAN_TRUE, toIsoDate, validateCustomValue } from "@/lib/custom-fields";
+
 // Lógica de mapeo/validación del Smart Import — pura (sin `prisma`, sin
 // nada server-only) a propósito: el wizard la corre en el navegador para
 // el preview (Fase 5), y modules/import/execute.ts corre EXACTAMENTE la
@@ -107,10 +109,17 @@ export function suggestStandardField(header: string, moduleDef: ImportModuleDef)
   return null;
 }
 
+// Si la columna coincide con un campo personalizado que YA existe en el
+// módulo (por nombre o por clave), se lo pre-selecciona — así reimportar
+// un archivo no invita a crear el mismo campo dos veces.
+export function suggestCustomField<T extends { id: string; key: string; label: string }>(header: string, definitions: T[]): T | null {
+  const h = normalizeHeader(header);
+  const k = slugifyKey(header);
+  return definitions.find((d) => normalizeHeader(d.label) === h || d.key === k) ?? null;
+}
+
 export type GuessedType = "text" | "number" | "boolean" | "date";
 
-const BOOLEAN_TRUE = new Set(["si", "sí", "yes", "true", "1", "x"]);
-const BOOLEAN_FALSE = new Set(["no", "false", "0"]);
 
 // Heurística simple sobre una muestra de valores no vacíos — sólo para
 // PRE-SELECCIONAR el tipo al crear un custom field desde el importador
@@ -122,16 +131,10 @@ export function guessColumnType(samples: string[]): GuessedType {
 
   if (values.every((v) => BOOLEAN_TRUE.has(v.toLowerCase()) || BOOLEAN_FALSE.has(v.toLowerCase()))) return "boolean";
   if (values.every((v) => /^-?\d+([.,]\d+)?$/.test(v))) return "number";
-  if (values.every((v) => !Number.isNaN(Date.parse(normalizeDateForParse(v))))) return "date";
+  if (values.every((v) => toIsoDate(v) !== null)) return "date";
   return "text";
 }
 
-function normalizeDateForParse(v: string): string {
-  // Date.parse no entiende dd/mm/yyyy de forma confiable — lo reordena a
-  // yyyy-mm-dd para el chequeo heurístico únicamente.
-  const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : v;
-}
 
 export type MappingTarget =
   | { kind: "ignore" }
@@ -158,48 +161,9 @@ export function validateStandardValue(field: StandardFieldDef, raw: string): str
   return null;
 }
 
-export interface CustomFieldTypeInfo {
-  type: string;
-  options: string[];
-  label: string;
-}
-
-// Recibe SIEMPRE type/options de una fuente autoritativa (las
-// definiciones reales del negocio) — nunca del propio cliente: ver la
-// diferencia entre `MappingTarget.custom` (lo que arma la UI para el
-// preview, con datos que el propio cliente ya tiene) y cómo
-// modules/import/execute.ts vuelve a llamar a esta misma función con la
-// definición releída de la base.
-export function validateCustomValue(info: CustomFieldTypeInfo, raw: string): string | null {
-  const value = raw.trim();
-  const { label } = info;
-  if (!value) return null;
-  switch (info.type) {
-    case "number":
-    case "currency":
-      if (Number.isNaN(Number(value.replace(",", ".")))) return `"${label}" no es un número válido: ${value}`;
-      return null;
-    case "boolean":
-      if (!BOOLEAN_TRUE.has(value.toLowerCase()) && !BOOLEAN_FALSE.has(value.toLowerCase())) return `"${label}" no es sí/no: ${value}`;
-      return null;
-    case "date":
-    case "datetime":
-      if (Number.isNaN(Date.parse(normalizeDateForParse(value)))) return `"${label}" no es una fecha válida: ${value}`;
-      return null;
-    case "select":
-      if (info.options.length > 0 && !info.options.includes(value)) return `"${label}": "${value}" no está entre las opciones`;
-      return null;
-    case "multiselect":
-      if (info.options.length > 0) {
-        const parts = value.split(",").map((p) => p.trim());
-        const bad = parts.find((p) => !info.options.includes(p));
-        if (bad) return `"${label}": "${bad}" no está entre las opciones`;
-      }
-      return null;
-    default:
-      return null;
-  }
-}
+// Validación de valores: única implementación en lib/custom-fields.ts
+// (la comparten el importador, el editor del registro y la API).
+export { validateCustomValue, type CustomFieldTypeInfo } from "@/lib/custom-fields";
 
 // Corre el mapeo completo sobre UNA fila cruda del archivo. Usada tal
 // cual del lado del cliente (preview) y del lado del servidor

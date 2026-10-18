@@ -4,6 +4,7 @@ import { assertOptionalOwner } from "@/modules/business/members";
 import { assertValidStatus, resolveStatusRules, validateStatusReason } from "@/modules/status-definitions/service";
 import { runLeadCreatedAutomations, runLeadStatusAutomations } from "@/modules/automations/engine";
 import { buildLeadWhere, leadOrderBy, type LeadFilters } from "@/modules/leads/filters";
+import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 
 // crm.Lead — prospecto propio de CADA NEGOCIO que usa el CRM. NO es
 // public.Lead (pipeline comercial de Kodexa) — ver
@@ -144,5 +145,6 @@ export async function updateLead(businessId: string, id: string, data: UpdateLea
 
 export async function deleteLead(businessId: string, id: string) {
   const result = await prisma.lead.deleteMany({ where: { id, businessId } });
+  if (result.count > 0) await cleanupDeletedRecord(businessId, "lead", id);
   return result.count > 0;
 }

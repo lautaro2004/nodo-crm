@@ -88,6 +88,7 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   invalid_reason: 400,
   pipeline_in_use: 409,
   stage_in_use: 409,
+  field_key_taken: 409,
 };
 
 export function domainErrorResponse(err: unknown): NextResponse {

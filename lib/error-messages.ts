@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   use_convert_endpoint: "Para marcar un lead como convertido usá la acción “Convertir”.",
   lead_already_converted: "Este lead ya fue convertido y no se puede cambiar de estado.",
   invalid_config: "La configuración de la regla no es válida.",
+  field_key_taken: "Ya existe un campo con ese nombre y otro tipo. Elegí otro nombre o usá el campo existente.",
   already_member: "Esa persona ya es parte del equipo.",
   email_in_other_business: "Ese email ya pertenece a otro negocio. Por ahora cada usuario puede estar en un solo negocio: pedile que use otro email.",
   products_required: "Elegí al menos un producto (Nodo o Nexo).",

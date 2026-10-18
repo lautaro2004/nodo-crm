@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
 import { assertUserBelongsToBusiness } from "@/modules/business/members";
+import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 
 export const TASK_STATUSES = ["todo", "in_progress", "completed", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -208,6 +209,7 @@ export async function reopenTask(businessId: string, id: string, actorUserId: st
 
 export async function deleteTask(businessId: string, id: string) {
   const result = await prisma.task.deleteMany({ where: { id, businessId } });
+  if (result.count > 0) await cleanupDeletedRecord(businessId, "task", id);
   return result.count > 0;
 }
 

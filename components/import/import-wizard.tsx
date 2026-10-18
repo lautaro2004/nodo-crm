@@ -5,12 +5,15 @@ import { useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, Input, Label, Select, Spinner, Textarea } from "@/components/ui/primitives";
 import { UploadIcon } from "@/components/ui/icons";
 import { customFieldTypes } from "@/lib/schemas";
+import { CUSTOM_FIELD_TYPE_LABELS } from "@/lib/custom-fields";
+import { errorMessage } from "@/lib/error-messages";
 import { ImportParseError, parseSpreadsheetFile, type ParsedSheet } from "@/lib/import-parse";
 import {
   IMPORT_MODULE_DEFS,
   applyMapping,
   guessColumnType,
   slugifyKey,
+  suggestCustomField,
   suggestStandardField,
   type ColumnMapping,
   type ImportModule,
@@ -29,20 +32,12 @@ interface CustomFieldDef {
 type Step = "module" | "upload" | "map" | "preview" | "result";
 
 const MODULES: ImportModule[] = ["contact", "company", "lead"];
-
-const CUSTOM_FIELD_TYPE_LABELS: Record<string, string> = {
-  text: "Texto",
-  number: "Número",
-  currency: "Moneda",
-  date: "Fecha",
-  datetime: "Fecha y hora",
-  boolean: "Sí / No",
-  select: "Selección única",
-  multiselect: "Selección múltiple",
-  email: "Email",
-  phone: "Teléfono",
-  url: "URL",
+const MODULE_LIST_PATH: Record<ImportModule, string> = {
+  contact: "/dashboard/contactos",
+  company: "/dashboard/empresas",
+  lead: "/dashboard/leads",
 };
+
 
 interface ImportResultDto {
   totalRows: number;
@@ -61,6 +56,7 @@ export function ImportWizard() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
+  const [fieldNotice, setFieldNotice] = useState<{ column: string; tone: "error" | "info"; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ImportResultDto | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -84,7 +80,12 @@ export function ImportWizard() {
       setSheet(parsed);
       const initialMapping: ColumnMapping[] = parsed.headers.map((column) => {
         const suggestion = moduleDef ? suggestStandardField(column, moduleDef) : null;
-        const target: MappingTarget = suggestion ? { kind: "standard", fieldKey: suggestion } : { kind: "ignore" };
+        const existing = suggestion ? null : suggestCustomField(column, definitions);
+        const target: MappingTarget = suggestion
+          ? { kind: "standard", fieldKey: suggestion }
+          : existing
+            ? { kind: "custom", definitionId: existing.id, fieldType: existing.type, options: existing.options }
+            : { kind: "ignore" };
         return { column, target };
       });
       setMapping(initialMapping);
@@ -114,10 +115,17 @@ export function ImportWizard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityType: moduleDef.entityType, key: slugifyKey(label), label, type, options }),
     });
-    if (!res.ok) return;
-    const definition: CustomFieldDef = await res.json();
-    setDefinitions((prev) => [...prev, definition]);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setFieldNotice({ column, tone: "error", text: errorMessage(body.error) });
+      return;
+    }
+    // 200 + existing: ya había un campo con ese nombre y tipo (p. ej. de
+    // una importación anterior) → se reutiliza, nunca se duplica.
+    const definition: CustomFieldDef & { existing?: boolean } = await res.json();
+    setDefinitions((prev) => (prev.some((d) => d.id === definition.id) ? prev : [...prev, definition]));
     setColumnTarget(column, { kind: "custom", definitionId: definition.id, fieldType: definition.type, options: definition.options });
+    setFieldNotice(definition.existing ? { column, tone: "info", text: `Ya existía el campo "${definition.label}": se usa ese.` } : null);
     setCreatingFor(null);
   }
 
@@ -280,6 +288,10 @@ export function ImportWizard() {
                     </div>
                   </div>
 
+                  {fieldNotice?.column === column && (
+                    <p className={`mt-2 text-xs ${fieldNotice.tone === "error" ? "text-red-600" : "text-slate-600"}`}>{fieldNotice.text}</p>
+                  )}
+
                   {creatingFor === column && (
                     <NewFieldForm
                       column={column}
@@ -414,7 +426,21 @@ export function ImportWizard() {
             </div>
           )}
 
-          <Button onClick={reset}>Importar otro archivo</Button>
+          {preview && preview.customFieldLabels.length > 0 && (
+            <p className="mb-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              Los campos personalizados ({preview.customFieldLabels.map((l) => `"${l}"`).join(", ")}) se ven y se editan en la ficha de cada registro.
+              {module === "lead" && " En la lista de Leads podés sumarlos como columnas desde “Columnas”."}
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {module && (
+              <a href={MODULE_LIST_PATH[module]}>
+                <Button variant="secondary">Ver {IMPORT_MODULE_DEFS[module].label.toLowerCase()}</Button>
+              </a>
+            )}
+            <Button onClick={reset}>Importar otro archivo</Button>
+          </div>
         </Card>
       )}
     </div>

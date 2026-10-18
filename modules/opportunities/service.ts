@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
 import { assertOptionalOwner } from "@/modules/business/members";
 import { buildOpportunityWhere, opportunityOrderBy, type OpportunityFilters } from "@/modules/opportunities/filters";
+import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 
 export interface CreateOpportunityInput {
   title: string;
@@ -164,5 +165,6 @@ export async function updateOpportunity(businessId: string, id: string, data: Up
 
 export async function deleteOpportunity(businessId: string, id: string) {
   const result = await prisma.opportunity.deleteMany({ where: { id, businessId } });
+  if (result.count > 0) await cleanupDeletedRecord(businessId, "opportunity", id);
   return result.count > 0;
 }

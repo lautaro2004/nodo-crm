@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { assertOptionalOwner } from "@/modules/business/members";
+import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 
 export interface CreateContactInput {
   name: string;
@@ -86,5 +87,6 @@ export async function updateContact(businessId: string, id: string, data: Update
 
 export async function deleteContact(businessId: string, id: string) {
   const result = await prisma.contact.deleteMany({ where: { id, businessId } });
+  if (result.count > 0) await cleanupDeletedRecord(businessId, "contact", id);
   return result.count > 0;
 }
