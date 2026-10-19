@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AppProviders } from "@/components/ui/app-providers";
 
 // Misma tipografía que Nexo (Geist) — consistencia de marca entre los
 // productos de Kodexa, sin necesidad de compartir código entre repos.
@@ -18,7 +19,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }

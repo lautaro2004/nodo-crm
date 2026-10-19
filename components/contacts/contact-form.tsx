@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePendingNavigation } from "@/lib/hooks/use-pending-navigation";
+import { useToast } from "@/components/ui/toast";
+import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
@@ -21,7 +23,8 @@ export function ContactForm({
   contactId?: string;
   companies: { id: string; name: string }[];
 }) {
-  const router = useRouter();
+  const { navigating, navigate } = usePendingNavigation();
+  const toast = useToast();
   const [values, setValues] = useState<ContactFormValues>({
     name: initial?.name ?? "",
     email: initial?.email ?? "",
@@ -33,25 +36,35 @@ export function ContactForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || navigating) return;
     setLoading(true);
     setError(null);
 
     const url = contactId ? `/api/contacts/${contactId}` : "/api/contacts";
     const method = contactId ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, companyId: values.companyId || null }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, companyId: values.companyId || null }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. Los cambios no se guardaron.");
+      return;
+    }
 
-    setLoading(false);
     if (!res.ok) {
-      setError("Revisá los datos e intentá de nuevo.");
+      setLoading(false);
+      setError(await readApiError(res));
       return;
     }
     const saved = await res.json();
-    router.push(`/dashboard/contactos/${saved.id}`);
-    router.refresh();
+    toast.success(contactId ? "Cambios guardados" : "Contacto creado");
+    // El botón sigue en "Guardando…" hasta que llega el detalle (sin dobles envíos).
+    navigate(`/dashboard/contactos/${saved.id}`);
+    setLoading(false);
   }
 
   return (
@@ -80,8 +93,8 @@ export function ContactForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading}>
-        {loading ? "Guardando…" : contactId ? "Guardar cambios" : "Crear contacto"}
+      <Button type="submit" loading={loading || navigating}>
+        {loading || navigating ? "Guardando…" : contactId ? "Guardar cambios" : "Crear contacto"}
       </Button>
     </form>
   );

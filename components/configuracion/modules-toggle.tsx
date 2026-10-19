@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/primitives";
 import { AVAILABLE_MODULES, STATIC_MODULE_LABELS } from "@/modules/workspace/available-modules";
+import { apiFetch } from "@/lib/api-fetch";
+import { readApiError } from "@/lib/error-messages";
+import { useToast } from "@/components/ui/toast";
 
 export function ModulesToggle({ activeModules, opportunityLabelPlural }: { activeModules: string[]; opportunityLabelPlural: string }) {
   const router = useRouter();
@@ -23,14 +26,21 @@ export function ModulesToggle({ activeModules, opportunityLabelPlural }: { activ
     setSelected((prev) => (prev.includes(key) ? prev.filter((m) => m !== key) : [...prev, key]));
   }
 
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+
   async function save() {
+    if (saving) return;
     setSaving(true);
-    await fetch("/api/workspace/modules", {
+    setError(null);
+    const res = await apiFetch("/api/workspace/modules", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activeModules: selected }),
     });
     setSaving(false);
+    if (!res.ok) return setError(await readApiError(res));
+    toast.success("Módulos actualizados");
     router.refresh();
   }
 
@@ -49,7 +59,12 @@ export function ModulesToggle({ activeModules, opportunityLabelPlural }: { activ
           </label>
         ))}
       </div>
-      <Button type="button" className="mt-3" onClick={save} disabled={saving}>
+      {error && (
+        <p role="alert" className="mt-3 text-sm text-red-600">
+          {error}
+        </p>
+      )}
+      <Button type="button" className="mt-3" onClick={save} loading={saving}>
         {saving ? "Guardando…" : "Guardar módulos"}
       </Button>
     </div>

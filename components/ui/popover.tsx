@@ -24,6 +24,7 @@ export function Popover({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -31,7 +32,10 @@ export function Popover({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
     }
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -46,11 +50,12 @@ export function Popover({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-sm font-medium shadow-[var(--shadow-card)] transition-colors ${
+        className={`inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-sm font-medium shadow-[var(--shadow-card)] transition-[border-color,box-shadow,color,transform] duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
           active || open ? "border-slate-300 bg-white text-slate-900" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
         }`}
       >
@@ -64,7 +69,7 @@ export function Popover({
         <div
           role="dialog"
           aria-label={label}
-          className={`glass absolute top-12 z-40 max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl p-4 ${width} ${
+          className={`glass animate-pop-in absolute top-12 z-40 max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl p-4 ${width} ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

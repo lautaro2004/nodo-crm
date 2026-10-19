@@ -7,7 +7,9 @@ import { Button, Card, Input, Label, Select } from "@/components/ui/primitives";
 import { customFieldTypes } from "@/lib/schemas";
 import { RELATED_TYPE_LABELS } from "@/lib/labels";
 import { CUSTOM_FIELD_TYPE_LABELS } from "@/lib/custom-fields";
-import { errorMessage } from "@/lib/error-messages";
+import { errorMessage, readApiError } from "@/lib/error-messages";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Definition {
   id: string;
@@ -27,9 +29,13 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
   const [type, setType] = useState<string>("text");
   const [options, setOptions] = useState("");
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function createDefinition() {
-    if (!label.trim()) return;
+    if (!label.trim() || saving) return;
     const key = label
       .toLowerCase()
       .normalize("NFD")
@@ -38,6 +44,7 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
       .replace(/^_+|_+$/g, "");
 
     setNotice(null);
+    setSaving(true);
     const res = await fetch("/api/custom-field-definitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -48,22 +55,35 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
         type,
         options: type === "select" || type === "multiselect" ? options.split(",").map((o) => o.trim()).filter(Boolean) : [],
       }),
-    });
+    }).catch(() => null);
+    setSaving(false);
+    if (!res) return setNotice({ tone: "error", text: "Sin conexión. El campo no se creó." });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       setNotice({ tone: "error", text: errorMessage(body.error) });
       return;
     }
     if (body.existing) setNotice({ tone: "info", text: `"${body.label}" ya existía en ${RELATED_TYPE_LABELS[entityType]}.` });
+    else toast.success(`Campo “${label.trim()}” creado`);
     setLabel("");
     setOptions("");
     router.refresh();
   }
 
   async function deleteDefinition(id: string) {
-    if (!confirm("¿Borrar este campo personalizado? Se pierden los valores ya cargados.")) return;
-    await fetch(`/api/custom-field-definitions/${id}`, { method: "DELETE" });
-    router.refresh();
+    const ok = await confirm({ title: "¿Borrar este campo personalizado?", description: "Se pierden los valores ya cargados.", tone: "danger" });
+    if (!ok) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/custom-field-definitions/${id}`, { method: "DELETE" });
+      if (!res.ok) return setNotice({ tone: "error", text: await readApiError(res) });
+      toast.success("Campo borrado");
+      router.refresh();
+    } catch {
+      setNotice({ tone: "error", text: "Sin conexión. El campo no se borró." });
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (
@@ -103,8 +123,8 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
             </div>
           )}
         </div>
-        <Button type="button" className="mt-3" onClick={createDefinition}>
-          Agregar campo
+        <Button type="button" className="mt-3" onClick={createDefinition} loading={saving} disabled={!label.trim()}>
+          {saving ? "Agregando…" : "Agregar campo"}
         </Button>
         {notice && <p className={`mt-2 text-sm ${notice.tone === "error" ? "text-red-600" : "text-slate-600"}`}>{notice.text}</p>}
       </Card>
@@ -121,8 +141,8 @@ export function CustomFieldsManager({ definitions }: { definitions: Definition[]
                   <span>
                     {d.label} <span className="text-slate-400">({CUSTOM_FIELD_TYPE_LABELS[d.type] ?? d.type})</span>
                   </span>
-                  <button type="button" onClick={() => deleteDefinition(d.id)} className="text-red-400 hover:text-red-600">
-                    Borrar
+                  <button type="button" onClick={() => deleteDefinition(d.id)} disabled={!!deleting} className="text-red-400 hover:text-red-600 disabled:opacity-50">
+                    {deleting === d.id ? "Borrando…" : "Borrar"}
                   </button>
                 </li>
               ))}

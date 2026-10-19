@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 
 import { Button, Input, Label, Textarea } from "@/components/ui/primitives";
 import { HtmlPreview } from "@/components/email/html-preview";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
+import { readApiError } from "@/lib/error-messages";
 import { TEMPLATE_VARIABLES, renderTemplate, SAMPLE_VALUES } from "@/modules/email/render";
 
 const ERRORS: Record<string, string> = {
@@ -19,6 +22,10 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   function insertVariable(key: string) {
@@ -32,14 +39,22 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
     setInfo(null);
-    const res = await fetch(templateId ? `/api/email/templates/${templateId}` : "/api/email/templates", {
-      method: templateId ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
+    let res: Response;
+    try {
+      res = await fetch(templateId ? `/api/email/templates/${templateId}` : "/api/email/templates", {
+        method: templateId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. La plantilla no se guardó.");
+      return;
+    }
     setLoading(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -47,7 +62,7 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
       return;
     }
     if (templateId) {
-      setInfo("Guardado.");
+      toast.success("Plantilla guardada");
       router.refresh();
     } else {
       router.push("/dashboard/configuracion/plantillas");
@@ -56,10 +71,18 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
   }
 
   async function sendTest() {
-    if (!templateId) return;
+    if (!templateId || testing) return;
     setError(null);
     setInfo(null);
-    const res = await fetch(`/api/email/templates/${templateId}/test`, { method: "POST" });
+    setTesting(true);
+    let res: Response;
+    try {
+      res = await fetch(`/api/email/templates/${templateId}/test`, { method: "POST" });
+    } catch {
+      setTesting(false);
+      return setError("Sin conexión. No se envió la prueba.");
+    }
+    setTesting(false);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setError(ERRORS[data.error] ?? "No se pudo enviar la prueba.");
     if (data.status === "failed") return setError(`El proveedor rechazó el envío (${data.error}).`);
@@ -71,10 +94,23 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
   }
 
   async function remove() {
-    if (!templateId || !window.confirm("¿Eliminar esta plantilla? Los correos ya enviados no se modifican.")) return;
-    await fetch(`/api/email/templates/${templateId}`, { method: "DELETE" });
-    router.push("/dashboard/configuracion/plantillas");
-    router.refresh();
+    if (!templateId || removing) return;
+    const ok = await confirm({ title: "¿Eliminar esta plantilla?", description: "Los correos ya enviados no se modifican.", tone: "danger", confirmLabel: "Eliminar" });
+    if (!ok) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/email/templates/${templateId}`, { method: "DELETE" });
+      if (!res.ok) {
+        setRemoving(false);
+        return setError(await readApiError(res));
+      }
+      toast.success("Plantilla eliminada");
+      router.push("/dashboard/configuracion/plantillas");
+      router.refresh();
+    } catch {
+      setRemoving(false);
+      setError("Sin conexión. La plantilla no se eliminó.");
+    }
   }
 
   const previewSubject = renderTemplate(values.subject, SAMPLE_VALUES).output;
@@ -121,16 +157,16 @@ export function TemplateForm({ templateId, initial }: { templateId?: string; ini
         {info && <p className="text-sm text-slate-600">{info}</p>}
 
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" loading={loading} disabled={testing || removing}>
             {loading ? "Guardando…" : templateId ? "Guardar cambios" : "Crear plantilla"}
           </Button>
           {templateId && (
             <>
-              <Button type="button" variant="secondary" onClick={sendTest}>
-                Enviarme una prueba
+              <Button type="button" variant="secondary" onClick={sendTest} loading={testing} disabled={loading || removing}>
+                {testing ? "Enviando…" : "Enviarme una prueba"}
               </Button>
-              <Button type="button" variant="danger" onClick={remove}>
-                Eliminar
+              <Button type="button" variant="danger" onClick={remove} loading={removing} disabled={loading || testing}>
+                {removing ? "Eliminando…" : "Eliminar"}
               </Button>
             </>
           )}

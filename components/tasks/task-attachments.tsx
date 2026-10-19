@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button, Card } from "@/components/ui/primitives";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Attachment {
   id: string;
@@ -34,7 +35,7 @@ export function TaskAttachments({ taskId, attachments }: { taskId: string; attac
 
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: formData });
+    const res = await apiFetch(`/api/tasks/${taskId}/attachments`, { method: "POST", body: formData });
 
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";
@@ -54,7 +55,7 @@ export function TaskAttachments({ taskId, attachments }: { taskId: string; attac
 
   async function handleDownload(attachmentId: string) {
     setPendingId(attachmentId);
-    const res = await fetch(`/api/tasks/attachments/${attachmentId}`);
+    const res = await apiFetch(`/api/tasks/attachments/${attachmentId}`);
     setPendingId(null);
     if (!res.ok) {
       setError("No pudimos generar el link de descarga.");
@@ -66,7 +67,7 @@ export function TaskAttachments({ taskId, attachments }: { taskId: string; attac
 
   async function handleDelete(attachmentId: string) {
     setPendingId(attachmentId);
-    await fetch(`/api/tasks/attachments/${attachmentId}`, { method: "DELETE" });
+    await apiFetch(`/api/tasks/attachments/${attachmentId}`, { method: "DELETE" });
     setPendingId(null);
     router.refresh();
   }

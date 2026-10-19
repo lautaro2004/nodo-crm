@@ -55,6 +55,7 @@ const MESSAGES: Record<string, string> = {
   no_business: "No encontramos tu espacio de trabajo. Volvé a iniciar sesión.",
   no_workspace: "No encontramos tu espacio de trabajo. Volvé a iniciar sesión.",
   invalid_input: "Revisá los datos ingresados.",
+  network_error: "Sin conexión con el servidor. Revisá tu conexión y probá de nuevo.",
 };
 
 export function errorMessage(code: string | undefined | null): string {

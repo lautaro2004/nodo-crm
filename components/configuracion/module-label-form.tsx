@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 import { ModuleIcon } from "@/components/ui/module-icon";
 import { MODULE_ICONS, type ModuleIconKey, type ModuleLabel } from "@/modules/workspace/module-config-shared";
+import { apiFetch } from "@/lib/api-fetch";
+import { readApiError } from "@/lib/error-messages";
 
 const ICON_NAMES: Record<ModuleIconKey, string> = {
   "trending-up": "Tendencia",
@@ -26,16 +28,20 @@ export function ModuleLabelForm({ moduleLabel }: { moduleLabel: ModuleLabel }) {
   const [icon, setIcon] = useState<ModuleIconKey>(moduleLabel.icon);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function save() {
+    if (saving) return;
     setSaving(true);
     setSaved(false);
-    await fetch("/api/module-config", {
+    setError(null);
+    const res = await apiFetch("/api/module-config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ internalModule: moduleLabel.internalModule, labelSingular, labelPlural, icon }),
     });
     setSaving(false);
+    if (!res.ok) return setError(await readApiError(res));
     setSaved(true);
     router.refresh();
   }
@@ -71,10 +77,19 @@ export function ModuleLabelForm({ moduleLabel }: { moduleLabel: ModuleLabel }) {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button type="button" disabled={saving || !labelSingular.trim() || !labelPlural.trim()} onClick={save}>
+        <Button type="button" disabled={!labelSingular.trim() || !labelPlural.trim()} loading={saving} onClick={save}>
           {saving ? "Guardando…" : "Guardar"}
         </Button>
-        {saved && !saving && <span className="text-xs text-emerald-600">Guardado.</span>}
+        {saved && !saving && (
+          <span role="status" className="animate-fade-in text-xs text-emerald-600">
+            Guardado
+          </span>
+        )}
+        {error && (
+          <span role="alert" className="text-xs text-red-600">
+            {error}
+          </span>
+        )}
       </div>
     </div>
   );

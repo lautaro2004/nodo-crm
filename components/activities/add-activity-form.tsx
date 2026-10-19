@@ -5,26 +5,35 @@ import { useRouter } from "next/navigation";
 
 import { Button, Select, Textarea } from "@/components/ui/primitives";
 import { ACTIVITY_TYPE_LABELS } from "@/lib/labels";
+import { apiFetch } from "@/lib/api-fetch";
+import { readApiError } from "@/lib/error-messages";
+import { useToast } from "@/components/ui/toast";
 
 export function AddActivityForm({ relatedType, relatedId }: { relatedType: string; relatedId: string }) {
   const router = useRouter();
   const [type, setType] = useState("note");
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || loading) return;
     setLoading(true);
+    setError(null);
 
-    await fetch("/api/activities", {
+    const res = await apiFetch("/api/activities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ relatedType, relatedId, type, body }),
     });
 
     setLoading(false);
+    // Si falló, el texto se conserva para reintentar (antes se borraba igual).
+    if (!res.ok) return setError(await readApiError(res));
     setBody("");
+    toast.success("Actividad registrada");
     router.refresh();
   }
 
@@ -48,7 +57,12 @@ export function AddActivityForm({ relatedType, relatedId }: { relatedType: strin
           className="flex-1"
         />
       </div>
-      <Button type="submit" variant="secondary" disabled={loading || !body.trim()}>
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+      <Button type="submit" variant="secondary" disabled={!body.trim()} loading={loading}>
         {loading ? "Guardando…" : "Registrar"}
       </Button>
     </form>

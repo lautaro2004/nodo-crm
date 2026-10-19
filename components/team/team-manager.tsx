@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { Badge, Button, Card, InlineAlert, Input, Label, Select } from "@/components/ui/primitives";
 import { PlusIcon } from "@/components/ui/icons";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 import { canManage, normalizeRole, PRODUCT_LABELS, ROLE_HINTS, ROLE_LABELS, type Product, type Role } from "@/lib/permissions";
 
@@ -41,6 +43,8 @@ export function TeamManager({
   invitations: Invitation[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ email: string; link: string; emailSent: boolean } | null>(null);
@@ -52,7 +56,13 @@ export function TeamManager({
 
   async function call(url: string, init: RequestInit) {
     setError(null);
-    const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    } catch {
+      setError("Sin conexión. El cambio no se guardó.");
+      return null;
+    }
     if (!res.ok) {
       setError(await readApiError(res));
       return null;
@@ -214,11 +224,15 @@ export function TeamManager({
                     size="sm"
                     variant="ghost"
                     className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={() =>
-                      window.confirm(
-                        `¿Quitar a ${m.name || m.email} del equipo? Pierde el acceso a Nodo y a Nexo, y sus leads, oportunidades y tareas quedan sin responsable.`
-                      ) && call(`/api/team/members/${m.id}`, { method: "DELETE" })
-                    }
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `¿Quitar a ${m.name || m.email} del equipo?`,
+                        description: "Pierde el acceso a Nodo y a Nexo, y sus leads, oportunidades y tareas quedan sin responsable.",
+                        tone: "danger",
+                        confirmLabel: "Quitar",
+                      });
+                      if (ok && (await call(`/api/team/members/${m.id}`, { method: "DELETE" }))) toast.success("Miembro quitado del equipo");
+                    }}
                   >
                     Quitar
                   </Button>
@@ -270,7 +284,10 @@ export function TeamManager({
                         size="sm"
                         variant="ghost"
                         className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                        onClick={() => window.confirm(`¿Cancelar la invitación a ${i.email}?`) && call(`/api/team/invitations/${i.id}`, { method: "DELETE" })}
+                        onClick={async () => {
+                          const ok = await confirm({ title: `¿Cancelar la invitación a ${i.email}?`, tone: "danger", confirmLabel: "Cancelar invitación", cancelLabel: "Volver" });
+                          if (ok && (await call(`/api/team/invitations/${i.id}`, { method: "DELETE" }))) toast.success("Invitación cancelada");
+                        }}
                       >
                         Cancelar
                       </Button>

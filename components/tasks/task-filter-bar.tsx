@@ -3,7 +3,10 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { Input, Select } from "@/components/ui/primitives";
+import { Input, Spinner } from "@/components/ui/primitives";
+import { SearchIcon } from "@/components/ui/icons";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { PendingBar } from "@/components/ui/pending-bar";
 import { TASK_PRIORITY_LABELS } from "@/lib/labels";
 
 // Mismo patrón que SearchFilterBar (components/dashboard/search-filter-bar.tsx)
@@ -15,34 +18,47 @@ export function TaskFilterBar({ searchPlaceholder }: { searchPlaceholder: string
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("q") ?? "");
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
   function updateParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
+    if ((searchParams.get(key) ?? "") === value) return;
     startTransition(() => router.push(`${pathname}?${params.toString()}`));
   }
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="relative mb-4 flex flex-wrap items-center gap-2" aria-busy={pending || undefined}>
+      <PendingBar active={pending} />
       <form
+        role="search"
         onSubmit={(e) => {
           e.preventDefault();
-          updateParam("q", q);
+          updateParam("q", q.trim());
         }}
-        className="min-w-56 flex-1"
+        className="relative min-w-56 flex-1"
       >
-        <Input value={q} onChange={(e) => setQ(e.target.value)} onBlur={() => updateParam("q", q)} placeholder={searchPlaceholder} />
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+          {pending ? <Spinner className="h-4 w-4" /> : <SearchIcon className="h-4 w-4" />}
+        </span>
+        <Input
+          type="search"
+          aria-label="Buscar"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onBlur={() => updateParam("q", q.trim())}
+          placeholder={searchPlaceholder}
+          className="pl-9"
+        />
       </form>
-      <Select defaultValue={searchParams.get("priority") ?? ""} onChange={(e) => updateParam("priority", e.target.value)} className="w-44">
-        <option value="">Toda prioridad</option>
-        {Object.entries(TASK_PRIORITY_LABELS).map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </Select>
+      <SelectMenu
+        ariaLabel="Filtrar por prioridad"
+        value={searchParams.get("priority") ?? ""}
+        onChange={(v) => updateParam("priority", v)}
+        className="w-44"
+        options={[{ value: "", label: "Toda prioridad" }, ...Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => ({ value, label }))]}
+      />
     </div>
   );
 }

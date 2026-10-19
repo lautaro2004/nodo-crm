@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button, Label } from "@/components/ui/primitives";
 import { FieldInput, toInputValue } from "@/components/custom-fields/field-input";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface FieldWithValue {
   definitionId: string;
@@ -27,7 +28,7 @@ export function CustomFieldsEditor({ entityId, fields }: { entityId: string; fie
   async function save(definitionId: string) {
     setSaving(definitionId);
     setErrors((e) => ({ ...e, [definitionId]: "" }));
-    const res = await fetch("/api/custom-field-values", {
+    const res = await apiFetch("/api/custom-field-values", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ definitionId, entityId, value: values[definitionId] || null }),

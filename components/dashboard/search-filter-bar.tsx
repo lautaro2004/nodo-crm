@@ -3,8 +3,10 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { Input, Select, Spinner } from "@/components/ui/primitives";
+import { Input, Spinner } from "@/components/ui/primitives";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { SearchIcon } from "@/components/ui/icons";
+import { PendingBar } from "@/components/ui/pending-bar";
 
 interface Option {
   value: string;
@@ -43,7 +45,8 @@ export function SearchFilterBar({
   }
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    <div className="relative mb-4 flex flex-wrap items-center gap-2" aria-busy={pending || undefined}>
+      <PendingBar active={pending} />
       <form
         role="search"
         onSubmit={(e) => {
@@ -66,44 +69,41 @@ export function SearchFilterBar({
         />
       </form>
       {statusOptions && (
-        <Select aria-label="Filtrar por estado" defaultValue={searchParams.get("status") ?? ""} onChange={(e) => updateParam("status", e.target.value)} className="w-auto min-w-40">
-          <option value="">Todos los estados</option>
-          {statusOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
+        <SelectMenu
+          ariaLabel="Filtrar por estado"
+          value={searchParams.get("status") ?? ""}
+          onChange={(v) => updateParam("status", v)}
+          className="w-auto min-w-40"
+          options={[{ value: "", label: "Todos los estados" }, ...statusOptions]}
+        />
       )}
       {ownerOptions && ownerOptions.length > 0 && (
-        <Select aria-label="Filtrar por responsable" defaultValue={searchParams.get("ownerId") ?? ""} onChange={(e) => updateParam("ownerId", e.target.value)} className="w-auto min-w-40">
-          <option value="">Todos los responsables</option>
-          <option value="none">Sin asignar</option>
-          {ownerOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
+        <SelectMenu
+          ariaLabel="Filtrar por responsable"
+          value={searchParams.get("ownerId") ?? ""}
+          onChange={(v) => updateParam("ownerId", v)}
+          className="w-auto min-w-40"
+          options={[{ value: "", label: "Todos los responsables" }, { value: "none", label: "Sin asignar" }, ...ownerOptions]}
+        />
       )}
       {tagOptions && tagOptions.length > 0 && (
-        <Select aria-label="Filtrar por etiqueta" defaultValue={searchParams.get("tagId") ?? ""} onChange={(e) => updateParam("tagId", e.target.value)} className="w-auto min-w-40">
-          <option value="">Todas las etiquetas</option>
-          {tagOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
+        <SelectMenu
+          ariaLabel="Filtrar por etiqueta"
+          value={searchParams.get("tagId") ?? ""}
+          onChange={(v) => updateParam("tagId", v)}
+          className="w-auto min-w-40"
+          options={[{ value: "", label: "Todas las etiquetas" }, ...tagOptions]}
+        />
       )}
       {sortOptions && (
-        <Select aria-label="Ordenar" defaultValue={searchParams.get("sort") ?? ""} onChange={(e) => updateParam("sort", e.target.value)} className="w-auto min-w-40">
-          {sortOptions.map((opt, i) => (
-            <option key={opt.value} value={i === 0 ? "" : opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
+        <SelectMenu
+          ariaLabel="Ordenar"
+          value={searchParams.get("sort") ?? ""}
+          onChange={(v) => updateParam("sort", v)}
+          className="w-auto min-w-40"
+          align="right"
+          options={sortOptions.map((opt, i) => ({ value: i === 0 ? "" : opt.value, label: opt.label }))}
+        />
       )}
     </div>
   );

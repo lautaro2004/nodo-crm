@@ -21,6 +21,7 @@ import {
   type MappingTarget,
   type RowValidationResult,
 } from "@/modules/import/shared";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface CustomFieldDef {
   id: string;
@@ -80,7 +81,7 @@ export function ImportWizard({ customModules = [] }: { customModules?: CustomMod
   async function chooseModule(next: ModuleChoice) {
     setModule(next);
     const entityType = next.startsWith("cm:") ? next : IMPORT_MODULE_DEFS[next as ImportModule].entityType;
-    const res = await fetch(`/api/custom-field-definitions?entityType=${encodeURIComponent(entityType)}`);
+    const res = await apiFetch(`/api/custom-field-definitions?entityType=${encodeURIComponent(entityType)}`);
     // Imagen y relación no se cargan desde un archivo.
     const defs: CustomFieldDef[] = res.ok ? await res.json() : [];
     setDefinitions(defs.filter((d) => d.type !== "image" && d.type !== "relation"));
@@ -125,7 +126,7 @@ export function ImportWizard({ customModules = [] }: { customModules?: CustomMod
   async function createFieldForColumn(column: string, label: string, type: string, optionsText: string) {
     if (!module || !moduleDef) return;
     const options = type === "select" || type === "multiselect" ? optionsText.split(",").map((o) => o.trim()).filter(Boolean) : [];
-    const res = await fetch("/api/custom-field-definitions", {
+    const res = await apiFetch("/api/custom-field-definitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityType: moduleDef.entityType, key: slugifyKey(label), label, type, options }),
@@ -169,7 +170,7 @@ export function ImportWizard({ customModules = [] }: { customModules?: CustomMod
     setSubmitting(true);
     setSubmitError(null);
     const rows = preview.valid.map((r) => ({ standard: r.standard, custom: r.custom }));
-    const res = await fetch(`/api/import/${encodeURIComponent(module)}/execute`, {
+    const res = await apiFetch(`/api/import/${encodeURIComponent(module)}/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rows }),

@@ -94,7 +94,7 @@ export function ColorSelect({
         {c.label}
       </button>
       {open && (
-        <div className="glass absolute right-0 top-10 z-40 w-[13.5rem] rounded-2xl p-3" role="dialog" aria-label="Elegir color">
+        <div className="glass animate-pop-in absolute right-0 top-10 z-40 w-[13.5rem] rounded-2xl p-3" role="dialog" aria-label="Elegir color">
           <ColorSwatches
             name={`color-${id}`}
             value={value}

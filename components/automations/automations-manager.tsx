@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 import { Badge, Button, Card, InlineAlert, Input, Label, Select } from "@/components/ui/primitives";
 import { ZapIcon } from "@/components/ui/icons";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 
 interface Option {
@@ -55,6 +57,8 @@ export function AutomationsManager({
   sources: Option[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState<RuleType | null>(null);
@@ -64,7 +68,13 @@ export function AutomationsManager({
 
   async function call(url: string, init: RequestInit) {
     setError(null);
-    const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    } catch {
+      setError("Sin conexión. El cambio no se guardó.");
+      return false;
+    }
     if (!res.ok) {
       setError(await readApiError(res));
       return false;
@@ -168,7 +178,10 @@ export function AutomationsManager({
                       size="sm"
                       variant="ghost"
                       className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => window.confirm(`¿Borrar la regla “${r.name}”? Se borra también su historial.`) && call(`/api/automations/${r.id}`, { method: "DELETE" })}
+                      onClick={async () => {
+                        const ok = await confirm({ title: `¿Borrar la regla “${r.name}”?`, description: "Se borra también su historial.", tone: "danger" });
+                        if (ok && (await call(`/api/automations/${r.id}`, { method: "DELETE" }))) toast.success("Regla borrada");
+                      }}
                     >
                       Borrar
                     </Button>

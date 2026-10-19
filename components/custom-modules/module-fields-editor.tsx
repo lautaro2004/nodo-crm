@@ -8,6 +8,8 @@ import { CUSTOM_FIELD_TYPE_LABELS } from "@/lib/custom-fields";
 import { customFieldTypes } from "@/lib/schemas";
 import { slugifyKey } from "@/modules/import/shared";
 import { errorMessage, readApiError } from "@/lib/error-messages";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface FieldRow {
   id: string;
@@ -38,6 +40,9 @@ export function ModuleFieldsEditor({
   const [order, setOrder] = useState(fields.map((f) => f.id));
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
   const byId = new Map(fields.map((f) => [f.id, f]));
   const ordered = order.map((id) => byId.get(id)).filter((f): f is FieldRow => !!f);
   // Campos nuevos (después de router.refresh) al final.
@@ -47,22 +52,46 @@ export function ModuleFieldsEditor({
     const ids = ordered.map((f) => f.id);
     const i = ids.indexOf(id);
     const j = i + dir;
-    if (j < 0 || j >= ids.length) return;
+    if (j < 0 || j >= ids.length || busy) return;
+    const previous = ordered.map((f) => f.id);
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    setOrder(ids);
-    await fetch("/api/custom-field-definitions/reorder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entityType, ids }),
-    });
-    router.refresh();
+    setOrder(ids); // optimista
+    setBusy("move");
+    setError(null);
+    try {
+      const res = await fetch("/api/custom-field-definitions/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityType, ids }),
+      });
+      if (!res.ok) {
+        setOrder(previous);
+        return setError(await readApiError(res));
+      }
+      router.refresh();
+    } catch {
+      setOrder(previous);
+      setError("Sin conexión. El orden no se guardó.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function remove(f: FieldRow) {
-    if (!confirm(`¿Borrar el campo "${f.label}"? Se pierden los valores cargados en todos los registros.`)) return;
-    const res = await fetch(`/api/custom-field-definitions/${f.id}`, { method: "DELETE" });
-    if (!res.ok) return setError(await readApiError(res));
-    router.refresh();
+    const ok = await confirm({ title: `¿Borrar el campo “${f.label}”?`, description: "Se pierden los valores cargados en todos los registros.", tone: "danger" });
+    if (!ok) return;
+    setBusy(`del:${f.id}`);
+    setError(null);
+    try {
+      const res = await fetch(`/api/custom-field-definitions/${f.id}`, { method: "DELETE" });
+      if (!res.ok) return setError(await readApiError(res));
+      toast.success(`Campo “${f.label}” borrado`);
+      router.refresh();
+    } catch {
+      setError("Sin conexión. El campo no se borró.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -82,13 +111,13 @@ export function ModuleFieldsEditor({
             <li key={f.id} className="px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <div className="flex flex-col">
-                  <button type="button" aria-label={`Subir ${f.label}`} disabled={idx === 0} onClick={() => move(f.id, -1)} className="px-1 text-xs leading-none text-slate-400 hover:text-slate-900 disabled:opacity-30">
+                  <button type="button" aria-label={`Subir ${f.label}`} disabled={idx === 0 || !!busy} onClick={() => move(f.id, -1)} className="px-1 text-xs leading-none text-slate-400 hover:text-slate-900 disabled:opacity-30">
                     ▲
                   </button>
                   <button
                     type="button"
                     aria-label={`Bajar ${f.label}`}
-                    disabled={idx === ordered.length - 1}
+                    disabled={idx === ordered.length - 1 || !!busy}
                     onClick={() => move(f.id, 1)}
                     className="px-1 text-xs leading-none text-slate-400 hover:text-slate-900 disabled:opacity-30"
                   >
@@ -109,8 +138,8 @@ export function ModuleFieldsEditor({
                 <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(editing === f.id ? null : f.id)}>
                   Editar
                 </Button>
-                <button type="button" onClick={() => remove(f)} className="text-xs text-red-400 hover:text-red-600">
-                  Borrar
+                <button type="button" onClick={() => remove(f)} disabled={!!busy} className="text-xs text-red-400 transition-colors hover:text-red-600 disabled:opacity-50">
+                  {busy === `del:${f.id}` ? "Borrando…" : "Borrar"}
                 </button>
               </div>
               {editing === f.id && <EditField field={f} onDone={() => setEditing(null)} />}
@@ -132,9 +161,14 @@ function EditField({ field, onDone }: { field: FieldRow; onDone: () => void }) {
   const [required, setRequired] = useState(field.required);
   const [multiple, setMultiple] = useState(field.multiple);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const hasOptions = field.type === "select" || field.type === "multiselect";
 
   async function save() {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
     const res = await fetch(`/api/custom-field-definitions/${field.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -144,8 +178,11 @@ function EditField({ field, onDone }: { field: FieldRow; onDone: () => void }) {
         ...(hasOptions ? { options: options.split(",").map((o) => o.trim()).filter(Boolean) } : {}),
         ...(field.type === "relation" ? { multiple } : {}),
       }),
-    });
+    }).catch(() => null);
+    setSaving(false);
+    if (!res) return setError("Sin conexión. Los cambios no se guardaron.");
     if (!res.ok) return setError(await readApiError(res));
+    toast.success("Campo actualizado");
     onDone();
     router.refresh();
   }
@@ -180,8 +217,8 @@ function EditField({ field, onDone }: { field: FieldRow; onDone: () => void }) {
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={save} disabled={!label.trim()}>
-          Guardar
+        <Button type="button" size="sm" onClick={save} disabled={!label.trim()} loading={saving}>
+          {saving ? "Guardando…" : "Guardar"}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onDone}>
           Cancelar
@@ -201,8 +238,10 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
   const [multiple, setMultiple] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
+  const toast = useToast();
 
   async function add() {
+    if (saving) return;
     setSaving(true);
     setNotice(null);
     const res = await fetch("/api/custom-field-definitions", {
@@ -217,11 +256,13 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
         options: type === "select" || type === "multiselect" ? options.split(",").map((o) => o.trim()).filter(Boolean) : [],
         ...(type === "relation" ? { targetEntity: target, multiple } : {}),
       }),
-    });
+    }).catch(() => null);
     setSaving(false);
+    if (!res) return setNotice({ tone: "error", text: "Sin conexión. El campo no se creó." });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return setNotice({ tone: "error", text: errorMessage(body.error) });
     if (body.existing) setNotice({ tone: "info", text: `"${body.label}" ya existía en este módulo.` });
+    else toast.success(`Campo “${label.trim()}” agregado`);
     setLabel("");
     setOptions("");
     setRequired(false);
@@ -287,7 +328,7 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
         {type === "image" && <Badge>JPG, PNG, WebP o GIF · hasta 5 MB</Badge>}
       </div>
       {notice && <p className={`mt-2 text-sm ${notice.tone === "error" ? "text-red-600" : "text-slate-600"}`}>{notice.text}</p>}
-      <Button type="submit" size="sm" className="mt-3" disabled={saving || !label.trim()}>
+      <Button type="submit" size="sm" className="mt-3" disabled={!label.trim()} loading={saving}>
         {saving ? "Agregando…" : "Agregar campo"}
       </Button>
     </form>
