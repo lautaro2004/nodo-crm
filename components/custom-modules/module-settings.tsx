@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { CustomModuleIcon } from "@/components/custom-modules/custom-module-icon";
 import { MODULE_ICONS } from "@/lib/custom-modules";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 
 interface ModuleData {
@@ -40,26 +42,43 @@ export function ModuleSettings({ module: m, fields }: { module: ModuleData; fiel
     imageFieldId: m.imageFieldId ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   async function patch(body: Record<string, unknown>) {
     setSaving(true);
     setMessage(null);
-    const res = await fetch(`/api/modules/${m.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(`/api/modules/${m.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     setSaving(false);
+    if (!res) {
+      setMessage({ tone: "error", text: "Sin conexión. Los cambios no se guardaron." });
+      return false;
+    }
     if (!res.ok) {
       setMessage({ tone: "error", text: await readApiError(res) });
       return false;
     }
-    setMessage({ tone: "ok", text: "Guardado." });
+    toast.success("Módulo guardado");
     router.refresh();
     return true;
   }
 
   async function remove() {
-    if (!confirm(`¿Borrar "${m.labelPlural}" definitivamente? Se pierden todos sus registros, campos y relaciones. No se puede deshacer.`)) return;
-    const res = await fetch(`/api/modules/${m.id}`, { method: "DELETE" });
-    if (!res.ok) return setMessage({ tone: "error", text: await readApiError(res) });
+    const ok = await confirm({
+      title: `¿Borrar “${m.labelPlural}” definitivamente?`,
+      description: "Se pierden todos sus registros, campos y relaciones. No se puede deshacer.",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setRemoving(true);
+    const res = await fetch(`/api/modules/${m.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res || !res.ok) {
+      setRemoving(false);
+      return setMessage({ tone: "error", text: res ? await readApiError(res) : "Sin conexión. El módulo no se borró." });
+    }
+    toast.success(`Módulo “${m.labelPlural}” borrado`);
     router.push("/dashboard/configuracion/modulos");
     router.refresh();
   }
@@ -142,7 +161,7 @@ export function ModuleSettings({ module: m, fields }: { module: ModuleData; fiel
           </div>
 
           {message && <p className={`text-sm ${message.tone === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>}
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" loading={saving}>
             {saving ? "Guardando…" : "Guardar"}
           </Button>
         </form>
@@ -161,7 +180,7 @@ export function ModuleSettings({ module: m, fields }: { module: ModuleData; fiel
               <Button variant="secondary" disabled={saving} onClick={() => patch({ archived: false })}>
                 Restaurar
               </Button>
-              <Button variant="danger" onClick={remove}>
+              <Button variant="danger" onClick={remove} loading={removing} disabled={saving}>
                 Borrar definitivamente
               </Button>
             </>

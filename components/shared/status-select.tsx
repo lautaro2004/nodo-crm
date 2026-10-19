@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { Select } from "@/components/ui/primitives";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { readApiError } from "@/lib/error-messages";
 import { resolveStatusColor } from "@/lib/status-colors";
 import { useReasonPrompt } from "@/components/status/reason-prompt";
@@ -71,28 +71,21 @@ export function StatusSelect({
 
   return (
     <div>
-      <div className="relative">
-        {hasColors && (
-          <span
-            aria-hidden
-            className={`pointer-events-none absolute left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full ${resolveStatusColor(selected?.color).dot}`}
-          />
-        )}
-        <Select
-          aria-label={label}
-          value={current}
-          disabled={saving}
-          onChange={(e) => handleChange(e.target.value)}
-          className={`w-auto min-w-40 ${hasColors ? "pl-7" : ""}`}
-        >
-          {!selected && <option value={current}>{current}</option>}
-          {options.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <SelectMenu
+        ariaLabel={label}
+        value={current}
+        loading={saving}
+        onChange={handleChange}
+        className="w-auto min-w-40"
+        options={[
+          ...(selected ? [] : [{ value: current, label: current }]),
+          ...options.map((o) => ({
+            value: o.key,
+            label: o.label,
+            leading: hasColors ? <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${resolveStatusColor(o.color).dot}`} /> : undefined,
+          })),
+        ]}
+      />
       {error && (
         <p role="alert" className="mt-1 max-w-xs text-xs text-red-600">
           {error}

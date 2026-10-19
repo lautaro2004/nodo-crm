@@ -7,6 +7,8 @@ import { Button, Card, InlineAlert, Input, Label, Select } from "@/components/ui
 import { StatusBadge } from "@/components/status/status-badge";
 import { ColorSelect, ColorSwatches } from "@/components/status/color-picker";
 import { RELATED_TYPE_LABELS } from "@/lib/labels";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 import type { StatusColorKey } from "@/lib/status-colors";
 
@@ -41,6 +43,8 @@ function slugify(label: string) {
 
 export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [entityType, setEntityType] = useState<EntityType>("lead");
@@ -51,7 +55,13 @@ export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }
 
   async function call(url: string, init: RequestInit) {
     setError(null);
-    const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    } catch {
+      setError("Sin conexión. El cambio no se guardó.");
+      return false;
+    }
     if (!res.ok) {
       setError(await readApiError(res));
       return false;
@@ -76,9 +86,9 @@ export function StatusDefinitionsManager({ statuses }: { statuses: StatusDef[] }
     if (ok) setEditing(null);
   }
 
-  function deleteStatus(s: StatusDef) {
-    if (!window.confirm(`¿Borrar el estado “${s.label}”? Esta acción no se puede deshacer.`)) return;
-    call(`/api/status-definitions/${s.id}`, { method: "DELETE" });
+  async function deleteStatus(s: StatusDef) {
+    if (!(await confirm({ title: `¿Borrar el estado “${s.label}”?`, description: "Esta acción no se puede deshacer.", tone: "danger" }))) return;
+    if (await call(`/api/status-definitions/${s.id}`, { method: "DELETE" })) toast.success("Estado borrado");
   }
 
   function move(items: StatusDef[], index: number, dir: -1 | 1) {

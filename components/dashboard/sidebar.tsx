@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -98,8 +98,21 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
     >
       {active && <span aria-hidden className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-brand-500" />}
       <span className={`[&>svg]:h-[18px] [&>svg]:w-[18px] ${active ? "text-brand-600" : "text-slate-400 group-hover:text-slate-600"}`}>{item.icon}</span>
-      {item.label}
+      <span className="flex-1 truncate">{item.label}</span>
+      <NavPending />
     </Link>
+  );
+}
+
+// Indicador discreto mientras carga la sección elegida (aparece solo si la
+// navegación tarda más de ~150 ms, así no parpadea en las instantáneas).
+function NavPending() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500 transition-opacity duration-200 ${pending ? "animate-pulse opacity-100 delay-150" : "opacity-0"}`}
+    />
   );
 }
 
@@ -218,8 +231,8 @@ export function MobileSidebarDrawer({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <button aria-label="Cerrar menú" onClick={onClose} className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
-      <div className="glass relative m-2 flex h-[calc(100%-1rem)] w-72 max-w-[85vw] flex-col rounded-[var(--radius-glass)]">
+      <button aria-label="Cerrar menú" onClick={onClose} className="animate-overlay-in absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
+      <div className="glass animate-sheet-in relative m-2 flex h-[calc(100%-1rem)] w-72 max-w-[85vw] flex-col rounded-[var(--radius-glass)]">
         <button
           type="button"
           aria-label="Cerrar menú"

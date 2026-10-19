@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button, Input, Label, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Input, Label, Select, Textarea, Skeleton } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/modal";
 import { HtmlPreview } from "@/components/email/html-preview";
+import { apiFetch } from "@/lib/api-fetch";
 
 const ERRORS: Record<string, string> = {
   recipient_missing: "Esta ficha no tiene un email de destino.",
@@ -34,6 +35,7 @@ export function SendEmailAction({
   const [recipient, setRecipient] = useState<{ email: string; name: string } | null>(null);
   const [unresolved, setUnresolved] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
@@ -51,11 +53,13 @@ export function SendEmailAction({
     setResult(null);
     setLoaded(false);
     if (!id) return;
-    const res = await fetch("/api/email/preview", {
+    setPreviewing(true);
+    const res = await apiFetch("/api/email/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityType, entityId, templateId: id }),
     });
+    setPreviewing(false);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setResult({ kind: "error", text: ERRORS[data.error] ?? "No se pudo cargar la plantilla." });
     setSubject(data.subject);
@@ -66,9 +70,10 @@ export function SendEmailAction({
   }
 
   async function send() {
+    if (sending) return;
     setSending(true);
     setResult(null);
-    const res = await fetch("/api/email/send", {
+    const res = await apiFetch("/api/email/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityType, entityId, subject, bodyHtml }),
@@ -91,7 +96,7 @@ export function SendEmailAction({
       <Button variant="secondary" onClick={() => setOpen(true)}>
         Enviar correo
       </Button>
-      <Modal open={open} onClose={close} title="Enviar correo" maxWidth="max-w-2xl">
+      <Modal open={open} onClose={close} title="Enviar correo" maxWidth="max-w-2xl" busy={sending}>
         {templates.length === 0 ? (
           <p className="text-sm text-slate-600">
             Todavía no hay plantillas. Creá una en{" "}
@@ -104,7 +109,7 @@ export function SendEmailAction({
           <div className="space-y-4">
             <div>
               <Label htmlFor="tpl">Plantilla</Label>
-              <Select id="tpl" value={templateId} onChange={(e) => chooseTemplate(e.target.value)} disabled={done}>
+              <Select id="tpl" value={templateId} onChange={(e) => chooseTemplate(e.target.value)} disabled={done || previewing} aria-busy={previewing || undefined}>
                 <option value="">Elegí una plantilla…</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -113,6 +118,14 @@ export function SendEmailAction({
                 ))}
               </Select>
             </div>
+
+            {previewing && (
+              <div className="space-y-2" aria-label="Cargando plantilla">
+                <Skeleton className="h-4 w-56" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+                <Skeleton className="h-32 w-full rounded-xl" />
+              </div>
+            )}
 
             {loaded && (
               <>
@@ -148,7 +161,7 @@ export function SendEmailAction({
                 {done ? "Cerrar" : "Cancelar"}
               </Button>
               {!done && (
-                <Button onClick={send} disabled={!canSend}>
+                <Button onClick={send} disabled={!canSend && !sending} loading={sending}>
                   {sending ? "Enviando…" : "Enviar"}
                 </Button>
               )}

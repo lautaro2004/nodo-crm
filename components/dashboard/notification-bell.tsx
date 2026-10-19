@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { BellIcon } from "@/components/ui/icons";
+import { Skeleton } from "@/components/ui/primitives";
 
 interface NotificationItem {
   id: string;
@@ -22,14 +23,22 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
+  // null = todavía no se cargó nunca; "error" = falló la última carga.
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   async function load() {
-    const res = await fetch("/api/notifications");
-    if (!res.ok) return;
-    const data = await res.json();
-    setItems(data.notifications);
-    setUnread(data.unread);
+    setStatus((s) => (s === null || s === "error" ? "loading" : s));
+    try {
+      const res = await fetch("/api/notifications");
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setItems(data.notifications);
+      setUnread(data.unread);
+      setStatus("idle");
+    } catch {
+      setStatus("error");
+    }
   }
 
   useEffect(() => {
@@ -45,8 +54,15 @@ export function NotificationBell() {
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   async function toggle() {
@@ -56,18 +72,25 @@ export function NotificationBell() {
   }
 
   async function openItem(item: NotificationItem) {
+    setOpen(false);
     if (!item.readAt) {
-      await fetch(`/api/notifications/${item.id}/read`, { method: "POST" });
+      // Optimista: marcar como leída no debe demorar la navegación.
       setUnread((u) => Math.max(0, u - 1));
       setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n)));
+      fetch(`/api/notifications/${item.id}/read`, { method: "POST" }).catch(() => undefined);
     }
-    setOpen(false);
   }
 
   async function markAllRead() {
-    await fetch("/api/notifications/read-all", { method: "POST" });
+    const before = { items, unread };
     setUnread(0);
     setItems((prev) => prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })));
+    const res = await fetch("/api/notifications/read-all", { method: "POST" }).catch(() => null);
+    if (!res?.ok) {
+      setItems(before.items);
+      setUnread(before.unread);
+      setStatus("error");
+    }
   }
 
   return (
@@ -75,8 +98,9 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={toggle}
-        aria-label="Notificaciones"
-        className="relative flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-900/[0.05] hover:text-slate-800"
+        aria-label={unread > 0 ? `Notificaciones (${unread} sin leer)` : "Notificaciones"}
+        aria-expanded={open}
+        className="relative flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-[background-color,color,transform] hover:bg-slate-900/[0.05] hover:text-slate-800 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         <BellIcon className="h-5 w-5" />
         {unread > 0 && (
@@ -87,7 +111,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="glass absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2">
+        <div className="glass animate-pop-in absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-2xl p-2">
           <div className="flex items-center justify-between px-2 py-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notificaciones</p>
             {unread > 0 && (
@@ -96,7 +120,19 @@ export function NotificationBell() {
               </button>
             )}
           </div>
-          {items.length === 0 ? (
+          {status === "loading" && items.length === 0 ? (
+            <div className="space-y-1.5 p-2" aria-label="Cargando notificaciones">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : status === "error" && items.length === 0 ? (
+            <div className="px-2 py-4 text-center text-sm text-slate-500">
+              No pudimos cargar las notificaciones.{" "}
+              <button type="button" onClick={() => void load()} className="font-medium text-brand-700 hover:underline">
+                Reintentar
+              </button>
+            </div>
+          ) : items.length === 0 ? (
             <p className="px-2 py-4 text-center text-sm text-slate-400">Sin notificaciones.</p>
           ) : (
             <ul className="max-h-96 space-y-0.5 overflow-y-auto">

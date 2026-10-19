@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/primitives";
+import { apiFetch } from "@/lib/api-fetch";
 
 export function SyncNexoButton() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export function SyncNexoButton() {
   async function sync() {
     setLoading(true);
     setResult(null);
-    const res = await fetch("/api/nexo/sync-leads", { method: "POST" });
+    const res = await apiFetch("/api/nexo/sync-leads", { method: "POST" });
     setLoading(false);
 
     if (!res.ok) {

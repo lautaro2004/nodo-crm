@@ -7,6 +7,7 @@ import { Button, Card, Input, Label, Spinner } from "@/components/ui/primitives"
 import { Logo } from "@/components/ui/logo";
 import { INDUSTRY_OPTIONS, INDUSTRY_TEMPLATES, type IndustryKey } from "@/lib/industry-templates";
 import { AVAILABLE_MODULES, STATIC_MODULE_LABELS, type AvailableModule } from "@/modules/workspace/available-modules";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Step = "industry" | "modules";
 
@@ -49,7 +50,7 @@ export function OnboardingForm({ needsBusinessName }: { needsBusinessName: boole
     setLoading(true);
     setError(null);
 
-    const res = await fetch("/api/onboarding", {
+    const res = await apiFetch("/api/onboarding", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

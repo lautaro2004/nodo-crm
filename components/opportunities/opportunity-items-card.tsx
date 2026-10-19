@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, Input, Select } from "@/components/ui/primitives";
 import { RecordSearchBox, type RecordOption } from "@/components/custom-modules/record-picker";
 import { readApiError } from "@/lib/error-messages";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Item {
   id: string;
@@ -48,7 +49,7 @@ export function OpportunityItemsCard({
   async function call(url: string, init: RequestInit) {
     setBusy(true);
     setError(null);
-    const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+    const res = await apiFetch(url, { ...init, headers: { "Content-Type": "application/json" } });
     setBusy(false);
     if (!res.ok) {
       setError(await readApiError(res));

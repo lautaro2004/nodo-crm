@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePendingNavigation } from "@/lib/hooks/use-pending-navigation";
+import { useToast } from "@/components/ui/toast";
+import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
@@ -24,7 +26,8 @@ export function LeadForm({
   companies: { id: string; name: string }[];
   statusOptions: { key: string; label: string }[];
 }) {
-  const router = useRouter();
+  const { navigating, navigate } = usePendingNavigation();
+  const toast = useToast();
   const [values, setValues] = useState<LeadFormValues>({
     name: initial?.name ?? "",
     email: initial?.email ?? "",
@@ -37,25 +40,35 @@ export function LeadForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || navigating) return;
     setLoading(true);
     setError(null);
 
     const url = leadId ? `/api/leads/${leadId}` : "/api/leads";
     const method = leadId ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, companyId: values.companyId || null }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, companyId: values.companyId || null }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. Los cambios no se guardaron.");
+      return;
+    }
 
-    setLoading(false);
     if (!res.ok) {
-      setError("Revisá los datos e intentá de nuevo.");
+      setLoading(false);
+      setError(await readApiError(res));
       return;
     }
     const saved = await res.json();
-    router.push(`/dashboard/leads/${saved.id}`);
-    router.refresh();
+    toast.success(leadId ? "Cambios guardados" : "Lead creado");
+    // El botón sigue en "Guardando…" hasta que llega el detalle (sin dobles envíos).
+    navigate(`/dashboard/leads/${saved.id}`);
+    setLoading(false);
   }
 
   return (
@@ -94,8 +107,8 @@ export function LeadForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading}>
-        {loading ? "Guardando…" : leadId ? "Guardar cambios" : "Crear lead"}
+      <Button type="submit" loading={loading || navigating}>
+        {loading || navigating ? "Guardando…" : leadId ? "Guardar cambios" : "Crear lead"}
       </Button>
     </form>
   );

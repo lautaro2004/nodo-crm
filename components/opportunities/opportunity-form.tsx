@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePendingNavigation } from "@/lib/hooks/use-pending-navigation";
+import { useToast } from "@/components/ui/toast";
+import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
@@ -38,7 +40,8 @@ export function OpportunityForm({
   companies: { id: string; name: string }[];
   contacts: { id: string; name: string }[];
 }) {
-  const router = useRouter();
+  const { navigating, navigate } = usePendingNavigation();
+  const toast = useToast();
   const defaultPipeline = initial?.pipelineId ?? pipelines[0]?.id ?? "";
   const [values, setValues] = useState<OpportunityFormValues>({
     title: initial?.title ?? "",
@@ -55,32 +58,42 @@ export function OpportunityForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || navigating) return;
     setLoading(true);
     setError(null);
 
     const url = opportunityId ? `/api/opportunities/${opportunityId}` : "/api/opportunities";
     const method = opportunityId ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: values.title,
-        companyId: values.companyId || null,
-        contactId: values.contactId || null,
-        pipelineId: values.pipelineId,
-        stageId: values.stageId,
-        amount: values.amount ? Number(values.amount) : null,
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          companyId: values.companyId || null,
+          contactId: values.contactId || null,
+          pipelineId: values.pipelineId,
+          stageId: values.stageId,
+          amount: values.amount ? Number(values.amount) : null,
+        }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. Los cambios no se guardaron.");
+      return;
+    }
 
-    setLoading(false);
     if (!res.ok) {
-      setError("Revisá los datos e intentá de nuevo.");
+      setLoading(false);
+      setError(await readApiError(res));
       return;
     }
     const saved = await res.json();
-    router.push(`/dashboard/oportunidades/${saved.id}`);
-    router.refresh();
+    toast.success(opportunityId ? "Cambios guardados" : "Oportunidad creada");
+    // El botón sigue en "Guardando…" hasta que llega el detalle (sin dobles envíos).
+    navigate(`/dashboard/oportunidades/${saved.id}`);
+    setLoading(false);
   }
 
   return (
@@ -151,8 +164,8 @@ export function OpportunityForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading || !values.pipelineId || !values.stageId}>
-        {loading ? "Guardando…" : opportunityId ? "Guardar cambios" : "Crear oportunidad"}
+      <Button type="submit" loading={loading || navigating} disabled={!values.pipelineId || !values.stageId}>
+        {loading || navigating ? "Guardando…" : opportunityId ? "Guardar cambios" : "Crear oportunidad"}
       </Button>
     </form>
   );

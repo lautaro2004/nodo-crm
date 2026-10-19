@@ -8,6 +8,7 @@ import { Badge, Button, Card, Input, Label, Textarea } from "@/components/ui/pri
 import { PlusIcon } from "@/components/ui/icons";
 import { CustomModuleIcon } from "@/components/custom-modules/custom-module-icon";
 import { readApiError } from "@/lib/error-messages";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface ModuleRow {
   id: string;
@@ -48,7 +49,7 @@ export function ModulesAdmin({ modules, templates, max }: { modules: ModuleRow[]
   async function create() {
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/modules", {
+    const res = await apiFetch("/api/modules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

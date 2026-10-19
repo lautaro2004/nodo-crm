@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePendingNavigation } from "@/lib/hooks/use-pending-navigation";
+import { useToast } from "@/components/ui/toast";
+import { errorMessage } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { CALENDAR_EVENT_TYPE_LABELS } from "@/lib/labels";
@@ -64,7 +66,8 @@ export function EventForm({
   // El evento ya vive en Google: los cambios de título/horario/lugar se reflejan allá.
   googleLinked?: boolean;
 }) {
-  const router = useRouter();
+  const { navigating, navigate } = usePendingNavigation();
+  const toast = useToast();
   const [values, setValues] = useState<EventFormValues>({
     title: initial?.title ?? "",
     description: initial?.description ?? "",
@@ -112,35 +115,44 @@ export function EventForm({
       setError("La hora de fin debe ser posterior a la de inicio.");
       return;
     }
+    if (loading || navigating) return;
     setLoading(true);
 
-    const res = await fetch(eventId ? `/api/calendar/events/${eventId}` : "/api/calendar/events", {
-      method: eventId ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: values.title,
-        description: values.description || null,
-        type: values.type,
-        startsAt: toInstant(values.date, values.startTime).toISOString(),
-        endsAt: toInstant(values.date, values.endTime).toISOString(),
-        location: values.location || null,
-        ownerId: values.ownerId || null,
-        companyId: values.companyId || null,
-        contactId: values.contactId || null,
-        leadId: values.leadId || null,
-        opportunityId: values.opportunityId || null,
-        ...(!eventId && syncToGoogle ? { syncToGoogle: true } : {}),
-      }),
-    });
-
-    setLoading(false);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(GOOGLE_ERROR_MESSAGES[body?.error ?? ""] ?? "Revisá los datos e intentá de nuevo.");
+    let res: Response;
+    try {
+      res = await fetch(eventId ? `/api/calendar/events/${eventId}` : "/api/calendar/events", {
+        method: eventId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          description: values.description || null,
+          type: values.type,
+          startsAt: toInstant(values.date, values.startTime).toISOString(),
+          endsAt: toInstant(values.date, values.endTime).toISOString(),
+          location: values.location || null,
+          ownerId: values.ownerId || null,
+          companyId: values.companyId || null,
+          contactId: values.contactId || null,
+          leadId: values.leadId || null,
+          opportunityId: values.opportunityId || null,
+          ...(!eventId && syncToGoogle ? { syncToGoogle: true } : {}),
+        }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. El evento no se guardó.");
       return;
     }
-    router.push(returnTo ?? "/dashboard/calendario");
-    router.refresh();
+
+    if (!res.ok) {
+      setLoading(false);
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(GOOGLE_ERROR_MESSAGES[body?.error ?? ""] ?? errorMessage(body?.error));
+      return;
+    }
+    toast.success(eventId ? "Evento actualizado" : "Evento programado");
+    navigate(returnTo ?? "/dashboard/calendario");
+    setLoading(false);
   }
 
   const set = (patch: Partial<EventFormValues>) => setValues((v) => ({ ...v, ...patch }));
@@ -236,8 +248,8 @@ export function EventForm({
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading}>
-        {loading ? "Guardando…" : eventId ? "Guardar cambios" : "Programar"}
+      <Button type="submit" loading={loading || navigating}>
+        {loading || navigating ? "Guardando…" : eventId ? "Guardar cambios" : "Programar"}
       </Button>
     </form>
   );
