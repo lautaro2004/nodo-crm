@@ -12,12 +12,12 @@ beforeEach(() => {
 describe("trustedOrigins", () => {
   it("normaliza barra final/path y suma las URLs de Netlify y extras", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("BETTER_AUTH_URL", "https://nodo.kodexa.ar/");
-    vi.stubEnv("URL", "https://nodo.kodexa.ar");
+    vi.stubEnv("BETTER_AUTH_URL", "https://crm.example.com/");
+    vi.stubEnv("URL", "https://crm.example.com");
     vi.stubEnv("DEPLOY_PRIME_URL", "https://main--nodo-crm.netlify.app");
-    vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "https://www.nodo.kodexa.ar, basura");
+    vi.stubEnv("BETTER_AUTH_TRUSTED_ORIGINS", "https://www.crm.example.com, basura");
     const { trustedOrigins } = await import("./auth");
-    expect(trustedOrigins).toEqual(["https://nodo.kodexa.ar", "https://main--nodo-crm.netlify.app", "https://www.nodo.kodexa.ar"]);
+    expect(trustedOrigins).toEqual(["https://crm.example.com", "https://main--nodo-crm.netlify.app", "https://www.crm.example.com"]);
   });
 
   it("en desarrollo confía en los puertos locales", async () => {
