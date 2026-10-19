@@ -122,3 +122,33 @@
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+/* Landing: entrada suave de los bloques (respeta reduced-motion arriba). */
+@keyframes nodo-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility fade-up {
+  animation: nodo-fade-up 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes nodo-toast-in {
+  0%,
+  30% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  40%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility toast-in {
+  animation: nodo-toast-in 3.2s ease-out both;
+}
