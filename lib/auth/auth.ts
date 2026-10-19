@@ -26,11 +26,43 @@ import { getPrisma } from "@/lib/prisma";
 // dos es secreto ni un riesgo real en local.
 const devOrigins = ["http://localhost:3000", "http://localhost:3001"];
 
+// En producción el Origin del navegador tiene que coincidir EXACTO con uno
+// de estos (esquema + dominio, sin barra final). Por eso:
+// - se normaliza cada URL a su origin (un BETTER_AUTH_URL con "/" final o
+//   con path daba "Invalid origin" aunque el dominio fuera el correcto);
+// - se suman las URLs que Netlify define solo (URL = dominio principal,
+//   DEPLOY_PRIME_URL = el *.netlify.app del deploy), así entrar por el
+//   dominio propio o por el de Netlify funciona igual;
+// - BETTER_AUTH_TRUSTED_ORIGINS (separados por coma) permite sumar otros
+//   dominios (ej. www.) sin tocar código.
+function toOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value.trim()).origin;
+  } catch {
+    return null;
+  }
+}
+
+export const trustedOrigins = [
+  ...new Set(
+    [
+      process.env.BETTER_AUTH_URL,
+      process.env.URL,
+      process.env.DEPLOY_PRIME_URL,
+      ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(","),
+      ...(process.env.NODE_ENV === "production" ? [] : devOrigins),
+    ]
+      .map(toOrigin)
+      .filter((v): v is string => Boolean(v))
+  ),
+];
+
 export const auth = betterAuth({
   database: prismaAdapter(getPrisma(), { provider: "postgresql" }),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
-  trustedOrigins: [...new Set([process.env.BETTER_AUTH_URL, ...devOrigins].filter((v): v is string => Boolean(v)))],
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
   },
