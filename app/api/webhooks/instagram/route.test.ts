@@ -1,6 +1,11 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { processInstagramWebhook } = vi.hoisted(() => ({
+  processInstagramWebhook: vi.fn(async () => ({ entries: 1, unknownAccount: 1, processed: 0, duplicates: 0, skipped: 0, failed: 0 })),
+}));
+vi.mock("@/modules/integrations/instagram", () => ({ processInstagramWebhook }));
+
 import { GET, POST } from "./route";
 
 const BASE = "https://nodo.test/api/webhooks/instagram";
@@ -146,5 +151,28 @@ describe("POST — eventos recibidos y logs", () => {
     await POST(post(TEST_EVENT, sign(TEST_EVENT, "malo")));
     expect(logs.join("\n")).not.toContain("texto privado");
     expect(logs.some((l) => l.includes("firma inválida"))).toBe(true);
+  });
+});
+
+describe("POST — procesamiento", () => {
+  it("con firma válida pasa el payload al procesador de integraciones", async () => {
+    processInstagramWebhook.mockClear();
+    const res = await POST(post(TEST_EVENT, sign(TEST_EVENT)));
+    expect(res.status).toBe(200);
+    expect(processInstagramWebhook).toHaveBeenCalledTimes(1);
+    expect(processInstagramWebhook.mock.calls[0]).toEqual([JSON.parse(TEST_EVENT)]);
+  });
+
+  it("firma inválida: nunca llega al procesador", async () => {
+    processInstagramWebhook.mockClear();
+    const res = await POST(post(TEST_EVENT, sign(TEST_EVENT, "otro-secreto")));
+    expect(res.status).toBe(401);
+    expect(processInstagramWebhook).not.toHaveBeenCalled();
+  });
+
+  it("falla de infraestructura: 500 para que Meta reintente (idempotente por mid)", async () => {
+    processInstagramWebhook.mockRejectedValueOnce(new Error("db down"));
+    const res = await POST(post(TEST_EVENT, sign(TEST_EVENT)));
+    expect(res.status).toBe(500);
   });
 });

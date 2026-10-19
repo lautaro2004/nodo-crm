@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { processInstagramWebhook } from "@/modules/integrations/instagram";
 import { isValidMetaSignature, safeEqualString } from "@/lib/meta/webhook-signature";
 import { formatSummary, summarizeWebhook } from "@/modules/instagram/webhook";
 
@@ -66,8 +67,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  // Por ahora solo se registra un resumen sin datos personales (tipos y
-  // cantidades). No se guardan mensajes ni se crean leads todavía.
+  // Log sin datos personales: solo tipos y cantidades.
   console.info(`${LOG} evento recibido: ${formatSummary(summarizeWebhook(payload))}`);
+
+  // Procesamiento (modules/integrations/instagram.ts): cada mensaje queda
+  // registrado como IngestionEvent (idempotente por message.mid) y se
+  // asocia al negocio dueño de la cuenta (entry.id). Los errores quedan
+  // en el evento para reintentar desde Nodo: a Meta se le responde 200
+  // igual, para que no reintente lo que ya está registrado.
+  try {
+    const result = await processInstagramWebhook(payload);
+    if (result.entries) {
+      console.info(
+        `${LOG} procesado: ok=${result.processed} dup=${result.duplicates} omitidos=${result.skipped} error=${result.failed} sin_cuenta=${result.unknownAccount}`
+      );
+    }
+  } catch (err) {
+    // Error de infraestructura (ej. base caída): 500 para que Meta reintente.
+    console.error(`${LOG} no se pudo procesar el evento: ${err instanceof Error ? err.name : "error"}`);
+    return NextResponse.json({ error: "processing_failed" }, { status: 500 });
+  }
   return new NextResponse("EVENT_RECEIVED", { status: 200, headers: { "Content-Type": "text/plain" } });
 }

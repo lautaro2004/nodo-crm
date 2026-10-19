@@ -42,7 +42,13 @@ export function AddActivityForm({ relatedType, relatedId }: { relatedType: strin
       <div className="flex gap-2">
         <Select value={type} onChange={(e) => setType(e.target.value)} className="w-40">
           {Object.entries(ACTIVITY_TYPE_LABELS)
-            .filter(([key]) => !["stage_change", "status_change", "converted"].includes(key) && !key.startsWith("event_"))
+            .filter(
+              ([key]) =>
+                !["stage_change", "status_change", "converted"].includes(key) &&
+                !key.startsWith("event_") &&
+                !key.startsWith("instagram_") &&
+                !key.startsWith("sheets_")
+            )
             .map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
