@@ -1,8 +1,9 @@
-// Marca de Nodo: una "N" armada con piezas redondeadas — mismo lenguaje
-// que el logo de Nexo (familia Kodexa), en el naranja de Kodexa. El SVG
+// Marca de Nodo: tres nodos conectados — dos en grafito que confluyen en
+// uno naranja (el naranja de Kodexa). El SVG
 // vive también en public/logo-nodo-mark.svg y app/icon.svg (favicon).
-// `dark` = sobre fondo oscuro (la pieza grafito pasa a clara).
+// `dark` = sobre fondo oscuro (las piezas grafito pasan a claras).
 export function LogoMark({ className = "h-8 w-8", dark = false }: { className?: string; dark?: boolean }) {
+  const ink = dark ? "#f5f4f0" : "#1f2023";
   return (
     <svg viewBox="0 0 512 512" className={className} aria-hidden="true">
       <defs>
@@ -11,9 +12,10 @@ export function LogoMark({ className = "h-8 w-8", dark = false }: { className?: 
           <stop offset="1" stopColor="#e45c0c" />
         </linearGradient>
       </defs>
-      <line x1="138" y1="126" x2="374" y2="386" stroke="#fb6e1a" strokeOpacity="0.55" strokeWidth="112" strokeLinecap="round" />
-      <rect x="76" y="64" width="124" height="384" rx="62" fill="url(#nodo-mark-o)" />
-      <rect x="312" y="64" width="124" height="384" rx="62" fill={dark ? "#f5f4f0" : "#1f2023"} />
+      <path d="M140 150 L256 380 L372 150" fill="none" stroke={ink} strokeWidth="40" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="140" cy="150" r="78" fill={ink} />
+      <circle cx="372" cy="150" r="78" fill={ink} />
+      <circle cx="256" cy="380" r="96" fill="url(#nodo-mark-o)" />
     </svg>
   );
 }
