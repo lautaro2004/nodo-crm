@@ -3,7 +3,7 @@
 App de Meta: **Kodexa Connect**. Estado: el endpoint verifica la suscripción y la firma, y registra un resumen de cada evento. **No guarda mensajes ni crea leads todavía**, y no toca la base de datos.
 
 ## Endpoint
-`https://nodo.kodexa.ar/api/webhooks/instagram` (`app/api/webhooks/instagram/route.ts`). Es público: el `middleware` solo protege `/dashboard`.
+`https://<dominio de Nodo>/api/webhooks/instagram` (el mismo dominio de `BETTER_AUTH_URL`) (`app/api/webhooks/instagram/route.ts`). Es público: el `middleware` solo protege `/dashboard`.
 
 - **GET (verificación):**
   - exige `hub.mode=subscribe`;
