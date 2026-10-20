@@ -24,7 +24,8 @@ export const APPS_SCRIPT_FUNCTIONS = {
 } as const;
 
 export function buildAppsScript(input: { endpoint: string; integrationName: string }): string {
-  const name = input.integrationName.replace(/[\r\n*/]/g, " ").slice(0, 80);
+  // Solo se neutraliza lo que podría cerrar el comentario ("*/") o cortar la línea.
+  const name = input.integrationName.replace(/[\r\n]/g, " ").replace(/\*\//g, "* /").slice(0, 120);
   const F = APPS_SCRIPT_FUNCTIONS;
   return `/**
  * ─────────────────────────────────────────────────────────────────────
@@ -138,9 +139,14 @@ var NodoCRM = (function () {
 
     var r = enviar({ rows: filas.map(function (f) { return { rowId: f.rowId, values: f.values }; }) });
     if (r.codigo !== 200) {
-      Logger.log("Nodo CRM respondió " + r.codigo + ": " + JSON.stringify(r.json));
+      var motivo = (r.json && r.json.error) || "";
+      if (motivo === "integration_not_active") Logger.log("Nodo CRM: la integración todavía no está activa. Activala en Nodo (Configuración → Integraciones) y volvé a ejecutar " + "${F.sync}" + ".");
+      else if (motivo === "integration_paused") Logger.log("Nodo CRM: la integración está en pausa en Nodo. Las filas se envían cuando la reactives.");
+      else if (r.codigo === 401) Logger.log("Nodo CRM: el secreto no coincide. Revisá la propiedad ${APPS_SCRIPT_SECRET_PROPERTY} (o regenerá el secreto en Nodo).");
+      else Logger.log("Nodo CRM respondió " + r.codigo + ": " + JSON.stringify(r.json));
       return false;
     }
+    var resumen = { ok: 0, error: 0 };
     var porId = {};
     (r.json.results || []).forEach(function (x) { porId[x.rowId] = x; });
     filas.forEach(function (f) {
@@ -150,7 +156,9 @@ var NodoCRM = (function () {
         ? "error: " + (x.error || "desconocido")
         : "ok " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM HH:mm");
       h.getRange(f.numero, cols.colEstado).setValue(texto.slice(0, 250));
+      resumen[x.status === "failed" ? "error" : "ok"]++;
     });
+    Logger.log("Nodo CRM: " + resumen.ok + " fila(s) enviadas" + (resumen.error ? ", " + resumen.error + " con error (ver columna «Nodo estado»)" : "") + ".");
     return true;
   }
 
@@ -168,9 +176,21 @@ var NodoCRM = (function () {
     return r.codigo === 200;
   }
 
+  // Desde el código de un formulario: enviarFila(hoja, numeroDeFila).
+  // Ejecutada a mano desde el editor (sin datos): envía la fila
+  // seleccionada en la planilla o, si no hay, la última.
   function enviarFila(h, numeroFila) {
     h = h || hoja();
-    enviarFilas(h, columnas(h), [numeroFila]);
+    var n = Number(numeroFila);
+    if (!n) {
+      var activa = SpreadsheetApp.getActiveSpreadsheet().getActiveRange();
+      n = activa && activa.getSheet().getName() === h.getName() ? activa.getRow() : h.getLastRow();
+    }
+    if (n < 2) {
+      Logger.log("Nodo CRM: no hay filas con datos para enviar.");
+      return;
+    }
+    enviarFilas(h, columnas(h), [n]);
   }
 
   function sincronizar() {
