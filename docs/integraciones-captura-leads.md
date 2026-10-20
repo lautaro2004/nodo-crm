@@ -34,8 +34,9 @@ El negocio siempre sale de la integración resuelta en el servidor, nunca del pa
 - Autenticación: `X-Nodo-Timestamp` + `X-Nodo-Signature = HMAC-SHA256(secreto, "<timestamp>.<cuerpo>")`. Ventana de 5 minutos (anti-replay). El secreto se muestra **una sola vez**, se guarda cifrado y se puede rotar.
 - Límites: 256 KB por request, 50 filas por request, 300 eventos por minuto por integración.
 - Cada fila lleva un `rowId` estable (UUID) que el script guarda en la columna **"Nodo ID"**; el resultado queda en **"Nodo estado"**.
-- **Activadores:** `onChange` (instalable) + un activador por tiempo cada 5 minutos como respaldo. Limitación conocida: `onEdit`/`onChange` no se disparan cuando otro script o una API escribe en la hoja; por eso, si el formulario ya usa Apps Script, hay que llamar a `enviarFilaANodo(hoja, fila)` justo después de escribir la fila (o esperar la corrida de 5 minutos).
-- Las filas con error no se reenvían solas: se corrigen y se borra "Nodo estado", o se ejecuta `reintentarErroresNodo()`.
+- **Activadores:** `onChange` (instalable) + un activador por tiempo cada 5 minutos como respaldo. Limitación conocida: `onEdit`/`onChange` no se disparan cuando otro script o una API escribe en la hoja; por eso, si el formulario ya usa Apps Script, hay que llamar a `nodoCRM_enviarFila(hoja, fila)` justo después de escribir la fila (o esperar la corrida de 5 minutos).
+- **Convivencia con otros scripts:** el código se pega en un archivo nuevo del proyecto de Apps Script (no reemplaza el existente). Todo vive dentro del objeto `NodoCRM`; las únicas funciones globales llevan el prefijo `nodoCRM_` (`nodoCRM_probarConexion`, `nodoCRM_instalarActivadores`, `nodoCRM_sincronizar`, `nodoCRM_reintentarErrores`, `nodoCRM_enviarFila`, `nodoCRM_alCambiar`), el secreto va en la propiedad `NODO_CRM_SECRET` y el instalador solo toca los activadores de Nodo.
+- Las filas con error no se reenvían solas: se corrigen y se borra "Nodo estado", o se ejecuta `nodoCRM_reintentarErrores()`.
 
 ## Instagram (API con Instagram Login)
 
