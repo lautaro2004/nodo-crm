@@ -11,7 +11,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api-fetch";
 import { readApiError } from "@/lib/error-messages";
-import { buildAppsScript } from "@/modules/integrations/apps-script";
+import { APPS_SCRIPT_FILE_NAME, APPS_SCRIPT_FUNCTIONS, APPS_SCRIPT_SECRET_PROPERTY, buildAppsScript } from "@/modules/integrations/apps-script";
 import { TARGET_LABELS } from "@/modules/integrations/normalize";
 
 // Configuración → Integraciones: captura automática de leads (Instagram y
@@ -486,6 +486,10 @@ function SheetsSection({
             Cada fila nueva de una planilla (por ejemplo, las respuestas de un formulario) entra como lead. La planilla puede ser privada: un script dentro de ella
             envía las filas firmadas a Nodo.
           </p>
+          <p className="mt-1 max-w-lg text-xs text-slate-500">
+            Al crear la conexión te mostramos paso a paso dónde pegar el código en Apps Script. No reemplaza ni interfiere con otros scripts que ya tenga la
+            planilla.
+          </p>
         </div>
       </div>
 
@@ -518,7 +522,10 @@ function SheetsSection({
 
 function SecretModal({ reveal, onClose }: { reveal: { name: string; secret: string | null; endpoint: string } | null; onClose: () => void }) {
   const toast = useToast();
+  const [showCode, setShowCode] = useState(false);
   const script = useMemo(() => (reveal ? buildAppsScript({ endpoint: reveal.endpoint, integrationName: reveal.name }) : ""), [reveal]);
+  const F = APPS_SCRIPT_FUNCTIONS;
+  const formSnippet = `// después de escribir la fila (ej. hoja.appendRow(...)):\n${F.sendRow}(hoja, hoja.getLastRow());`;
 
   async function copy(text: string, what: string) {
     try {
@@ -533,51 +540,110 @@ function SecretModal({ reveal, onClose }: { reveal: { name: string; secret: stri
     <Modal
       open={!!reveal}
       onClose={onClose}
-      title="Conectá tu planilla"
+      title="Conectá tu planilla de Google"
       description={
         reveal?.secret
-          ? "Guardá el secreto ahora: por seguridad, Nodo no lo vuelve a mostrar."
-          : "El secreto no se vuelve a mostrar. Si lo perdiste, usá «Regenerar secreto»."
+          ? "Seguí estos pasos en tu planilla. Guardá el secreto ahora: por seguridad, Nodo no lo vuelve a mostrar."
+          : "Seguí estos pasos en tu planilla. El secreto no se vuelve a mostrar: si lo perdiste, usá «Regenerar secreto»."
       }
       maxWidth="max-w-2xl"
     >
       {reveal && (
         <div className="space-y-4 text-sm">
-          {reveal.secret && (
-            <div>
-              <Label htmlFor="sheets-secret">Secreto (NODO_SECRET)</Label>
-              <div className="flex gap-2">
-                <Input id="sheets-secret" readOnly value={reveal.secret} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
-                <Button type="button" variant="secondary" onClick={() => copy(reveal.secret!, "Secreto")}>
-                  Copiar
+          <ol className="space-y-3">
+            <Step n={1} title="Abrí el editor de Apps Script">
+              En tu planilla de Google, andá al menú <strong>Extensiones → Apps Script</strong>. Se abre el editor en otra pestaña.
+            </Step>
+            <Step n={2} title="Creá un archivo nuevo (no borres lo que ya tengas)">
+              En el panel de la izquierda, junto a <strong>Archivos</strong>, tocá <strong>+ → Secuencia de comandos</strong> y llamalo{" "}
+              <Code>{APPS_SCRIPT_FILE_NAME}</Code>. Si la planilla ya tiene código (por ejemplo, el de tu formulario), dejalo como está: el código de Nodo
+              usa nombres propios (<Code>NodoCRM</Code> y funciones <Code>nodoCRM_…</Code>) y no interfiere con él.
+            </Step>
+            <Step n={3} title="Pegá el código de Nodo y guardá">
+              <p>
+                En el archivo nuevo borrá el ejemplo (<Code>function myFunction()…</Code>), pegá el código y guardá con <strong>Ctrl + S</strong> (o el ícono
+                del disquete).
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={() => copy(script, "Código")}>
+                  Copiar código
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowCode((v) => !v)} aria-expanded={showCode}>
+                  {showCode ? "Ocultar código" : "Ver código"}
                 </Button>
               </div>
-            </div>
-          )}
-          <ol className="list-decimal space-y-1.5 pl-5 text-slate-700">
-            <li>
-              En la planilla: <strong>Extensiones → Apps Script</strong>. Pegá el script de abajo (reemplazando el contenido) y guardá.
-            </li>
-            <li>
-              <strong>Configuración del proyecto → Propiedades del script</strong>: agregá <code className="rounded bg-slate-100 px-1">NODO_SECRET</code> con el
-              secreto de arriba.
-            </li>
-            <li>
-              Ejecutá <code className="rounded bg-slate-100 px-1">probarConexionNodo</code> y aceptá los permisos. Volvé acá y configurá el mapeo de columnas.
-            </li>
-            <li>
-              Activá la integración y ejecutá <code className="rounded bg-slate-100 px-1">instalarActivadoresNodo</code>.
-            </li>
+              {showCode && (
+                <textarea
+                  aria-label="Código para Apps Script"
+                  id="sheets-script"
+                  readOnly
+                  value={script}
+                  rows={10}
+                  className="mt-2 w-full animate-fade-in rounded-xl border border-slate-200 bg-white p-3 font-mono text-[11px] text-slate-700"
+                />
+              )}
+            </Step>
+            <Step n={4} title="Guardá el secreto en las propiedades del script">
+              <p>
+                En el editor: <strong>⚙ Configuración del proyecto → Propiedades del script → Agregar propiedad del script</strong>. Así el secreto no queda
+                escrito en el código ni en la hoja.
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
+                <span className="text-xs text-slate-500">Propiedad</span>
+                <div className="flex gap-2">
+                  <Input readOnly value={APPS_SCRIPT_SECRET_PROPERTY} aria-label="Nombre de la propiedad" className="h-8 py-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                  <Button type="button" size="sm" variant="secondary" onClick={() => copy(APPS_SCRIPT_SECRET_PROPERTY, "Nombre")}>
+                    Copiar
+                  </Button>
+                </div>
+                <span className="text-xs text-slate-500">Valor</span>
+                {reveal.secret ? (
+                  <div className="flex gap-2">
+                    <Input id="sheets-secret" readOnly value={reveal.secret} aria-label="Secreto" className="h-8 py-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                    <Button type="button" size="sm" variant="secondary" onClick={() => copy(reveal.secret!, "Secreto")}>
+                      Copiar
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-600">El secreto que guardaste al crear la conexión.</span>
+                )}
+              </div>
+            </Step>
+            <Step n={5} title="Probá la conexión">
+              Arriba del editor elegí la función <Code>{F.test}</Code> y tocá <strong>Ejecutar</strong>. La primera vez Google pide permisos:{" "}
+              <strong>Revisar permisos</strong> → tu cuenta → <strong>Configuración avanzada → Ir a … → Permitir</strong>. Es tu propio script: Nodo no
+              recibe acceso a tu cuenta de Google. Al volver a esta pantalla vas a ver las columnas detectadas.
+            </Step>
+            <Step n={6} title="Mapeá las columnas y activá la integración">
+              Acá en Nodo: <strong>Mapeo de columnas</strong> → elegí a qué campo va cada columna → <strong>Guardar mapeo</strong> → <strong>Activar</strong>.
+            </Step>
+            <Step n={7} title="Activá el envío automático">
+              De vuelta en el editor, ejecutá <Code>{F.install}</Code>. Desde ahí, cada fila nueva se envía sola (al cambiar la hoja y, como respaldo, cada 5
+              minutos).
+            </Step>
           </ol>
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <Label htmlFor="sheets-script">Script</Label>
-              <Button type="button" size="sm" variant="secondary" onClick={() => copy(script, "Script")}>
-                Copiar script
+
+          <div className="space-y-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+            <p>
+              <strong className="text-slate-800">Columnas de control:</strong> Nodo agrega al final de la hoja «Nodo ID» y «Nodo estado». No las borres: evitan
+              envíos duplicados y muestran si cada fila entró bien.
+            </p>
+            <p>
+              <strong className="text-slate-800">Si tu formulario ya guarda las respuestas con un script:</strong> agregá esta línea justo después de escribir la
+              fila, así se envía al instante.
+            </p>
+            <div className="flex items-start gap-2">
+              <pre className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-white p-2 font-mono text-[11px] text-slate-700">{formSnippet}</pre>
+              <Button type="button" size="sm" variant="secondary" onClick={() => copy(formSnippet, "Línea")}>
+                Copiar
               </Button>
             </div>
-            <textarea id="sheets-script" readOnly value={script} rows={10} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] text-slate-700" />
+            <p>
+              <strong className="text-slate-800">Filas con error:</strong> se marcan en «Nodo estado». Corregilas y borrá esa celda, o ejecutá{" "}
+              <Code>{F.retry}</Code>.
+            </p>
           </div>
+
           <div className="flex justify-end">
             <Button type="button" onClick={onClose}>
               {reveal.secret ? "Listo, ya lo guardé" : "Cerrar"}
@@ -587,6 +653,24 @@ function SecretModal({ reveal, onClose }: { reveal: { name: string; secret: stri
       )}
     </Modal>
   );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span aria-hidden className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-800 ring-1 ring-brand-200">
+        {n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-slate-900">{title}</p>
+        <div className="mt-0.5 text-slate-600">{children}</div>
+      </div>
+    </li>
+  );
+}
+
+function Code({ children }: { children: React.ReactNode }) {
+  return <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-slate-800">{children}</code>;
 }
 
 function SheetsItem({
@@ -634,7 +718,7 @@ function SheetsItem({
   async function rotate() {
     const ok = await confirm({
       title: "¿Generar un secreto nuevo?",
-      description: "El secreto actual deja de funcionar en el acto: vas a tener que actualizar NODO_SECRET en el script.",
+      description: `El secreto actual deja de funcionar en el acto: vas a tener que actualizar ${APPS_SCRIPT_SECRET_PROPERTY} en las propiedades del script.`,
       confirmLabel: "Generar",
     });
     if (!ok) return;
@@ -677,7 +761,7 @@ function SheetsItem({
       {item.status === "pending" && (
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {!config.lastTestAt
-            ? "Pegá el script en la planilla y ejecutá probarConexionNodo para detectar las columnas."
+            ? `Seguí los pasos de «Cómo conectar» y ejecutá ${APPS_SCRIPT_FUNCTIONS.test} en la planilla para detectar las columnas.`
             : mappedCount === 0
               ? "Conexión probada. Configurá el mapeo de columnas y activá la integración."
               : "Mapeo listo. Activá la integración para empezar a recibir filas."}
@@ -699,7 +783,7 @@ function SheetsItem({
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={script}>
-          Ver script
+          Cómo conectar
         </Button>
         <Button size="sm" variant="ghost" loading={busy === "rotate"} disabled={!!busy} onClick={rotate}>
           Regenerar secreto
@@ -792,7 +876,8 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
       {error && <InlineAlert onDismiss={() => setError(null)}>{error}</InlineAlert>}
       {headers.length === 0 ? (
         <p className="text-sm text-slate-600">
-          Todavía no conocemos las columnas. Ejecutá <code className="rounded bg-white px-1">probarConexionNodo</code> en el script, o agregalas a mano.
+          Todavía no conocemos las columnas. Ejecutá <code className="rounded bg-white px-1">{APPS_SCRIPT_FUNCTIONS.test}</code> en el editor de Apps Script, o
+          agregalas a mano.
         </p>
       ) : (
         <div className="space-y-2">

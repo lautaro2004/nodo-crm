@@ -1,194 +1,238 @@
-// Genera el Apps Script que el cliente pega en su planilla (Extensiones →
-// Apps Script). El secreto NO va en el código: se carga como propiedad del
-// script (NODO_SECRET), así no queda visible en la hoja ni al compartirla.
+// Genera el Apps Script que el cliente pega en su planilla.
+//
+// Convivencia con otros scripts de la misma planilla: en Apps Script todos
+// los archivos de un proyecto comparten el mismo espacio global, así que
+// una función `sincronizar()` o una constante `URL` podrían pisar (o ser
+// pisadas por) código que el cliente ya tiene. Por eso:
+// - todo el código vive dentro de un único objeto `NodoCRM` (IIFE);
+// - las únicas funciones globales son las que Apps Script necesita ver
+//   (para ejecutarlas desde el editor o como activadores), y todas llevan el
+//   prefijo `nodoCRM_`;
+// - el secreto se guarda en una propiedad del script con nombre propio;
+// - el instalador de activadores solo toca los activadores de Nodo.
+// El secreto NUNCA va en el código.
+
+export const APPS_SCRIPT_FILE_NAME = "NodoCRM";
+export const APPS_SCRIPT_SECRET_PROPERTY = "NODO_CRM_SECRET";
+export const APPS_SCRIPT_FUNCTIONS = {
+  test: "nodoCRM_probarConexion",
+  install: "nodoCRM_instalarActivadores",
+  sync: "nodoCRM_sincronizar",
+  retry: "nodoCRM_reintentarErrores",
+  sendRow: "nodoCRM_enviarFila",
+  onChange: "nodoCRM_alCambiar",
+} as const;
 
 export function buildAppsScript(input: { endpoint: string; integrationName: string }): string {
   const name = input.integrationName.replace(/[\r\n*/]/g, " ").slice(0, 80);
+  const F = APPS_SCRIPT_FUNCTIONS;
   return `/**
+ * ─────────────────────────────────────────────────────────────────────
  * Nodo CRM — envío automático de filas como leads
  * Integración: ${name}
+ * ─────────────────────────────────────────────────────────────────────
+ * Pegá este código en un ARCHIVO NUEVO del editor de Apps Script
+ * (por ejemplo "${APPS_SCRIPT_FILE_NAME}"). No reemplaces ni borres el código
+ * que ya tengas: todo lo de Nodo vive dentro del objeto NodoCRM y sus
+ * funciones empiezan con "nodoCRM_", así que no interfiere con otros scripts.
  *
- * CONFIGURACIÓN (una sola vez):
- *  1. Configuración del proyecto (ícono ⚙) → Propiedades del script →
- *     agregá la propiedad NODO_SECRET con el secreto que te mostró Nodo.
- *  2. Si los datos no están en la primera pestaña, completá NODO_HOJA abajo.
- *  3. Ejecutá probarConexionNodo() y aceptá los permisos. Nodo va a mostrar
- *     los encabezados para que configures el mapeo.
- *  4. Con el mapeo listo y la integración activa en Nodo, ejecutá
- *     instalarActivadoresNodo().
+ * PASOS (una sola vez):
+ *  1. Configuración del proyecto (⚙) → Propiedades del script → agregá
+ *     ${APPS_SCRIPT_SECRET_PROPERTY} con el secreto que te mostró Nodo.
+ *  2. Si los datos no están en la primera pestaña, completá "hoja" abajo.
+ *  3. Elegí la función ${F.test} y tocá "Ejecutar". Aceptá los permisos.
+ *  4. En Nodo: mapeá las columnas y activá la integración.
+ *  5. Elegí la función ${F.install} y tocá "Ejecutar".
  *
- * FORMULARIOS CON APPS SCRIPT: si tu formulario ya guarda las respuestas con
- * un script (doPost / onFormSubmit), llamá a enviarFilaANodo(hoja, fila)
- * justo después de escribir la fila. Es la forma más confiable: los
- * activadores de cambios no siempre se disparan cuando otro script o una
- * API escribe en la hoja.
+ * SI TU FORMULARIO YA GUARDA LAS RESPUESTAS CON UN SCRIPT (doPost /
+ * onFormSubmit): justo después de escribir la fila, agregá
+ *     ${F.sendRow}(hoja, numeroDeFila);
+ * Es lo más confiable: los activadores de cambios no siempre se disparan
+ * cuando otro script o una API escribe en la hoja.
  *
  * FILAS CON ERROR: no se reenvían solas. Corregí los datos y borrá la celda
- * "Nodo estado" de esa fila, o ejecutá reintentarErroresNodo().
+ * "Nodo estado" de esa fila, o ejecutá ${F.retry}.
  */
+var NodoCRM = (function () {
+  var CONFIG = {
+    url: "${input.endpoint}",
+    hoja: "", // nombre de la pestaña; vacío = la primera
+    propiedadSecreto: "${APPS_SCRIPT_SECRET_PROPERTY}",
+    colId: "Nodo ID",
+    colEstado: "Nodo estado",
+    lote: 50,
+    maxPorCorrida: 500,
+    activadores: ["${F.onChange}", "${F.sync}"],
+  };
 
-const NODO_URL = "${input.endpoint}";
-const NODO_HOJA = ""; // nombre de la pestaña; vacío = la primera
-const NODO_COL_ID = "Nodo ID";
-const NODO_COL_ESTADO = "Nodo estado";
-const NODO_LOTE = 50;
-const NODO_MAX_POR_CORRIDA = 500;
-
-function hojaNodo_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja = NODO_HOJA ? ss.getSheetByName(NODO_HOJA) : ss.getSheets()[0];
-  if (!hoja) throw new Error("No existe la pestaña " + NODO_HOJA);
-  return hoja;
-}
-
-// Agrega (si faltan) las columnas de control al final y devuelve sus índices.
-function columnasNodo_(hoja) {
-  const ultima = Math.max(hoja.getLastColumn(), 1);
-  const encabezados = hoja.getRange(1, 1, 1, ultima).getDisplayValues()[0];
-  let colId = encabezados.indexOf(NODO_COL_ID) + 1;
-  let colEstado = encabezados.indexOf(NODO_COL_ESTADO) + 1;
-  if (!colId) {
-    colId = hoja.getLastColumn() + 1;
-    hoja.getRange(1, colId).setValue(NODO_COL_ID);
+  function hoja() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var h = CONFIG.hoja ? ss.getSheetByName(CONFIG.hoja) : ss.getSheets()[0];
+    if (!h) throw new Error("Nodo CRM: no existe la pestaña " + CONFIG.hoja);
+    return h;
   }
-  if (!colEstado) {
-    colEstado = hoja.getLastColumn() + 1;
-    hoja.getRange(1, colEstado).setValue(NODO_COL_ESTADO);
-  }
-  const todos = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getDisplayValues()[0];
-  return { colId: colId, colEstado: colEstado, encabezados: todos };
-}
 
-function firmaNodo_(timestamp, cuerpo) {
-  const secreto = PropertiesService.getScriptProperties().getProperty("NODO_SECRET");
-  if (!secreto) throw new Error("Falta la propiedad del script NODO_SECRET.");
-  const bytes = Utilities.computeHmacSha256Signature(timestamp + "." + cuerpo, secreto, Utilities.Charset.UTF_8);
-  return bytes.map(function (b) { return ("0" + (b & 0xff).toString(16)).slice(-2); }).join("");
-}
-
-function enviarNodo_(datos) {
-  const cuerpo = JSON.stringify(datos);
-  const timestamp = String(Date.now());
-  const respuesta = UrlFetchApp.fetch(NODO_URL, {
-    method: "post",
-    contentType: "application/json; charset=utf-8",
-    payload: cuerpo,
-    headers: { "X-Nodo-Timestamp": timestamp, "X-Nodo-Signature": firmaNodo_(timestamp, cuerpo) },
-    muteHttpExceptions: true,
-  });
-  let json = {};
-  try { json = JSON.parse(respuesta.getContentText()); } catch (e) {}
-  return { codigo: respuesta.getResponseCode(), json: json };
-}
-
-/** Prueba la conexión y le informa a Nodo los encabezados de la hoja. */
-function probarConexionNodo() {
-  const hoja = hojaNodo_();
-  const cols = columnasNodo_(hoja);
-  const r = enviarNodo_({
-    test: true,
-    spreadsheetName: SpreadsheetApp.getActiveSpreadsheet().getName(),
-    sheetName: hoja.getName(),
-    headers: cols.encabezados.filter(function (h) { return h && h !== NODO_COL_ID && h !== NODO_COL_ESTADO; }),
-  });
-  if (r.codigo === 200) Logger.log("Conexión OK. Volvé a Nodo para configurar el mapeo.");
-  else Logger.log("Nodo respondió " + r.codigo + ": " + JSON.stringify(r.json));
-  return r.codigo === 200;
-}
-
-/** Envía UNA fila (usar desde el script de un formulario). */
-function enviarFilaANodo(hoja, numeroFila) {
-  hoja = hoja || hojaNodo_();
-  const cols = columnasNodo_(hoja);
-  enviarFilas_(hoja, cols, [numeroFila]);
-}
-
-/** Envía todas las filas que todavía no se enviaron. */
-function sincronizarNodo() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(20000)) return;
-  try {
-    const hoja = hojaNodo_();
-    const cols = columnasNodo_(hoja);
-    const ultimaFila = hoja.getLastRow();
-    if (ultimaFila < 2) return;
-    const estados = hoja.getRange(2, cols.colEstado, ultimaFila - 1, 1).getDisplayValues();
-    const pendientes = [];
-    for (let i = 0; i < estados.length && pendientes.length < NODO_MAX_POR_CORRIDA; i++) {
-      if (!estados[i][0]) pendientes.push(i + 2);
+  // Agrega (si faltan) las columnas de control al final y devuelve sus índices.
+  function columnas(h) {
+    var ultima = Math.max(h.getLastColumn(), 1);
+    var encabezados = h.getRange(1, 1, 1, ultima).getDisplayValues()[0];
+    var colId = encabezados.indexOf(CONFIG.colId) + 1;
+    var colEstado = encabezados.indexOf(CONFIG.colEstado) + 1;
+    if (!colId) {
+      colId = h.getLastColumn() + 1;
+      h.getRange(1, colId).setValue(CONFIG.colId);
     }
-    for (let i = 0; i < pendientes.length; i += NODO_LOTE) {
-      if (!enviarFilas_(hoja, cols, pendientes.slice(i, i + NODO_LOTE))) break;
+    if (!colEstado) {
+      colEstado = h.getLastColumn() + 1;
+      h.getRange(1, colEstado).setValue(CONFIG.colEstado);
     }
-  } finally {
-    lock.releaseLock();
+    var todos = h.getRange(1, 1, 1, h.getLastColumn()).getDisplayValues()[0];
+    return { colId: colId, colEstado: colEstado, encabezados: todos };
   }
-}
 
-/** Vuelve a enviar las filas marcadas con error. */
-function reintentarErroresNodo() {
-  const hoja = hojaNodo_();
-  const cols = columnasNodo_(hoja);
-  const ultimaFila = hoja.getLastRow();
-  if (ultimaFila < 2) return;
-  const estados = hoja.getRange(2, cols.colEstado, ultimaFila - 1, 1).getDisplayValues();
-  for (let i = 0; i < estados.length; i++) {
-    if (String(estados[i][0]).indexOf("error") === 0) hoja.getRange(i + 2, cols.colEstado).clearContent();
+  function esDeControl(cols, indice) {
+    return indice + 1 === cols.colId || indice + 1 === cols.colEstado;
   }
-  sincronizarNodo();
-}
 
-// Devuelve false si hay que cortar (credenciales, pausa o límite).
-function enviarFilas_(hoja, cols, numeros) {
-  const filas = [];
-  numeros.forEach(function (n) {
-    const valores = hoja.getRange(n, 1, 1, cols.encabezados.length).getDisplayValues()[0];
-    const tieneDatos = valores.some(function (v, i) { return v && i + 1 !== cols.colId && i + 1 !== cols.colEstado; });
-    if (!tieneDatos) return;
-    let id = valores[cols.colId - 1];
-    if (!id) {
-      id = Utilities.getUuid();
-      hoja.getRange(n, cols.colId).setValue(id);
-    }
-    const datos = {};
-    cols.encabezados.forEach(function (h, i) {
-      if (h && i + 1 !== cols.colId && i + 1 !== cols.colEstado) datos[h] = valores[i];
+  function firma(timestamp, cuerpo) {
+    var secreto = PropertiesService.getScriptProperties().getProperty(CONFIG.propiedadSecreto);
+    if (!secreto) throw new Error("Nodo CRM: falta la propiedad del script " + CONFIG.propiedadSecreto + ".");
+    var bytes = Utilities.computeHmacSha256Signature(timestamp + "." + cuerpo, secreto, Utilities.Charset.UTF_8);
+    return bytes.map(function (b) { return ("0" + (b & 0xff).toString(16)).slice(-2); }).join("");
+  }
+
+  function enviar(datos) {
+    var cuerpo = JSON.stringify(datos);
+    var timestamp = String(Date.now());
+    var respuesta = UrlFetchApp.fetch(CONFIG.url, {
+      method: "post",
+      contentType: "application/json; charset=utf-8",
+      payload: cuerpo,
+      headers: { "X-Nodo-Timestamp": timestamp, "X-Nodo-Signature": firma(timestamp, cuerpo) },
+      muteHttpExceptions: true,
     });
-    filas.push({ numero: n, rowId: id, values: datos });
-  });
-  if (!filas.length) return true;
-
-  const r = enviarNodo_({ rows: filas.map(function (f) { return { rowId: f.rowId, values: f.values }; }) });
-  if (r.codigo !== 200) {
-    Logger.log("Nodo respondió " + r.codigo + ": " + JSON.stringify(r.json));
-    return false;
+    var json = {};
+    try { json = JSON.parse(respuesta.getContentText()); } catch (e) {}
+    return { codigo: respuesta.getResponseCode(), json: json };
   }
-  const porId = {};
-  (r.json.results || []).forEach(function (x) { porId[x.rowId] = x; });
-  filas.forEach(function (f) {
-    const x = porId[f.rowId];
-    if (!x || x.status === "in_progress") return; // se reintenta en la próxima corrida
-    const texto = x.status === "failed" ? "error: " + (x.error || "desconocido") : "ok " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM HH:mm");
-    hoja.getRange(f.numero, cols.colEstado).setValue(texto.slice(0, 250));
-  });
-  return true;
-}
 
-/** Instala los activadores: al cambiar la hoja y cada 5 minutos. */
-function instalarActivadoresNodo() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    const f = t.getHandlerFunction();
-    if (f === "alCambiarNodo" || f === "sincronizarNodo") ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger("alCambiarNodo").forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onChange().create();
-  // Respaldo: filas escritas por otros scripts o integraciones (que no
-  // disparan onChange) se envían en la siguiente corrida.
-  ScriptApp.newTrigger("sincronizarNodo").timeBased().everyMinutes(5).create();
-  Logger.log("Activadores instalados.");
-}
+  // Devuelve false si hay que cortar (credenciales, pausa o límite).
+  function enviarFilas(h, cols, numeros) {
+    var filas = [];
+    numeros.forEach(function (n) {
+      var valores = h.getRange(n, 1, 1, cols.encabezados.length).getDisplayValues()[0];
+      var tieneDatos = valores.some(function (v, i) { return v && !esDeControl(cols, i); });
+      if (!tieneDatos) return;
+      var id = valores[cols.colId - 1];
+      if (!id) {
+        id = Utilities.getUuid();
+        h.getRange(n, cols.colId).setValue(id);
+      }
+      var datos = {};
+      cols.encabezados.forEach(function (encabezado, i) {
+        if (encabezado && !esDeControl(cols, i)) datos[encabezado] = valores[i];
+      });
+      filas.push({ numero: n, rowId: id, values: datos });
+    });
+    if (!filas.length) return true;
 
-function alCambiarNodo(e) {
-  sincronizarNodo();
-}
+    var r = enviar({ rows: filas.map(function (f) { return { rowId: f.rowId, values: f.values }; }) });
+    if (r.codigo !== 200) {
+      Logger.log("Nodo CRM respondió " + r.codigo + ": " + JSON.stringify(r.json));
+      return false;
+    }
+    var porId = {};
+    (r.json.results || []).forEach(function (x) { porId[x.rowId] = x; });
+    filas.forEach(function (f) {
+      var x = porId[f.rowId];
+      if (!x || x.status === "in_progress") return; // se reintenta en la próxima corrida
+      var texto = x.status === "failed"
+        ? "error: " + (x.error || "desconocido")
+        : "ok " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM HH:mm");
+      h.getRange(f.numero, cols.colEstado).setValue(texto.slice(0, 250));
+    });
+    return true;
+  }
+
+  function probarConexion() {
+    var h = hoja();
+    var cols = columnas(h);
+    var r = enviar({
+      test: true,
+      spreadsheetName: SpreadsheetApp.getActiveSpreadsheet().getName(),
+      sheetName: h.getName(),
+      headers: cols.encabezados.filter(function (e, i) { return e && !esDeControl(cols, i); }),
+    });
+    if (r.codigo === 200) Logger.log("Nodo CRM: conexión OK. Volvé a Nodo para configurar el mapeo.");
+    else Logger.log("Nodo CRM respondió " + r.codigo + ": " + JSON.stringify(r.json));
+    return r.codigo === 200;
+  }
+
+  function enviarFila(h, numeroFila) {
+    h = h || hoja();
+    enviarFilas(h, columnas(h), [numeroFila]);
+  }
+
+  function sincronizar() {
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(20000)) return;
+    try {
+      var h = hoja();
+      var cols = columnas(h);
+      var ultimaFila = h.getLastRow();
+      if (ultimaFila < 2) return;
+      var estados = h.getRange(2, cols.colEstado, ultimaFila - 1, 1).getDisplayValues();
+      var pendientes = [];
+      for (var i = 0; i < estados.length && pendientes.length < CONFIG.maxPorCorrida; i++) {
+        if (!estados[i][0]) pendientes.push(i + 2);
+      }
+      for (var j = 0; j < pendientes.length; j += CONFIG.lote) {
+        if (!enviarFilas(h, cols, pendientes.slice(j, j + CONFIG.lote))) break;
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  function reintentarErrores() {
+    var h = hoja();
+    var cols = columnas(h);
+    var ultimaFila = h.getLastRow();
+    if (ultimaFila < 2) return;
+    var estados = h.getRange(2, cols.colEstado, ultimaFila - 1, 1).getDisplayValues();
+    for (var i = 0; i < estados.length; i++) {
+      if (String(estados[i][0]).indexOf("error") === 0) h.getRange(i + 2, cols.colEstado).clearContent();
+    }
+    sincronizar();
+  }
+
+  // Solo borra/crea los activadores de Nodo; los demás del proyecto quedan igual.
+  function instalarActivadores() {
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+      if (CONFIG.activadores.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+    });
+    ScriptApp.newTrigger("${F.onChange}").forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onChange().create();
+    // Respaldo: filas escritas por otros scripts o integraciones (que no
+    // disparan onChange) se envían en la siguiente corrida.
+    ScriptApp.newTrigger("${F.sync}").timeBased().everyMinutes(5).create();
+    Logger.log("Nodo CRM: activadores instalados.");
+  }
+
+  return {
+    probarConexion: probarConexion,
+    enviarFila: enviarFila,
+    sincronizar: sincronizar,
+    reintentarErrores: reintentarErrores,
+    instalarActivadores: instalarActivadores,
+  };
+})();
+
+// ── Funciones que se ejecutan desde el editor o como activadores ──
+function ${F.test}() { return NodoCRM.probarConexion(); }
+function ${F.install}() { NodoCRM.instalarActivadores(); }
+function ${F.sync}() { NodoCRM.sincronizar(); }
+function ${F.retry}() { NodoCRM.reintentarErrores(); }
+function ${F.sendRow}(hoja, numeroFila) { NodoCRM.enviarFila(hoja, numeroFila); }
+function ${F.onChange}(e) { NodoCRM.sincronizar(); }
 `;
 }
