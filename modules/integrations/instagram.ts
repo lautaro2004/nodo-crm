@@ -206,7 +206,7 @@ export async function processInstagramWebhook(payload: unknown): Promise<Webhook
   for (const rawEntry of root.entry.slice(0, 50)) {
     const entry = rawEntry as { id?: string; messaging?: MessagingEvent[] };
     summary.entries++;
-    if (!entry?.id || !Array.isArray(entry.messaging)) continue;
+    if (!entry?.id) continue;
     const integration = await prisma.leadIntegration.findFirst({
       where: { type: "instagram", externalAccountId: String(entry.id), status: { in: ["active", "error"] } },
     });
@@ -214,6 +214,13 @@ export async function processInstagramWebhook(payload: unknown): Promise<Webhook
       summary.unknownAccount++;
       continue;
     }
+    // Diagnóstico: cualquier aviso de Meta para esta cuenta (mensaje, lectura,
+    // reacción…) confirma que el canal Meta → Nodo funciona.
+    await prisma.leadIntegration.update({
+      where: { id: integration.id },
+      data: { config: { ...parseInstagramConfig(integration.config), lastWebhookAt: new Date().toISOString() } },
+    });
+    if (!Array.isArray(entry.messaging)) continue;
     for (const event of entry.messaging.slice(0, 100)) {
       const r = await processMessagingEvent(integration, String(entry.id), event);
       summary[r]++;

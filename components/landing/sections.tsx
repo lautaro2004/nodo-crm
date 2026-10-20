@@ -341,7 +341,17 @@ export function LandingFooter() {
             </a>
           </span>
         </div>
-        <p>© {new Date().getFullYear()} Kodexa</p>
+        <div className="flex flex-col items-center gap-1 sm:items-end">
+          <nav aria-label="Legales" className="flex gap-4">
+            <Link href="/privacidad" className="hover:text-slate-900">
+              Privacidad
+            </Link>
+            <Link href="/eliminacion-de-datos" className="hover:text-slate-900">
+              Eliminación de datos
+            </Link>
+          </nav>
+          <p>© {new Date().getFullYear()} Kodexa</p>
+        </div>
       </div>
     </footer>
   );
