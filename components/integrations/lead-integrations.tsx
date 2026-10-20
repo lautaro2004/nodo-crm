@@ -820,6 +820,7 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
     ],
     [customFields]
   );
+  const hasSample = Object.values(sample).some((v) => v.trim());
   const usedTargets = Array.from(new Set(Object.values(mapping).filter((t) => t && t !== "ignore")));
   const labelOf = (t: string) => options.find((o) => o.value === t)?.label ?? t;
 
@@ -956,9 +957,10 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
         <Button size="sm" onClick={save} loading={saving} disabled={headers.length === 0}>
           {saving ? "Guardando…" : "Guardar mapeo"}
         </Button>
-        <Button size="sm" variant="secondary" onClick={test} loading={testing} disabled={headers.length === 0}>
+        <Button size="sm" variant="secondary" onClick={test} loading={testing} disabled={headers.length === 0 || !hasSample}>
           Probar con el ejemplo
         </Button>
+        {!hasSample && headers.length > 0 && <span className="self-center text-xs text-slate-500">Completá algún valor en «Ejemplo» para probar.</span>}
       </div>
     </div>
   );
