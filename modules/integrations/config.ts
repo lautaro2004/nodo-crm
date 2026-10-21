@@ -34,6 +34,8 @@ export const instagramConfigSchema = z.object({
   missingScopes: z.array(z.string()).default([]),
   /** ¿Se activó la suscripción de webhooks para la cuenta? */
   webhookSubscribed: z.boolean().default(false),
+  /** Último aviso de Meta recibido para esta cuenta (diagnóstico). */
+  lastWebhookAt: z.string().nullable().optional(),
 });
 export type InstagramConfig = z.infer<typeof instagramConfigSchema>;
 

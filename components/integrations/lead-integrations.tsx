@@ -156,7 +156,7 @@ function InstagramCard({ integration, configured, onChanged }: { integration: In
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connected = !!integration && integration.status !== "disconnected" && integration.hasSecret;
-  const config = (integration?.config ?? {}) as { createLeadOnFirstMessage?: boolean; logReplies?: boolean; webhookSubscribed?: boolean; missingScopes?: string[] };
+  const config = (integration?.config ?? {}) as { createLeadOnFirstMessage?: boolean; logReplies?: boolean; webhookSubscribed?: boolean; missingScopes?: string[]; lastWebhookAt?: string | null };
 
   async function connect() {
     setBusy("connect");
@@ -250,7 +250,11 @@ function InstagramCard({ integration, configured, onChanged }: { integration: In
           <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <Info label="Cuenta" value={integration!.externalUsername ? `@${integration!.externalUsername}` : "—"} />
             <Info label="Recepción de mensajes" value={config.webhookSubscribed ? "Activa" : "Sin activar"} tone={config.webhookSubscribed ? undefined : "danger"} />
-            <Info label="Último mensaje" value={timeAgo(integration!.lastEventAt)} />
+            <Info
+              label="Último aviso de Meta"
+              value={config.lastWebhookAt ? timeAgo(config.lastWebhookAt) : "Ninguno todavía"}
+              hint={config.lastWebhookAt ? `Último mensaje: ${timeAgo(integration!.lastEventAt)}` : "Si escribiste y no aparece, Meta no está enviando avisos (¿la app está publicada?)"}
+            />
             <Info
               label="Acceso vence"
               value={expires ? expires.toLocaleDateString("es-AR", { day: "2-digit", month: "short" }) : "—"}
