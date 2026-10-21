@@ -3,6 +3,8 @@ import { listNexoAppointments } from "@/modules/nexo/appointments";
 import { listNexoInquiries } from "@/modules/nexo/inquiries";
 import { createActivity } from "@/modules/activities/service";
 import { runLeadCreatedAutomations } from "@/modules/automations/engine";
+import { findLeadByContactData } from "@/modules/integrations/ingest";
+import { NEXO_INQUIRY_SOURCE, nexoInquiryActivityBody, nexoInquiryLeadData } from "@/modules/nexo/ingest-inquiry";
 
 const SOURCE = "nexo_appointment";
 
@@ -87,7 +89,7 @@ export async function syncLeadsFromNexoAppointments(businessId: string): Promise
   return { created, skipped, total: appointments.length };
 }
 
-const INQUIRY_SOURCE = "nexo_inquiry";
+const INQUIRY_SOURCE = NEXO_INQUIRY_SOURCE;
 
 // Mismo contrato que syncLeadsFromNexoAppointments (idempotente por
 // (businessId, source, sourceRef), create-only, nunca pisa un Lead ya
@@ -104,7 +106,12 @@ export async function syncLeadsFromNexoInquiries(businessId: string): Promise<Sy
       where: { businessId_source_sourceRef: { businessId, source: INQUIRY_SOURCE, sourceRef: inquiry.id } },
     });
 
-    if (existing) {
+    // Ya enviada por Nexo al momento de guardarse (ver
+    // app/api/internal/nexo-inquiry), o ya hay un lead con ese email /
+    // teléfono: no se duplica. Sigue siendo create-only: no se agrega
+    // actividad en cada sincronización.
+    const data = nexoInquiryLeadData(inquiry);
+    if (existing || inquiry.nodoLeadId || (await findLeadByContactData(businessId, data.email, data.phone))) {
       skipped++;
       continue;
     }
@@ -113,8 +120,8 @@ export async function syncLeadsFromNexoInquiries(businessId: string): Promise<Sy
       data: {
         businessId,
         name: inquiry.customerName,
-        email: inquiry.customerEmail,
-        phone: inquiry.customerWhatsapp,
+        email: data.email,
+        phone: data.phone ?? inquiry.customerWhatsapp,
         status: "new",
         source: INQUIRY_SOURCE,
         sourceRef: inquiry.id,
@@ -125,7 +132,7 @@ export async function syncLeadsFromNexoInquiries(businessId: string): Promise<Sy
       relatedType: "lead",
       relatedId: lead.id,
       type: "note",
-      body: `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
+      body: nexoInquiryActivityBody(inquiry),
     });
     await runLeadCreatedAutomations(businessId, lead.id);
     created++;

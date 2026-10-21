@@ -131,7 +131,7 @@ export type UpsertOutcome =
   | { outcome: "skipped"; reason: string };
 
 /** Busca un lead del MISMO negocio por email o teléfono (nunca por nombre). */
-async function findLeadByContactData(businessId: string, email: string | null, phone: string | null) {
+export async function findLeadByContactData(businessId: string, email: string | null, phone: string | null) {
   if (email) {
     const byEmail = await prisma.lead.findFirst({
       where: { businessId, email: { equals: email, mode: "insensitive" } },

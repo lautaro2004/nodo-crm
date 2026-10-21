@@ -971,6 +971,12 @@ model Inquiry {
   status           String
   createdAt        DateTime
   updatedAt        DateTime
+  // Columnas agregadas por Nexo (migración 20261021120000_inquiry_assistant_leads):
+  // interesados que registra el asistente de WhatsApp. Solo lectura.
+  channel          String
+  need             String?
+  summary          String?
+  nodoLeadId       String?
 
   @@schema("nexo")
 }
