@@ -16,6 +16,12 @@ export interface NexoInquiry {
   message: string;
   status: string;
   createdAt: Date;
+  /** "web" (formulario del sitio) | "whatsapp" (asistente de Nexo). */
+  channel: string;
+  need: string | null;
+  summary: string | null;
+  /** Lead de Nodo que ya se creó/actualizó para esta consulta (lo guarda Nexo). */
+  nodoLeadId: string | null;
 }
 
 function toDomain(row: NexoInquiry): NexoInquiry {
@@ -28,6 +34,10 @@ function toDomain(row: NexoInquiry): NexoInquiry {
     message: row.message,
     status: row.status,
     createdAt: row.createdAt,
+    channel: row.channel,
+    need: row.need,
+    summary: row.summary,
+    nodoLeadId: row.nodoLeadId,
   };
 }
 
@@ -37,4 +47,9 @@ export async function listNexoInquiries(businessId: string): Promise<NexoInquiry
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toDomain);
+}
+
+export async function getNexoInquiry(businessId: string, id: string): Promise<NexoInquiry | null> {
+  const row = await prisma.inquiry.findFirst({ where: { id, businessId } });
+  return row ? toDomain(row) : null;
 }

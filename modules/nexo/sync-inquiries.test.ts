@@ -5,13 +5,17 @@ const leadCreate = vi.fn();
 const listNexoAppointments = vi.fn();
 const listNexoInquiries = vi.fn();
 const activityCreate = vi.fn();
+const leadFindFirst = vi.fn();
+const queryRaw = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     lead: {
       findUnique: (...args: unknown[]) => leadFindUnique(...args),
       create: (...args: unknown[]) => leadCreate(...args),
+      findFirst: (...args: unknown[]) => leadFindFirst(...args),
     },
+    $queryRaw: (...args: unknown[]) => queryRaw(...args),
   },
 }));
 
@@ -43,6 +47,10 @@ const INQUIRY = {
   message: "¿Tienen turnos el sábado?",
   status: "NEW",
   createdAt: new Date("2026-09-20T10:00:00Z"),
+  channel: "web",
+  need: null,
+  summary: null,
+  nodoLeadId: null,
 };
 
 beforeEach(() => {
@@ -51,6 +59,8 @@ beforeEach(() => {
   listNexoAppointments.mockReset().mockResolvedValue([]);
   listNexoInquiries.mockReset();
   activityCreate.mockReset();
+  leadFindFirst.mockReset().mockResolvedValue(null);
+  queryRaw.mockReset().mockResolvedValue([]);
 });
 
 describe("syncLeadsFromNexoInquiries", () => {
@@ -67,7 +77,7 @@ describe("syncLeadsFromNexoInquiries", () => {
         businessId: "biz_A",
         name: "Ana Pérez",
         email: "ana@example.com",
-        phone: "+54 9 11 5555-0000",
+        phone: "+5491155550000",
         status: "new",
         source: "nexo_inquiry",
         sourceRef: "inq_1",
@@ -97,6 +107,33 @@ describe("syncLeadsFromNexoInquiries", () => {
     expect(leadCreate).not.toHaveBeenCalled();
     expect(activityCreate).not.toHaveBeenCalled();
     expect(result).toEqual({ created: 0, skipped: 1, total: 1 });
+  });
+
+  it("no duplica: salta las consultas que Nexo ya envió a Nodo", async () => {
+    listNexoInquiries.mockResolvedValue([{ ...INQUIRY, nodoLeadId: "lead_9" }]);
+    leadFindUnique.mockResolvedValue(null);
+    expect(await syncLeadsFromNexoInquiries("biz_A")).toEqual({ created: 0, skipped: 1, total: 1 });
+    expect(leadCreate).not.toHaveBeenCalled();
+  });
+
+  it("no duplica: si ya hay un lead con ese teléfono no crea otro ni agrega actividad", async () => {
+    listNexoInquiries.mockResolvedValue([{ ...INQUIRY, customerEmail: "" }]);
+    leadFindUnique.mockImplementation(async (args: { where: { id?: string } }) => (args.where.id ? { id: "lead_7" } : null));
+    queryRaw.mockResolvedValue([{ id: "lead_7" }]);
+    expect(await syncLeadsFromNexoInquiries("biz_A")).toEqual({ created: 0, skipped: 1, total: 1 });
+    expect(leadCreate).not.toHaveBeenCalled();
+    expect(activityCreate).not.toHaveBeenCalled();
+  });
+
+  it("un interesado del asistente (WhatsApp) deja necesidad y resumen en la nota", async () => {
+    listNexoInquiries.mockResolvedValue([
+      { ...INQUIRY, channel: "whatsapp", customerEmail: "", need: "Coloración", summary: "Quiere color el sábado" },
+    ]);
+    leadFindUnique.mockResolvedValue(null);
+    leadCreate.mockResolvedValue({ id: "lead_2" });
+    await syncLeadsFromNexoInquiries("biz_A");
+    expect(leadCreate.mock.calls[0][0].data.email).toBeNull();
+    expect(activityCreate.mock.calls[0][1].body).toContain("Necesita: Coloración");
   });
 
   it("sin consultas no hace nada", async () => {
