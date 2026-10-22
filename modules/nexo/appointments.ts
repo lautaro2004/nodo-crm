@@ -54,9 +54,12 @@ function toDomain(row: {
 // dueño desde el dashboard de Nexo (Appointment no persiste esa
 // distinción — ver auditoría en crm-fase4-nexo-leads.md). Se documenta
 // como limitación conocida, no se resuelve modificando Nexo en esta fase.
-export async function listNexoAppointments(businessId: string): Promise<NexoAppointment[]> {
+// `since`: solo turnos creados desde esa fecha — lo usa la sincronización
+// automática (cron) para no recorrer todo el historial en cada corrida. El
+// botón manual no lo pasa y sigue revisando todo.
+export async function listNexoAppointments(businessId: string, options: { since?: Date } = {}): Promise<NexoAppointment[]> {
   const rows = await prisma.appointment.findMany({
-    where: { businessId },
+    where: { businessId, ...(options.since ? { createdAt: { gte: options.since } } : {}) },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toDomain);

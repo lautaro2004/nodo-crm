@@ -965,9 +965,15 @@ model Inquiry {
   businessId       String
   customerName     String
   customerWhatsapp String
-  customerEmail    String
+  // Nullable desde que Nexo detecta consultas por WhatsApp (sin email).
+  customerEmail    String?
   message          String
   status           String
+  // "web_form" | "whatsapp" (nexo migración 20261022180000).
+  source           String
+  // null = sin calificar | "pending" | "qualified" | "discarded". Solo null y
+  // "qualified" se sincronizan como Lead (ver modules/nexo/inquiries.ts).
+  qualificationStatus String?
   createdAt        DateTime
   updatedAt        DateTime
 

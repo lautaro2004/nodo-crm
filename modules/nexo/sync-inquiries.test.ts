@@ -5,12 +5,16 @@ const leadCreate = vi.fn();
 const listNexoAppointments = vi.fn();
 const listNexoInquiries = vi.fn();
 const activityCreate = vi.fn();
+const workspaceFindMany = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     lead: {
       findUnique: (...args: unknown[]) => leadFindUnique(...args),
       create: (...args: unknown[]) => leadCreate(...args),
+    },
+    workspace: {
+      findMany: (...args: unknown[]) => workspaceFindMany(...args),
     },
   },
 }));
@@ -32,7 +36,8 @@ vi.mock("@/modules/activities/service", () => ({
   createActivity: (...args: unknown[]) => activityCreate(...args),
 }));
 
-const { syncLeadsFromNexoInquiries, syncLeadsFromNexo } = await import("./sync-leads");
+const { syncLeadsFromNexoInquiries, syncLeadsFromNexo, syncLeadsFromNexoForAllWorkspaces, AUTO_SYNC_WINDOW_DAYS } =
+  await import("./sync-leads");
 
 const INQUIRY = {
   id: "inq_1",
@@ -42,6 +47,8 @@ const INQUIRY = {
   customerEmail: "ana@example.com",
   message: "¿Tienen turnos el sábado?",
   status: "NEW",
+  source: "web_form",
+  qualificationStatus: null,
   createdAt: new Date("2026-09-20T10:00:00Z"),
 };
 
@@ -51,6 +58,7 @@ beforeEach(() => {
   listNexoAppointments.mockReset().mockResolvedValue([]);
   listNexoInquiries.mockReset();
   activityCreate.mockReset();
+  workspaceFindMany.mockReset();
 });
 
 describe("syncLeadsFromNexoInquiries", () => {
@@ -61,7 +69,7 @@ describe("syncLeadsFromNexoInquiries", () => {
 
     const result = await syncLeadsFromNexoInquiries("biz_A");
 
-    expect(listNexoInquiries).toHaveBeenCalledWith("biz_A");
+    expect(listNexoInquiries).toHaveBeenCalledWith("biz_A", {});
     expect(leadCreate).toHaveBeenCalledWith({
       data: {
         businessId: "biz_A",
@@ -99,6 +107,24 @@ describe("syncLeadsFromNexoInquiries", () => {
     expect(result).toEqual({ created: 0, skipped: 1, total: 1 });
   });
 
+  it("una consulta de WhatsApp crea el Lead sin email y lo indica en la nota", async () => {
+    listNexoInquiries.mockResolvedValue([
+      { ...INQUIRY, id: "inq_wa", customerEmail: null, source: "whatsapp", message: "Quiero sumar mi local" },
+    ]);
+    leadFindUnique.mockResolvedValue(null);
+    leadCreate.mockResolvedValue({ id: "lead_wa" });
+
+    await syncLeadsFromNexoInquiries("biz_A");
+
+    expect(leadCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ email: null, source: "nexo_inquiry", sourceRef: "inq_wa" }),
+    });
+    expect(activityCreate).toHaveBeenCalledWith(
+      "biz_A",
+      expect.objectContaining({ body: "Contacto nuevo por WhatsApp (Nexo): Quiero sumar mi local" })
+    );
+  });
+
   it("sin consultas no hace nada", async () => {
     listNexoInquiries.mockResolvedValue([]);
     expect(await syncLeadsFromNexoInquiries("biz_A")).toEqual({ created: 0, skipped: 0, total: 0 });
@@ -133,5 +159,41 @@ describe("syncLeadsFromNexo (acción única del botón)", () => {
     expect(result.inquiries.created).toBe(1);
     expect(leadCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ source: "nexo_appointment" }) });
     expect(leadCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ source: "nexo_inquiry" }) });
+  });
+});
+
+describe("syncLeadsFromNexoForAllWorkspaces (cron)", () => {
+  const NOW = new Date("2026-10-22T12:00:00Z");
+
+  it("sincroniza cada negocio con Nodo usando la ventana de días recientes", async () => {
+    workspaceFindMany.mockResolvedValue([{ businessId: "biz_A" }, { businessId: "biz_B" }]);
+    listNexoInquiries.mockImplementation(async (businessId: string) => (businessId === "biz_A" ? [INQUIRY] : []));
+    leadFindUnique.mockResolvedValue(null);
+    leadCreate.mockResolvedValue({ id: "lead_1" });
+
+    const result = await syncLeadsFromNexoForAllWorkspaces(NOW);
+
+    const since = new Date(NOW.getTime() - AUTO_SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    expect(listNexoInquiries).toHaveBeenCalledWith("biz_A", { since });
+    expect(listNexoInquiries).toHaveBeenCalledWith("biz_B", { since });
+    expect(listNexoAppointments).toHaveBeenCalledWith("biz_A", { since });
+    expect(result).toEqual({ workspaces: 2, created: 1, failed: 0 });
+  });
+
+  it("un error en un negocio no corta a los demás", async () => {
+    workspaceFindMany.mockResolvedValue([{ businessId: "biz_A" }, { businessId: "biz_B" }]);
+    listNexoAppointments.mockImplementation(async (businessId: string) => {
+      if (businessId === "biz_A") throw new Error("boom");
+      return [];
+    });
+    listNexoInquiries.mockResolvedValue([INQUIRY]);
+    leadFindUnique.mockResolvedValue(null);
+    leadCreate.mockResolvedValue({ id: "lead_1" });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await syncLeadsFromNexoForAllWorkspaces(NOW);
+
+    expect(result).toEqual({ workspaces: 2, created: 1, failed: 1 });
+    consoleError.mockRestore();
   });
 });

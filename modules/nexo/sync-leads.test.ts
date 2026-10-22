@@ -98,7 +98,7 @@ describe("3/4. Multi-tenancy — un turno de Business A solo puede generar un Le
 
     await syncLeadsFromNexoAppointments("biz_A");
 
-    expect(listNexoAppointments).toHaveBeenCalledWith("biz_A");
+    expect(listNexoAppointments).toHaveBeenCalledWith("biz_A", {});
     expect(leadCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ businessId: "biz_A" }) }));
   });
 
@@ -106,8 +106,8 @@ describe("3/4. Multi-tenancy — un turno de Business A solo puede generar un Le
     listNexoAppointments.mockResolvedValue([]); // B no tiene turnos propios en este escenario
     await syncLeadsFromNexoAppointments("biz_B");
 
-    expect(listNexoAppointments).toHaveBeenCalledWith("biz_B");
-    expect(listNexoAppointments).not.toHaveBeenCalledWith("biz_A");
+    expect(listNexoAppointments).toHaveBeenCalledWith("biz_B", {});
+    expect(listNexoAppointments).not.toHaveBeenCalledWith("biz_A", expect.anything());
     expect(leadCreate).not.toHaveBeenCalled();
   });
 });

@@ -37,8 +37,13 @@ export interface SyncLeadsResult {
 //   NULL en Nexo — nunca llegan vacíos acá. No hay email disponible (no
 //   existe en el modelo de Nexo, confirmado por auditoría) — el Lead
 //   sincronizado siempre queda con email: null.
-export async function syncLeadsFromNexoAppointments(businessId: string): Promise<SyncLeadsResult> {
-  const appointments = await listNexoAppointments(businessId);
+export interface SyncOptions {
+  // Ver listNexoAppointments: solo registros creados desde esta fecha.
+  since?: Date;
+}
+
+export async function syncLeadsFromNexoAppointments(businessId: string, options: SyncOptions = {}): Promise<SyncLeadsResult> {
+  const appointments = await listNexoAppointments(businessId, options);
 
   let created = 0;
   let skipped = 0;
@@ -91,10 +96,13 @@ const INQUIRY_SOURCE = "nexo_inquiry";
 
 // Mismo contrato que syncLeadsFromNexoAppointments (idempotente por
 // (businessId, source, sourceRef), create-only, nunca pisa un Lead ya
-// tocado). Diferencia: una consulta SÍ trae email, y el texto de la
-// consulta va como nota (Activity), no como columna nueva del Lead.
-export async function syncLeadsFromNexoInquiries(businessId: string): Promise<SyncLeadsResult> {
-  const inquiries = await listNexoInquiries(businessId);
+// tocado). Diferencias: una consulta del formulario SÍ trae email (las de
+// WhatsApp no), y el texto de la consulta va como nota (Activity), no como
+// columna nueva del Lead. Las consultas web y las de WhatsApp comparten
+// source "nexo_inquiry" (mismo registro de origen, nexo.Inquiry); el canal
+// queda en la nota.
+export async function syncLeadsFromNexoInquiries(businessId: string, options: SyncOptions = {}): Promise<SyncLeadsResult> {
+  const inquiries = await listNexoInquiries(businessId, options);
 
   let created = 0;
   let skipped = 0;
@@ -125,7 +133,10 @@ export async function syncLeadsFromNexoInquiries(businessId: string): Promise<Sy
       relatedType: "lead",
       relatedId: lead.id,
       type: "note",
-      body: `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
+      body:
+        inquiry.source === "whatsapp"
+          ? `Contacto nuevo por WhatsApp (Nexo): ${inquiry.message}`
+          : `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
     });
     await runLeadCreatedAutomations(businessId, lead.id);
     created++;
@@ -141,9 +152,9 @@ export interface SyncNexoResult extends SyncLeadsResult {
 
 // Única acción de usuario ("Sincronizar con Nexo"): corre ambas fuentes y
 // devuelve los totales combinados más el desglose.
-export async function syncLeadsFromNexo(businessId: string): Promise<SyncNexoResult> {
-  const appointments = await syncLeadsFromNexoAppointments(businessId);
-  const inquiries = await syncLeadsFromNexoInquiries(businessId);
+export async function syncLeadsFromNexo(businessId: string, options: SyncOptions = {}): Promise<SyncNexoResult> {
+  const appointments = await syncLeadsFromNexoAppointments(businessId, options);
+  const inquiries = await syncLeadsFromNexoInquiries(businessId, options);
   return {
     created: appointments.created + inquiries.created,
     skipped: appointments.skipped + inquiries.skipped,
@@ -151,4 +162,39 @@ export async function syncLeadsFromNexo(businessId: string): Promise<SyncNexoRes
     appointments,
     inquiries,
   };
+}
+
+// Ventana de la sincronización automática: el cron corre cada pocos minutos,
+// así que mirar los últimos 7 días alcanza de sobra (cubre también días con
+// el scheduler caído) sin recorrer todo el historial de cada negocio en cada
+// corrida. Lo anterior a eso lo levanta el botón manual, que revisa todo.
+export const AUTO_SYNC_WINDOW_DAYS = 7;
+
+export interface SyncAllResult {
+  workspaces: number;
+  created: number;
+  failed: number;
+}
+
+// Sincronización automática para TODOS los negocios con Nodo (los que tienen
+// crm.Workspace). Un negocio que solo usa Nexo no tiene Workspace y nunca
+// entra acá: sus consultas quedan solo en Nexo → Consultas. Un error en un
+// negocio no corta a los demás.
+export async function syncLeadsFromNexoForAllWorkspaces(now: Date = new Date()): Promise<SyncAllResult> {
+  const since = new Date(now.getTime() - AUTO_SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const workspaces = await prisma.workspace.findMany({ select: { businessId: true } });
+
+  let created = 0;
+  let failed = 0;
+  for (const { businessId } of workspaces) {
+    try {
+      const result = await syncLeadsFromNexo(businessId, { since });
+      created += result.created;
+    } catch (error) {
+      failed++;
+      console.error(`[Nexo sync] Error sincronizando ${businessId}:`, error);
+    }
+  }
+
+  return { workspaces: workspaces.length, created, failed };
 }
