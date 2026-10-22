@@ -60,3 +60,15 @@ describe("mapRow", () => {
     expect(fallbackLeadName({ name: null, email: null, phone: null }, "Sheets")).toBe("Lead de Sheets");
   });
 });
+
+describe("mapRow: varias columnas a la nota", () => {
+  it("antepone el nombre de la columna a cada línea", () => {
+    const r = mapRow(
+      { Nombre: "Ana", "Tipo de proyecto": "Web", Presupuesto: "500 USD", Mensaje: "Hola" },
+      { Nombre: "name", "Tipo de proyecto": "note", Presupuesto: "note", Mensaje: "note" },
+      [],
+      []
+    );
+    expect(r.ok && r.data.note).toBe("Tipo de proyecto: Web\nPresupuesto: 500 USD\nMensaje: Hola");
+  });
+});

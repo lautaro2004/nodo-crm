@@ -13,6 +13,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { readApiError } from "@/lib/error-messages";
 import { APPS_SCRIPT_FILE_NAME, APPS_SCRIPT_FUNCTIONS, APPS_SCRIPT_SECRET_PROPERTY, buildAppsScript } from "@/modules/integrations/apps-script";
 import { TARGET_LABELS } from "@/modules/integrations/normalize";
+import { slugifyKey } from "@/modules/import/shared";
 
 // Configuración → Integraciones: captura automática de leads (Instagram y
 // Google Sheets). Solo ve estados y configuración; los tokens y secretos
@@ -816,8 +817,14 @@ function guessTarget(header: string, customFields: { id: string; label: string }
   return cf ? `cf:${cf.id}` : "ignore";
 }
 
-function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem; customFields: { id: string; label: string }[]; onSaved: () => void }) {
+const CREATE_FIELD = "__create_field__";
+
+function MappingEditor({ item, customFields: initialFields, onSaved }: { item: IntegrationItem; customFields: { id: string; label: string }[]; onSaved: () => void }) {
   const toast = useToast();
+  // Campos personalizados de leads: se pueden crear acá mismo para las
+  // columnas que no tienen un campo equivalente en Nodo.
+  const [customFields, setCustomFields] = useState(initialFields);
+  const [creatingField, setCreatingField] = useState<string | null>(null);
   const config = item.config as { headers?: string[]; mapping?: Record<string, string>; required?: string[] };
   const [headers, setHeaders] = useState<string[]>(() => Array.from(new Set([...(config.headers ?? []), ...Object.keys(config.mapping ?? {})])));
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
@@ -854,6 +861,27 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
   const labelOf = (t: string) => options.find((o) => o.value === t)?.label ?? t;
 
   const guess = (header: string) => guessTarget(header, customFields);
+
+  // Crea un campo personalizado de texto con el nombre de la columna (o
+  // reutiliza el que ya exista con ese nombre) y la mapea a él.
+  async function createFieldFor(header: string) {
+    setCreatingField(header);
+    setError(null);
+    const res = await apiFetch("/api/custom-field-definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityType: "lead", key: slugifyKey(header), label: header.slice(0, 80), type: "text" }),
+    });
+    setCreatingField(null);
+    if (!res.ok) {
+      setError(await readApiError(res));
+      return;
+    }
+    const field: { id: string; label: string; existing?: boolean } = await res.json();
+    setCustomFields((prev) => (prev.some((f) => f.id === field.id) ? prev : [...prev, { id: field.id, label: field.label }]));
+    setMapping((prev) => ({ ...prev, [header]: `cf:${field.id}` }));
+    toast.success(field.existing ? `Se usa el campo «${field.label}» que ya existía.` : `Campo «${field.label}» creado en Leads.`);
+  }
 
   function addHeader(e: React.FormEvent) {
     e.preventDefault();
@@ -913,11 +941,16 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
                 </span>
                 <SelectMenu
                   ariaLabel={`Destino de la columna ${h}`}
-                  value={mapping[h] ?? "ignore"}
-                  onChange={(v) => setMapping({ ...mapping, [h]: v })}
-                  options={options}
+                  value={creatingField === h ? "ignore" : (mapping[h] ?? "ignore")}
+                  onChange={(v) => (v === CREATE_FIELD ? void createFieldFor(h) : setMapping({ ...mapping, [h]: v }))}
+                  options={
+                    customFields.some((f) => f.label.toLowerCase() === h.toLowerCase())
+                      ? options
+                      : [...options, { value: CREATE_FIELD, label: `+ Crear campo «${h}»`, hint: "Campo nuevo en Leads" }]
+                  }
                   className="w-56 max-w-[60vw]"
                   size="sm"
+                  disabled={creatingField === h}
                 />
                 <Input
                   aria-label={`Valor de ejemplo para ${h}`}
