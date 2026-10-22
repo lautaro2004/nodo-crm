@@ -83,9 +83,14 @@ export function mapRow(
   const rawCustom: Record<string, string> = {};
   const cfById = new Map(customFields.map((f) => [f.id, f]));
 
+  // Si varias columnas van a la nota, cada línea lleva el nombre de su
+  // columna ("Presupuesto: 500 USD") para no perder el contexto.
+  const noteColumns = Object.values(mapping).filter((t) => t === "note").length;
+
   for (const [header, target] of Object.entries(mapping)) {
     if (!target || target === "ignore") continue;
-    const value = clean(values[header], target === "note" ? MAX_NOTE : MAX_TEXT);
+    const cleaned = clean(values[header], target === "note" ? MAX_NOTE : MAX_TEXT);
+    const value = cleaned !== null && target === "note" && noteColumns > 1 ? `${header}: ${cleaned}` : cleaned;
     if (value === null) continue;
     if (target.startsWith("cf:")) {
       const id = target.slice(3);
