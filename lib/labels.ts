@@ -16,6 +16,9 @@ export const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   event_reassigned: "Responsable de actividad",
   event_completed: "Actividad realizada",
   event_cancelled: "Actividad cancelada",
+  instagram_message: "Mensaje de Instagram",
+  instagram_reply: "Respuesta por Instagram",
+  sheets_submission: "Registro de Google Sheets",
 };
 
 // Color del punto en el timeline de Activity (components/activities/activity-feed.tsx)
@@ -41,6 +44,9 @@ export const ACTIVITY_TYPE_DOT_COLOR: Record<string, string> = {
   priority_changed: "bg-amber-500",
   due_date_changed: "bg-amber-500",
   attachment_added: "bg-emerald-500",
+  instagram_message: "bg-fuchsia-500",
+  instagram_reply: "bg-fuchsia-300",
+  sheets_submission: "bg-emerald-500",
 };
 
 export const RELATED_TYPE_LABELS: Record<string, string> = {
@@ -98,6 +104,8 @@ export const LEAD_SOURCE_LABELS: Record<string, string> = {
   nexo_appointment: "Nexo — Reserva",
   nexo_inquiry: "Nexo — Consulta",
   import: "Importación",
+  instagram: "Instagram",
+  google_sheets: "Google Sheets",
 };
 
 export const CALENDAR_EVENT_TYPE_LABELS: Record<string, string> = {

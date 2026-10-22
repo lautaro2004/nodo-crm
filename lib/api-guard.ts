@@ -108,6 +108,12 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   file_empty: 400,
   file_required: 400,
   invalid_role_field: 400,
+  integration_not_found: 404,
+  encryption_not_configured: 503,
+  too_many_integrations: 400,
+  integration_not_connected: 409,
+  mapping_required: 400,
+  event_not_retryable: 409,
 };
 
 export function domainErrorResponse(err: unknown): NextResponse {

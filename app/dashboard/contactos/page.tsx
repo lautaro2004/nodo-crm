@@ -4,6 +4,9 @@ import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listContacts } from "@/modules/contacts/service";
 import { PageHeader, Card, Button, EmptyState } from "@/components/ui/primitives";
 import { SearchFilterBar } from "@/components/dashboard/search-filter-bar";
+import { hasRole } from "@/lib/permissions";
+import { RECORD_NOUNS } from "@/lib/record-nouns";
+import { RecordSelection, SelectAllHeader, SelectCell, SelectableRow } from "@/components/records/selection";
 
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await resolveWorkspaceContext();
@@ -35,32 +38,36 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
           }
         />
       ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Teléfono</th>
-                <th className="px-4 py-3">Empresa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((c) => (
-                <tr key={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link href={`/dashboard/contactos/${c.id}`} className="font-medium text-slate-900 hover:underline">
-                      {c.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{c.email ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.phone ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.company?.name ?? "—"}</td>
+        <RecordSelection entityType="contact" ids={contacts.map((c) => c.id)} noun={RECORD_NOUNS.contact} canDelete={hasRole(ctx.role, "admin")}>
+          <Card className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <SelectAllHeader plain />
+                  <th className="px-4 py-3">Nombre</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Teléfono</th>
+                  <th className="px-4 py-3">Empresa</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {contacts.map((c) => (
+                  <SelectableRow key={c.id} id={c.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <SelectCell id={c.id} label={c.name} />
+                    <td className="px-4 py-3">
+                      <Link href={`/dashboard/contactos/${c.id}`} className="font-medium text-slate-900 hover:underline">
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{c.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{c.phone ?? "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{c.company?.name ?? "—"}</td>
+                  </SelectableRow>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </RecordSelection>
       )}
     </div>
   );

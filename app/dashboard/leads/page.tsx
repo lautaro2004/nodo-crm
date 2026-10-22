@@ -14,6 +14,9 @@ import { ListToolbar } from "@/components/views/list-toolbar";
 import { LEAD_COLUMNS, LEAD_DEFAULT_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
 import { loadCustomCells } from "@/modules/custom-fields/columns";
 import { LEAD_PRESETS } from "@/lib/views/presets";
+import { hasRole } from "@/lib/permissions";
+import { RECORD_NOUNS } from "@/lib/record-nouns";
+import { RecordSelection, SelectAllBar } from "@/components/records/selection";
 
 const SORT_OPTIONS = [
   { value: "recent", label: "Más recientes" },
@@ -95,30 +98,37 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             }
           />
         )
-      ) : display === "kanban" ? (
-        <LeadBoard
-          statuses={toolbar.leadStatuses}
-          leads={leads.map((l) => ({
-            id: l.id,
-            name: l.name,
-            email: l.email,
-            phone: l.phone,
-            status: l.status,
-            source: l.source,
-            company: l.company,
-            ownerName: l.ownerId ? (names.get(l.ownerId) ?? null) : null,
-            createdAt: l.createdAt,
-            lastFollowUpAt: l.lastFollowUpAt,
-          }))}
-        />
       ) : (
-        <LeadTable
-          leads={leads}
-          columns={columns}
-          statusOf={(key) => findStatusOption(toolbar.leadStatuses, key)}
-          ownerName={(id) => names.get(id)}
-          custom={custom}
-        />
+        <RecordSelection entityType="lead" ids={leads.map((l) => l.id)} noun={RECORD_NOUNS.lead} canDelete={hasRole(ctx.role, "admin")}>
+          {display === "kanban" ? (
+            <>
+              <SelectAllBar />
+              <LeadBoard
+                statuses={toolbar.leadStatuses}
+                leads={leads.map((l) => ({
+                  id: l.id,
+                  name: l.name,
+                  email: l.email,
+                  phone: l.phone,
+                  status: l.status,
+                  source: l.source,
+                  company: l.company,
+                  ownerName: l.ownerId ? (names.get(l.ownerId) ?? null) : null,
+                  createdAt: l.createdAt,
+                  lastFollowUpAt: l.lastFollowUpAt,
+                }))}
+              />
+            </>
+          ) : (
+            <LeadTable
+              leads={leads}
+              columns={columns}
+              statusOf={(key) => findStatusOption(toolbar.leadStatuses, key)}
+              ownerName={(id) => names.get(id)}
+              custom={custom}
+            />
+          )}
+        </RecordSelection>
       )}
     </div>
   );

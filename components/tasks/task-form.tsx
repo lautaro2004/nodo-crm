@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePendingNavigation } from "@/lib/hooks/use-pending-navigation";
+import { useToast } from "@/components/ui/toast";
+import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { TASK_PRIORITY_LABELS } from "@/lib/labels";
@@ -46,7 +48,8 @@ export function TaskForm({
   // remindAt en formato "YYYY-MM-DDTHH:mm" del recordatorio pending existente (edición).
   initialReminder?: string | null;
 }) {
-  const router = useRouter();
+  const { navigating, navigate } = usePendingNavigation();
+  const toast = useToast();
   const [values, setValues] = useState<TaskFormValues>({
     title: initial?.title ?? "",
     description: initial?.description ?? "",
@@ -69,49 +72,66 @@ export function TaskForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || navigating) return;
     setLoading(true);
     setError(null);
 
     const url = taskId ? `/api/tasks/${taskId}` : "/api/tasks";
     const method = taskId ? "PATCH" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: values.title,
-        description: values.description || null,
-        priority: values.priority,
-        startDate: values.startDate || null,
-        dueAt: values.dueAt || null,
-        ownerId: values.ownerId || null,
-        companyId: values.companyId || null,
-        contactId: values.contactId || null,
-        leadId: values.leadId || null,
-        opportunityId: values.opportunityId || null,
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: values.title,
+          description: values.description || null,
+          priority: values.priority,
+          startDate: values.startDate || null,
+          dueAt: values.dueAt || null,
+          ownerId: values.ownerId || null,
+          companyId: values.companyId || null,
+          contactId: values.contactId || null,
+          leadId: values.leadId || null,
+          opportunityId: values.opportunityId || null,
+        }),
+      });
+    } catch {
+      setLoading(false);
+      setError("Sin conexión. Los cambios no se guardaron.");
+      return;
+    }
 
     if (!res.ok) {
       setLoading(false);
-      setError("Revisá los datos e intentá de nuevo.");
+      setError(await readApiError(res));
       return;
     }
     const saved = await res.json();
 
     const remindAt = reminder.offset === "custom" ? reminder.custom : reminder.offset === "none" ? null : computeRemindAt(values.dueAt, Number(reminder.offset));
-    if (remindAt) {
-      await fetch(`/api/tasks/${saved.id}/reminder`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remindAt }),
-      });
-    } else if (taskId && initialReminder) {
-      await fetch(`/api/tasks/${saved.id}/reminder`, { method: "DELETE" });
+    // La tarea ya quedó guardada: si el recordatorio falla se avisa, sin
+    // ocultarlo ni deshacer lo guardado.
+    let reminderFailed = false;
+    try {
+      const r = remindAt
+        ? await fetch(`/api/tasks/${saved.id}/reminder`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ remindAt }),
+          })
+        : taskId && initialReminder
+          ? await fetch(`/api/tasks/${saved.id}/reminder`, { method: "DELETE" })
+          : null;
+      reminderFailed = !!r && !r.ok;
+    } catch {
+      reminderFailed = true;
     }
 
+    if (reminderFailed) toast.error("La tarea se guardó, pero no el recordatorio", "Revisalo desde el detalle de la tarea.");
+    else toast.success(taskId ? "Cambios guardados" : "Tarea creada");
+    navigate(`/dashboard/tareas/${saved.id}`);
     setLoading(false);
-    router.push(`/dashboard/tareas/${saved.id}`);
-    router.refresh();
   }
 
   return (
@@ -219,8 +239,8 @@ export function TaskForm({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="submit" disabled={loading}>
-        {loading ? "Guardando…" : taskId ? "Guardar cambios" : "Crear tarea"}
+      <Button type="submit" loading={loading || navigating}>
+        {loading || navigating ? "Guardando…" : taskId ? "Guardar cambios" : "Crear tarea"}
       </Button>
     </form>
   );

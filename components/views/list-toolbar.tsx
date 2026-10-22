@@ -7,6 +7,10 @@ import { useState, useTransition, type ReactNode } from "react";
 import { Button, Input, Select, Spinner } from "@/components/ui/primitives";
 import { Popover } from "@/components/ui/popover";
 import { BookmarkIcon, ColumnsIcon, DownloadIcon, FilterIcon, KanbanIcon, ListIcon, SearchIcon, XIcon } from "@/components/ui/icons";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { PendingBar } from "@/components/ui/pending-bar";
+import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 import { normalizeViewParams, type ViewPreset } from "@/lib/views/presets";
 import type { ColumnDef } from "@/lib/views/columns";
@@ -121,7 +125,8 @@ export function ListToolbar({
   exportQs.delete("view");
 
   return (
-    <div className="mb-4 space-y-3">
+    <div className="relative mb-4 space-y-3" aria-busy={pending || undefined}>
+      <PendingBar active={pending} />
       <div className="flex flex-wrap items-center gap-2">
         <form
           role="search"
@@ -183,18 +188,14 @@ export function ListToolbar({
                 onChange={(cols) => setParams({ cols: cols.join(",") === defaultColumns.join(",") ? undefined : cols.join(",") })}
               />
             </Popover>
-            <Select
-              aria-label="Ordenar"
+            <SelectMenu
+              ariaLabel="Ordenar"
               value={sp.get("sort") ?? ""}
-              onChange={(e) => setParams({ sort: e.target.value || undefined })}
+              onChange={(v) => setParams({ sort: v || undefined })}
               className="w-auto min-w-40"
-            >
-              {sortOptions.map((o, i) => (
-                <option key={o.value} value={i === 0 ? "" : o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
+              align="right"
+              options={sortOptions.map((o, i) => ({ value: i === 0 ? "" : o.value, label: o.label }))}
+            />
           </>
         )}
 
@@ -613,6 +614,8 @@ function ViewsMenu({
   onSaved: (id: string) => void;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const pathname = usePathname();
   const [name, setName] = useState("");
   const [shared, setShared] = useState(false);
@@ -632,7 +635,10 @@ function ViewsMenu({
         setError(await readApiError(res));
         return null;
       }
-      return res.json();
+      return res.json().catch(() => ({}));
+    } catch {
+      setError("Sin conexión. El cambio no se guardó.");
+      return null;
     } finally {
       setBusy(false);
     }
@@ -660,8 +666,11 @@ function ViewsMenu({
             <ViewGroup title="Mis vistas">
               {mine.map((v) => (
                 <ViewRow key={v.id} view={v} href={href(v.params, v.id)} active={activeView?.id === v.id} onClick={close} onDelete={async () => {
-                  if (!window.confirm(`¿Borrar la vista “${v.name}”?`)) return;
-                  if (await request(`/api/views/${v.id}`, { method: "DELETE" })) router.refresh();
+                  if (!(await confirm({ title: `¿Borrar la vista “${v.name}”?`, tone: "danger" }))) return;
+                  if (await request(`/api/views/${v.id}`, { method: "DELETE" })) {
+                    toast.success("Vista borrada");
+                    router.refresh();
+                  }
                 }} />
               ))}
             </ViewGroup>
@@ -671,8 +680,11 @@ function ViewsMenu({
             <ViewGroup title="Compartidas con el equipo">
               {sharedViews.map((v) => (
                 <ViewRow key={v.id} view={v} href={href(v.params, v.id)} active={activeView?.id === v.id} onClick={close} onDelete={async () => {
-                  if (!window.confirm(`¿Borrar la vista compartida “${v.name}”? Deja de estar disponible para todo el equipo.`)) return;
-                  if (await request(`/api/views/${v.id}`, { method: "DELETE" })) router.refresh();
+                  if (!(await confirm({ title: `¿Borrar la vista compartida “${v.name}”?`, description: "Deja de estar disponible para todo el equipo.", tone: "danger" }))) return;
+                  if (await request(`/api/views/${v.id}`, { method: "DELETE" })) {
+                    toast.success("Vista borrada");
+                    router.refresh();
+                  }
                 }} />
               ))}
             </ViewGroup>

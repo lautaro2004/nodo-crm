@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/primitives";
 import { ImageIcon } from "@/components/ui/icons";
 import { readApiError } from "@/lib/error-messages";
+import { apiFetch } from "@/lib/api-fetch";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 export const MAX_IMAGE_MB = 5;
@@ -49,7 +50,7 @@ export function ImageField({
     setBusy(true);
     const body = new FormData();
     body.append("file", file);
-    const res = await fetch(uploadUrl, { method: "POST", body });
+    const res = await apiFetch(uploadUrl, { method: "POST", body });
     setBusy(false);
     if (!res.ok) {
       URL.revokeObjectURL(local);
@@ -62,7 +63,7 @@ export function ImageField({
     setError(null);
     if (uploadUrl) {
       setBusy(true);
-      const res = await fetch(uploadUrl, { method: "DELETE" });
+      const res = await apiFetch(uploadUrl, { method: "DELETE" });
       setBusy(false);
       if (!res.ok) return setError(await readApiError(res));
     }

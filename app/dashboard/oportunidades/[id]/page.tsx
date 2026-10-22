@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
+import { getModuleLabel } from "@/modules/workspace/module-config";
+import { DeleteRecordButton } from "@/components/records/delete-record-button";
+import { RECORD_NOUNS, nounFromLabels } from "@/lib/record-nouns";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
@@ -48,6 +51,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
+  const moduleLabel = hasRole(ctx.role, "admin") ? await getModuleLabel(ctx.businessId, "opportunity") : null;
+
   return (
     <div>
       <PageHeader
@@ -60,6 +65,14 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             <Link href={`/dashboard/oportunidades/${id}/editar`}>
               <Button variant="secondary">Editar</Button>
             </Link>
+            {hasRole(ctx.role, "admin") && (
+              <DeleteRecordButton
+                entityType="opportunity"
+                id={id}
+                noun={moduleLabel ? nounFromLabels(moduleLabel.labelSingular, moduleLabel.labelPlural) : RECORD_NOUNS.opportunity}
+                redirectTo="/dashboard/oportunidades"
+              />
+            )}
           </div>
         }
       />

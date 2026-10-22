@@ -62,6 +62,7 @@ export function RecordForm({
   const [saved, setSaved] = useState(false);
 
   async function submit() {
+    if (saving) return;
     setSaving(true);
     setErrors({});
     setFormError(null);
@@ -78,7 +79,12 @@ export function RecordForm({
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    });
+    }).catch(() => null);
+    if (!res) {
+      setSaving(false);
+      setFormError("Sin conexión. Los cambios no se guardaron.");
+      return;
+    }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       setSaving(false);
@@ -95,8 +101,8 @@ export function RecordForm({
         if (!file) continue;
         const form = new FormData();
         form.append("file", file);
-        const up = await fetch(`/api/modules/${moduleId}/records/${body.id}/images/${defId}`, { method: "POST", body: form });
-        if (!up.ok) failed.push(fields.find((f) => f.id === defId)?.label ?? "Imagen");
+        const up = await fetch(`/api/modules/${moduleId}/records/${body.id}/images/${defId}`, { method: "POST", body: form }).catch(() => null);
+        if (!up?.ok) failed.push(fields.find((f) => f.id === defId)?.label ?? "Imagen");
       }
       router.push(`${basePath}/${body.id}${failed.length ? "?imageError=1" : ""}`);
       router.refresh();
@@ -178,7 +184,7 @@ export function RecordForm({
 
       {formError && <p className="text-sm text-red-600">{formError}</p>}
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={saving || !title.trim()}>
+        <Button type="submit" loading={saving} disabled={!title.trim()}>
           {saving ? "Guardando…" : editing ? "Guardar cambios" : `Crear ${singular}`}
         </Button>
         {!editing && (
@@ -186,7 +192,7 @@ export function RecordForm({
             Cancelar
           </Button>
         )}
-        {saved && <span className="text-sm text-emerald-700">Guardado.</span>}
+        {saved && <span role="status" className="animate-fade-in text-sm text-emerald-700">Guardado</span>}
       </div>
     </form>
   );

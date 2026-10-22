@@ -14,6 +14,7 @@ import { RecordForm } from "@/components/custom-modules/record-form";
 import { RecordActions } from "@/components/custom-modules/record-actions";
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
+import { nounFromLabels } from "@/lib/record-nouns";
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -50,6 +51,7 @@ export default async function RecordDetailPage({ params, searchParams }: { param
             archived={!!record.archivedAt}
             canDelete={hasRole(ctx.role, "admin")}
             disabled={!editable}
+            noun={nounFromLabels(mod.labelSingular, mod.labelPlural)}
           />
         }
       />

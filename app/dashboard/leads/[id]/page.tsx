@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
+import { DeleteRecordButton } from "@/components/records/delete-record-button";
+import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
@@ -87,6 +89,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <Link href={`/dashboard/leads/${id}/editar`}>
               <Button variant="secondary">Editar</Button>
             </Link>
+            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="lead" id={id} noun={RECORD_NOUNS.lead} redirectTo="/dashboard/leads" />}
           </div>
         }
       />

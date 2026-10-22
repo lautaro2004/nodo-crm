@@ -25,23 +25,44 @@ function cx(...classes: (string | false | undefined)[]) {
 export function Button({
   variant = "primary",
   size = "md",
+  loading = false,
   className,
+  disabled,
+  children,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md";
+  /**
+   * Operación en curso: muestra un spinner compacto, bloquea nuevos clicks
+   * (evita envíos duplicados) y anuncia `aria-busy`. El texto lo decide el
+   * caller («Guardar» → «Guardando…»).
+   */
+  loading?: boolean;
 }) {
+  // Respuesta inmediata al presionar: leve escala (transform → compositor,
+  // sin layout). Se anula con prefers-reduced-motion por la regla global.
   const base =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 focus-visible:ring-brand-500";
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-medium select-none transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-150 ease-[var(--ease-out)] active:scale-[0.98] disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 focus-visible:ring-brand-500";
   const sizes = { sm: "h-8 px-3 text-xs", md: "h-10 px-4 text-sm" };
   const variants = {
     // Texto grafito sobre naranja: el blanco no alcanza contraste AA (2.9:1).
     primary: "bg-brand-500 text-slate-900 shadow-[0_1px_0_rgb(255_255_255/0.35)_inset,0_1px_2px_rgb(32_33_36/0.12)] hover:bg-brand-400 active:bg-brand-600",
-    secondary: "bg-white text-slate-800 border border-slate-200 shadow-[var(--shadow-card)] hover:border-slate-300 hover:bg-slate-50",
-    ghost: "text-slate-600 hover:bg-slate-900/[0.05] hover:text-slate-900",
-    danger: "bg-red-600 text-white shadow-sm hover:bg-red-500",
+    secondary: "bg-white text-slate-800 border border-slate-200 shadow-[var(--shadow-card)] hover:border-slate-300 hover:bg-slate-50 active:bg-slate-100",
+    ghost: "text-slate-600 hover:bg-slate-900/[0.05] hover:text-slate-900 active:bg-slate-900/[0.08]",
+    danger: "bg-red-600 text-white shadow-sm hover:bg-red-500 active:bg-red-700",
   };
-  return <button className={cx(base, sizes[size], variants[variant], className)} {...props} />;
+  return (
+    <button
+      className={cx(base, sizes[size], variants[variant], loading ? "opacity-80" : "disabled:opacity-50", className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {loading && <Spinner className={size === "sm" ? "h-3.5 w-3.5" : undefined} />}
+      {children}
+    </button>
+  );
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
@@ -83,7 +104,7 @@ export function Label(props: LabelHTMLAttributes<HTMLLabelElement>) {
 }
 
 const FIELD_BASE =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-[var(--shadow-card)] transition-[border-color,box-shadow] hover:border-slate-300 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15 disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-[var(--shadow-card)] transition-[border-color,box-shadow] hover:border-slate-300 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 aria-invalid:border-red-400 aria-invalid:focus:ring-red-500/15";
 
 // Si el caller fija un ancho (`w-…`), se omite el `w-full` base: dos
 // utilidades de ancho en el mismo elemento dependen del orden del CSS.
@@ -91,7 +112,7 @@ function fieldBase(className?: string) {
   return className && /(^|\s)w-/.test(className) ? FIELD_BASE.replace("w-full ", "") : FIELD_BASE;
 }
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
   return <input className={cx(fieldBase(className), className)} {...props} />;
 }
 
@@ -190,8 +211,8 @@ export function ViewToggle({
 
 // Placeholder de carga simple (Next.js loading.tsx) — un bloque gris con
 // pulse, sin depender de ninguna librería de skeletons.
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-pulse rounded-lg bg-slate-200/60", className)} />;
+export function Skeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div aria-hidden className={cx("animate-pulse rounded-lg bg-slate-200/60", className)} style={style} />;
 }
 
 export function EmptyState({
@@ -274,7 +295,7 @@ export function Td({ className, ...props }: React.TdHTMLAttributes<HTMLTableCell
 
 export function Spinner({ className }: { className?: string }) {
   return (
-    <svg className={cx("h-4 w-4 animate-spin text-current", className)} viewBox="0 0 24 24" fill="none">
+    <svg aria-hidden="true" className={cx("h-4 w-4 shrink-0 animate-spin text-current", className)} viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>
@@ -295,7 +316,7 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 // Banner de error inline (guardados fallidos, validaciones del servidor).
 export function InlineAlert({ children, onDismiss }: { children: ReactNode; onDismiss?: () => void }) {
   return (
-    <div role="alert" className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+    <div role="alert" className="animate-fade-in mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
       <span>{children}</span>
       {onDismiss && (
         <button type="button" onClick={onDismiss} className="shrink-0 text-red-600 hover:text-red-800" aria-label="Cerrar aviso">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge, Button } from "@/components/ui/primitives";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Feature = "gmail" | "calendar";
 
@@ -48,7 +49,7 @@ export function GoogleIntegrations() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/integrations/google/status");
+    const res = await apiFetch("/api/integrations/google/status");
     if (res.ok) setStatus(await res.json());
   }, []);
 
@@ -67,7 +68,7 @@ export function GoogleIntegrations() {
   async function connect(feature: Feature) {
     setBusy(feature);
     setNotice(null);
-    const res = await fetch("/api/integrations/google/connect", {
+    const res = await apiFetch("/api/integrations/google/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ feature, returnTo: "/dashboard/configuracion/integraciones" }),
@@ -85,7 +86,7 @@ export function GoogleIntegrations() {
   async function disconnect() {
     setBusy("disconnect");
     setNotice(null);
-    const res = await fetch("/api/integrations/google/disconnect", { method: "POST" });
+    const res = await apiFetch("/api/integrations/google/disconnect", { method: "POST" });
     setBusy(null);
     setNotice(
       res.ok

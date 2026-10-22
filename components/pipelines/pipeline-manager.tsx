@@ -7,6 +7,8 @@ import { Badge, Button, Card, InlineAlert, Input } from "@/components/ui/primiti
 import { StatusBadge } from "@/components/status/status-badge";
 import { ColorSelect } from "@/components/status/color-picker";
 import { readApiError } from "@/lib/error-messages";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { stageColorKey } from "@/lib/status-colors";
 
 interface Stage {
@@ -34,27 +36,43 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
   const [newPipelineName, setNewPipelineName] = useState("");
   const [newStageLabel, setNewStageLabel] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // Clave de la operación en curso (ej. "create", "add:<pipelineId>",
+  // "del:<stageId>"): el feedback va en ese control y no se duplican envíos.
+  const [busy, setBusy] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
+
+  async function mutate(key: string, url: string, init: RequestInit, failMessage?: string): Promise<boolean> {
+    if (busy) return false;
+    setBusy(key);
+    setError(null);
+    try {
+      const res = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+      if (!res.ok) {
+        setError(failMessage ?? (await readApiError(res)));
+        return false;
+      }
+      router.refresh();
+      return true;
+    } catch {
+      setError("Sin conexión. El cambio no se guardó.");
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function setStageColor(pipelineId: string, stageId: string, color: string) {
-    setError(null);
-    const res = await fetch(`/api/pipelines/${pipelineId}/stages/${stageId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ color }),
-    });
-    if (!res.ok) return setError(await readApiError(res));
-    router.refresh();
+    await mutate(`color:${stageId}`, `/api/pipelines/${pipelineId}/stages/${stageId}`, { method: "PATCH", body: JSON.stringify({ color }) });
   }
 
   async function createPipeline() {
-    if (!newPipelineName.trim()) return;
-    await fetch("/api/pipelines", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newPipelineName }),
-    });
-    setNewPipelineName("");
-    router.refresh();
+    const name = newPipelineName.trim();
+    if (!name) return;
+    if (await mutate("create", "/api/pipelines", { method: "POST", body: JSON.stringify({ name }) })) {
+      setNewPipelineName("");
+      toast.success(`Pipeline “${name}” creado`);
+    }
   }
 
   async function addStage(pipelineId: string) {
@@ -63,27 +81,25 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
     const key = label
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
-    await fetch(`/api/pipelines/${pipelineId}/stages`, {
+    const ok = await mutate(`add:${pipelineId}`, `/api/pipelines/${pipelineId}/stages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: key || `etapa_${Date.now()}`, label }),
     });
-    setNewStageLabel({ ...newStageLabel, [pipelineId]: "" });
-    router.refresh();
+    if (ok) setNewStageLabel((prev) => ({ ...prev, [pipelineId]: "" }));
   }
 
   async function deleteStage(pipelineId: string, stage: Stage) {
-    if (!window.confirm(`¿Borrar la etapa “${stage.label}”?`)) return;
-    setError(null);
-    const res = await fetch(`/api/pipelines/${pipelineId}/stages/${stage.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      setError("No se puede borrar: hay oportunidades en esta etapa. Movelas a otra etapa primero.");
-      return;
-    }
-    router.refresh();
+    if (!(await confirm({ title: `¿Borrar la etapa “${stage.label}”?`, tone: "danger" }))) return;
+    const ok = await mutate(
+      `del:${stage.id}`,
+      `/api/pipelines/${pipelineId}/stages/${stage.id}`,
+      { method: "DELETE" },
+      "No se puede borrar: hay oportunidades en esta etapa. Movelas a otra etapa primero."
+    );
+    if (ok) toast.success("Etapa borrada");
   }
 
   async function moveStage(pipeline: Pipeline, index: number, direction: -1 | 1) {
@@ -91,12 +107,7 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
     if (target < 0 || target >= pipeline.stages.length) return;
     const ids = pipeline.stages.map((s) => s.id);
     [ids[index], ids[target]] = [ids[target], ids[index]];
-    await fetch(`/api/pipelines/${pipeline.id}/stages`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stageIds: ids }),
-    });
-    router.refresh();
+    await mutate(`move:${pipeline.id}`, `/api/pipelines/${pipeline.id}/stages`, { method: "PATCH", body: JSON.stringify({ stageIds: ids }) });
   }
 
   return (
@@ -110,8 +121,8 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
             onChange={(e) => setNewPipelineName(e.target.value)}
             placeholder="Ej: Ventas, Renovaciones…"
           />
-          <Button type="button" onClick={createPipeline}>
-            Crear
+          <Button type="button" onClick={createPipeline} loading={busy === "create"} disabled={!newPipelineName.trim()}>
+            {busy === "create" ? "Creando…" : "Crear"}
           </Button>
         </div>
       </Card>
@@ -136,25 +147,28 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
                   <button
                     type="button"
                     onClick={() => moveStage(pipeline, index, -1)}
+                    disabled={!!busy || index === 0}
                     aria-label={`Subir ${stage.label}`}
-                    className="rounded px-1.5 text-slate-400 hover:bg-slate-100"
+                    className="rounded px-1.5 text-slate-400 transition-colors hover:bg-slate-100 disabled:opacity-30"
                   >
                     ↑
                   </button>
                   <button
                     type="button"
                     onClick={() => moveStage(pipeline, index, 1)}
+                    disabled={!!busy || index === pipeline.stages.length - 1}
                     aria-label={`Bajar ${stage.label}`}
-                    className="rounded px-1.5 text-slate-400 hover:bg-slate-100"
+                    className="rounded px-1.5 text-slate-400 transition-colors hover:bg-slate-100 disabled:opacity-30"
                   >
                     ↓
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteStage(pipeline.id, stage)}
-                    className="rounded px-1.5 text-red-400 hover:bg-red-50"
+                    disabled={!!busy}
+                    className="rounded px-1.5 text-red-400 transition-colors hover:bg-red-50 disabled:opacity-50"
                   >
-                    Borrar
+                    {busy === `del:${stage.id}` ? "Borrando…" : "Borrar"}
                   </button>
                 </div>
               </li>
@@ -167,7 +181,7 @@ export function PipelineManager({ pipelines }: { pipelines: Pipeline[] }) {
               onChange={(e) => setNewStageLabel({ ...newStageLabel, [pipeline.id]: e.target.value })}
               placeholder="Nueva etapa…"
             />
-            <Button type="button" variant="secondary" onClick={() => addStage(pipeline.id)}>
+            <Button type="button" variant="secondary" onClick={() => addStage(pipeline.id)} loading={busy === `add:${pipeline.id}`} disabled={!newStageLabel[pipeline.id]?.trim()}>
               Agregar etapa
             </Button>
           </div>

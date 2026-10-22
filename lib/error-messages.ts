@@ -55,6 +55,13 @@ const MESSAGES: Record<string, string> = {
   no_business: "No encontramos tu espacio de trabajo. Volvé a iniciar sesión.",
   no_workspace: "No encontramos tu espacio de trabajo. Volvé a iniciar sesión.",
   invalid_input: "Revisá los datos ingresados.",
+  integration_not_found: "Esa integración ya no existe.",
+  encryption_not_configured: "Falta configurar la clave de cifrado de integraciones en el servidor (INTEGRATIONS_ENCRYPTION_KEY).",
+  too_many_integrations: "Llegaste al máximo de conexiones de Google Sheets.",
+  integration_not_connected: "La integración no está conectada.",
+  mapping_required: "Mapeá al menos una columna antes de activar la integración.",
+  event_not_retryable: "Ese evento ya no se puede reintentar.",
+  network_error: "Sin conexión con el servidor. Revisá tu conexión y probá de nuevo.",
 };
 
 export function errorMessage(code: string | undefined | null): string {

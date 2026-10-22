@@ -1,21 +1,46 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { Card, PageHeader } from "@/components/ui/primitives";
+import { hasRole } from "@/lib/permissions";
+import { Card, PageHeader, SectionTitle } from "@/components/ui/primitives";
 import { GoogleIntegrations } from "@/components/configuracion/google-integrations";
+import { LeadIntegrations } from "@/components/integrations/lead-integrations";
+import { integrationsEnvironment, listIntegrations } from "@/modules/integrations/service";
+import { leadCustomFields } from "@/modules/integrations/sheets";
+
+export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
+  const canManage = hasRole(ctx.role, "admin");
+  const [integrations, customFields] = canManage ? await Promise.all([listIntegrations(ctx.businessId), leadCustomFields(ctx.businessId)]) : [[], []];
 
   return (
     <div>
       <PageHeader
         title="Integraciones"
-        description="Conectá tu cuenta de Google una sola vez; cada función pide solo el permiso que necesita."
+        description="Conectá las fuentes de donde llegan tus leads y tu cuenta de Google."
         backHref="/dashboard/configuracion"
       />
-      <Card className="p-4">
-        <GoogleIntegrations />
-      </Card>
+      <div className="space-y-8">
+        <section>
+          <SectionTitle>Captura automática de leads</SectionTitle>
+          {canManage ? (
+            <LeadIntegrations
+              initial={integrations}
+              environment={integrationsEnvironment()}
+              customFields={customFields.map((f) => ({ id: f.id, label: f.label }))}
+            />
+          ) : (
+            <Card className="p-4 text-sm text-slate-600">Solo los dueños o administradores del espacio pueden configurar estas integraciones.</Card>
+          )}
+        </section>
+        <section>
+          <SectionTitle>Google (Gmail y Calendar)</SectionTitle>
+          <Card className="p-4">
+            <GoogleIntegrations />
+          </Card>
+        </section>
+      </div>
     </div>
   );
 }

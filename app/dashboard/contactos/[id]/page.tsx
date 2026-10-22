@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
+import { DeleteRecordButton } from "@/components/records/delete-record-button";
+import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
@@ -54,6 +56,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             <Link href={`/dashboard/contactos/${id}/editar`}>
               <Button variant="secondary">Editar</Button>
             </Link>
+            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="contact" id={id} noun={RECORD_NOUNS.contact} redirectTo="/dashboard/contactos" />}
           </div>
         }
       />

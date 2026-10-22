@@ -28,8 +28,14 @@ export interface CreateLeadInput {
   status?: string;
   statusReason?: string | null;
   source?: string;
+  /**
+   * ID del registro en la fuente externa (ej. remitente de Instagram, fila
+   * de Sheets). Con `source`, único por negocio: la base impide duplicados.
+   * Solo lo usan integraciones del servidor, nunca el body de la API.
+   */
+  sourceRef?: string | null;
 }
-export type UpdateLeadInput = Partial<CreateLeadInput>;
+export type UpdateLeadInput = Partial<Omit<CreateLeadInput, "sourceRef">>;
 
 async function assertCompanyBelongs(businessId: string, companyId: string | null | undefined) {
   if (!companyId) return;
@@ -55,6 +61,7 @@ export async function createLead(businessId: string, data: CreateLeadInput) {
       status: data.status ?? "new",
       statusReason,
       source: data.source ?? "manual",
+      sourceRef: data.sourceRef ?? null,
     },
   });
   await createActivity(businessId, { relatedType: "lead", relatedId: lead.id, type: "note", body: "Lead creado" });

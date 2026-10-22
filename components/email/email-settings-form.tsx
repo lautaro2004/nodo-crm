@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Badge, Button, Input, Label, Select } from "@/components/ui/primitives";
+import { apiFetch } from "@/lib/api-fetch";
 
 const STATUS_LABEL: Record<string, { label: string; variant: "neutral" | "brand" | "success" | "warning" | "danger" }> = {
   not_configured: { label: "Sin configurar", variant: "warning" },
@@ -29,7 +30,7 @@ export function EmailSettingsForm({
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const res = await fetch("/api/email/settings", {
+    const res = await apiFetch("/api/email/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),

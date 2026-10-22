@@ -251,6 +251,7 @@ model Workspace {
   customRecords           CustomRecord[]
   recordLinks             RecordLink[]
   opportunityItems        OpportunityItem[]
+  leadIntegrations        LeadIntegration[]
 
   @@schema("crm")
 }
@@ -976,6 +977,12 @@ model Inquiry {
   qualificationStatus String?
   createdAt        DateTime
   updatedAt        DateTime
+  // Columnas agregadas por Nexo (migración 20261021120000_inquiry_assistant_leads):
+  // interesados que registra el asistente de WhatsApp. Solo lectura.
+  channel          String
+  need             String?
+  summary          String?
+  nodoLeadId       String?
 
   @@schema("nexo")
 }
@@ -1048,5 +1055,75 @@ model AutomationRun {
 
   @@unique([ruleId, dedupeKey])
   @@index([businessId, createdAt])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Integraciones de captura de leads (Google Sheets, Instagram). Ver
+// docs/integraciones-captura-leads.md y modules/integrations/.
+//
+// - LeadIntegration: una conexión de UN negocio con UNA fuente. El secreto
+//   (firma HMAC de Sheets / token de Instagram) se guarda cifrado
+//   (AES-256-GCM, lib/crypto/secret-box.ts), nunca en texto plano.
+//   (type, externalAccountId) único: una cuenta de Instagram solo puede
+//   estar vinculada a un negocio (los NULL de Sheets no chocan).
+// - IngestionEvent: cada fila/mensaje recibido. (integrationId,
+//   externalId) único = idempotencia: un reintento nunca procesa dos veces
+//   lo mismo. `data` guarda solo los datos ya mapeados que hacen falta para
+//   reintentar (nunca el payload crudo ni tokens).
+// ═══════════════════════════════════════════════════════════════════════
+model LeadIntegration {
+  id                String    @id @default(cuid())
+  businessId        String
+  // "google_sheets" | "instagram"
+  type              String
+  name              String
+  // "pending" | "active" | "paused" | "error" | "disconnected"
+  status            String    @default("pending")
+  externalAccountId String?
+  externalUsername  String?
+  config            Json      @default("{}")
+  secretEnc         String?
+  tokenExpiresAt    DateTime?
+  scopes            String[]  @default([])
+  connectedById     String?
+  lastEventAt       DateTime?
+  lastSuccessAt     DateTime?
+  lastErrorAt       DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace        @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  events    IngestionEvent[]
+
+  @@unique([type, externalAccountId])
+  @@index([businessId, type])
+  @@schema("crm")
+}
+
+model IngestionEvent {
+  id            String    @id @default(cuid())
+  businessId    String
+  integrationId String
+  externalId    String
+  // "row" | "message" | "echo"
+  kind          String
+  // "received" | "processed" | "skipped" | "failed"
+  status        String    @default("received")
+  // "created" | "updated" | "matched_contact" | "activity" | null
+  outcome       String?
+  data          Json?
+  error         String?
+  leadId        String?
+  attempts      Int       @default(1)
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+
+  integration LeadIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalId])
+  @@index([businessId, receivedAt])
+  @@index([integrationId, status, receivedAt])
   @@schema("crm")
 }

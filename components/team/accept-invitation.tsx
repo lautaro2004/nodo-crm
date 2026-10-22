@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, Spinner } from "@/components/ui/primitives";
 import { signOut } from "@/lib/auth/auth-client";
 import { readApiError } from "@/lib/error-messages";
+import { apiFetch } from "@/lib/api-fetch";
 
 export function AcceptInvitation({ token, mode, email, nodoAccess = true }: { token: string; mode: "accept" | "switch"; email: string; nodoAccess?: boolean }) {
   const router = useRouter();
@@ -16,7 +17,7 @@ export function AcceptInvitation({ token, mode, email, nodoAccess = true }: { to
   async function accept() {
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/invitations/accept", {
+    const res = await apiFetch("/api/invitations/accept", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),

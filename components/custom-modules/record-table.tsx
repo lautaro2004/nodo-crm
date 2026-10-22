@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Card, Table, Th, Td } from "@/components/ui/primitives";
+import { SelectAllHeader, SelectCell, SelectableRow } from "@/components/records/selection";
 import { CustomCell } from "@/components/custom-fields/custom-cell";
 import { RECORD_COLUMNS } from "@/lib/views/columns";
 import type { CustomCells } from "@/modules/custom-fields/columns";
@@ -59,6 +60,7 @@ export function RecordTable({
       <Table>
         <thead>
           <tr className="border-b border-slate-100">
+            <SelectAllHeader />
             {columns.map((c) => (
               <Th key={c} className={numeric(c) ? "text-right" : undefined}>
                 {label(c)}
@@ -68,11 +70,12 @@ export function RecordTable({
         </thead>
         <tbody>
           {records.map((r) => (
-            <tr key={r.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+            <SelectableRow key={r.id} id={r.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+              <SelectCell id={r.id} label={r.title || "registro"} />
               {columns.map((c) => (
                 <Td key={c}>{cell[c] ? cell[c](r) : <CustomCell custom={custom} columnKey={c} entityId={r.id} />}</Td>
               ))}
-            </tr>
+            </SelectableRow>
           ))}
         </tbody>
       </Table>

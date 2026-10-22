@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/modal";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Stage {
   id: string;
@@ -93,6 +94,7 @@ export function ConvertLeadAction({
   }
 
   async function handleConfirm() {
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -110,7 +112,7 @@ export function ConvertLeadAction({
         : undefined,
     };
 
-    const res = await fetch(`/api/leads/${leadId}/convert`, {
+    const res = await apiFetch(`/api/leads/${leadId}/convert`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -139,7 +141,7 @@ export function ConvertLeadAction({
     <>
       <Button onClick={openWizard}>Convertir Lead</Button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Convertir Lead">
+      <Modal open={open} onClose={() => setOpen(false)} title="Convertir Lead" busy={loading}>
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         {step === 1 && (
@@ -318,7 +320,7 @@ export function ConvertLeadAction({
               <Button variant="secondary" onClick={() => setStep(2)} disabled={loading}>
                 Atrás
               </Button>
-              <Button onClick={handleConfirm} disabled={loading}>
+              <Button onClick={handleConfirm} loading={loading}>
                 {loading ? "Convirtiendo…" : "Convertir"}
               </Button>
             </div>

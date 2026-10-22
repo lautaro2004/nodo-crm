@@ -30,7 +30,12 @@ export type ActivityType =
   | "event_rescheduled"
   | "event_reassigned"
   | "event_completed"
-  | "event_cancelled";
+  | "event_cancelled"
+  // Integraciones de captura (modules/integrations): ingresos automáticos,
+  // no cuentan como seguimiento (no tienen ownerId).
+  | "instagram_message"
+  | "instagram_reply"
+  | "sheets_submission";
 
 export interface CreateActivityInput {
   relatedType: RelatedType;

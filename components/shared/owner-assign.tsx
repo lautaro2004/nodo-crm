@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { Select } from "@/components/ui/primitives";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { Spinner } from "@/components/ui/primitives";
 import { useSession } from "@/lib/auth/auth-client";
 import { readApiError } from "@/lib/error-messages";
 
@@ -58,17 +59,24 @@ export function OwnerAssign({
   return (
     <div>
       <div className="flex items-center gap-2">
-        <Select aria-label="Responsable" value={value} disabled={saving} onChange={(e) => save(e.target.value)} className="w-auto min-w-48">
-          <option value="">Sin asignar</option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name || m.email}
-              {m.userId === me ? " (vos)" : ""}
-            </option>
-          ))}
-        </Select>
+        <SelectMenu
+          ariaLabel="Responsable"
+          value={value}
+          loading={saving}
+          onChange={save}
+          className="w-auto min-w-48"
+          options={[
+            { value: "", label: "Sin asignar" },
+            ...members.map((m) => ({
+              value: m.userId,
+              label: `${m.name || m.email}${m.userId === me ? " (vos)" : ""}`,
+              hint: m.name ? m.email : undefined,
+            })),
+          ]}
+        />
         {me && value !== me && members.some((m) => m.userId === me) && (
-          <button type="button" disabled={saving} onClick={() => save(me)} className="text-xs font-medium text-brand-700 hover:underline">
+          <button type="button" disabled={saving} onClick={() => save(me)} className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline disabled:opacity-50">
+            {saving && <Spinner className="h-3 w-3" />}
             Asignarme
           </button>
         )}
