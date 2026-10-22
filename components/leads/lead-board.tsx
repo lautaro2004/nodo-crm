@@ -5,6 +5,7 @@ import Link from "next/link";
 import { KanbanBoard, patchMove, type BoardColumn } from "@/components/board/kanban-board";
 import { LEAD_SOURCE_LABELS } from "@/lib/labels";
 import { useReasonPrompt } from "@/components/status/reason-prompt";
+import { RecordCheckbox } from "@/components/records/selection";
 
 interface StatusOption {
   key: string;
@@ -76,12 +77,15 @@ export function LeadBoard({ statuses, leads }: { statuses: StatusOption[]; leads
         renderCard={(l) => (
           <div>
             <div className="flex items-start justify-between gap-2">
-              <Link
-                href={`/dashboard/leads/${l.id}`}
-                className="min-w-0 text-sm font-medium leading-snug text-slate-900 hover:text-brand-700"
-              >
-                {l.name}
-              </Link>
+              <span className="flex min-w-0 items-start gap-2">
+                <RecordCheckbox id={l.id} label={l.name} />
+                <Link
+                  href={`/dashboard/leads/${l.id}`}
+                  className="min-w-0 text-sm font-medium leading-snug text-slate-900 hover:text-brand-700"
+                >
+                  {l.name}
+                </Link>
+              </span>
               {l.source?.startsWith("nexo_") && (
                 <span className="shrink-0 rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-800 ring-1 ring-inset ring-brand-200">
                   Nexo

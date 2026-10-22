@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/primitives";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
+import { DeleteRecordButton } from "@/components/records/delete-record-button";
+import type { RecordNoun } from "@/components/records/use-delete-records";
 
 export function RecordActions({
   moduleId,
@@ -15,6 +16,7 @@ export function RecordActions({
   archived,
   canDelete,
   disabled,
+  noun = { one: "registro", many: "registros" },
 }: {
   moduleId: string;
   recordId: string;
@@ -22,11 +24,11 @@ export function RecordActions({
   archived: boolean;
   canDelete: boolean;
   disabled?: boolean;
+  noun?: RecordNoun;
 }) {
   const router = useRouter();
-  const confirm = useConfirm();
   const toast = useToast();
-  const [busy, setBusy] = useState<"archive" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"archive" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const url = `/api/modules/${moduleId}/records/${recordId}`;
 
@@ -45,30 +47,6 @@ export function RecordActions({
     }
   }
 
-  async function remove() {
-    const ok = await confirm({
-      title: "¿Borrar este registro definitivamente?",
-      description: "Se quitan también sus relaciones e imágenes. No se puede deshacer.",
-      tone: "danger",
-    });
-    if (!ok) return;
-    setBusy("delete");
-    setError(null);
-    try {
-      const res = await fetch(url, { method: "DELETE" });
-      if (!res.ok) {
-        setBusy(null);
-        return setError(await readApiError(res));
-      }
-      toast.success("Registro borrado");
-      router.push(basePath);
-      router.refresh();
-    } catch {
-      setBusy(null);
-      setError("Sin conexión. El registro no se borró.");
-    }
-  }
-
   return (
     <div className="flex flex-wrap items-center gap-2">
       {error && <span className="text-sm text-red-600">{error}</span>}
@@ -77,11 +55,7 @@ export function RecordActions({
           {archived ? "Restaurar" : "Archivar"}
         </Button>
       )}
-      {canDelete && (
-        <Button variant="ghost" className="text-red-600 hover:text-red-700" disabled={!!busy} loading={busy === "delete"} onClick={remove}>
-          {busy === "delete" ? "Borrando…" : "Borrar"}
-        </Button>
-      )}
+      {canDelete && <DeleteRecordButton entityType={`cm:${moduleId}`} id={recordId} noun={noun} redirectTo={basePath} />}
     </div>
   );
 }

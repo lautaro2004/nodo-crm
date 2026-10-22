@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { hasRole } from "@/lib/permissions";
+import { nounFromLabels } from "@/lib/record-nouns";
+import { RecordSelection, SelectAllBar } from "@/components/records/selection";
 import { getModuleLabel } from "@/modules/workspace/module-config";
 import { listPipelines } from "@/modules/pipelines/service";
 import { listOpportunities } from "@/modules/opportunities/service";
@@ -165,10 +167,22 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
                 }
               />
             )
-          ) : display === "kanban" ? (
-            <OpportunityBoard stalledDays={STALLED_DAYS} stages={pipeline.stages} opportunities={rows} />
           ) : (
-            <OpportunityTable opportunities={rows} columns={columns} custom={custom} />
+            <RecordSelection
+              entityType="opportunity"
+              ids={rows.map((o) => o.id)}
+              noun={nounFromLabels(moduleLabel.labelSingular, moduleLabel.labelPlural)}
+              canDelete={hasRole(ctx.role, "admin")}
+            >
+              {display === "kanban" ? (
+                <>
+                  <SelectAllBar />
+                  <OpportunityBoard stalledDays={STALLED_DAYS} stages={pipeline.stages} opportunities={rows} />
+                </>
+              ) : (
+                <OpportunityTable opportunities={rows} columns={columns} custom={custom} />
+              )}
+            </RecordSelection>
           )}
         </>
       )}

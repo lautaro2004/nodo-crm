@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { KanbanBoard, patchMove, type BoardColumn } from "@/components/board/kanban-board";
 import { stageColorKey } from "@/lib/status-colors";
+import { RecordCheckbox } from "@/components/records/selection";
 
 interface Stage {
   id: string;
@@ -65,9 +66,12 @@ export function OpportunityBoard({
         const idle = o.status === "open" ? daysSince(o.updatedAt) : 0;
         return (
           <div>
-            <Link href={`/dashboard/oportunidades/${o.id}`} className="block text-sm font-medium leading-snug text-slate-900 hover:text-brand-700">
-              {o.title}
-            </Link>
+            <span className="flex min-w-0 items-start gap-2">
+              <RecordCheckbox id={o.id} label={o.title} />
+              <Link href={`/dashboard/oportunidades/${o.id}`} className="block min-w-0 text-sm font-medium leading-snug text-slate-900 hover:text-brand-700">
+                {o.title}
+              </Link>
+            </span>
             {(o.company || o.contact) && (
               <p className="mt-0.5 truncate text-xs text-slate-500">{[o.company?.name, o.contact?.name].filter(Boolean).join(" · ")}</p>
             )}
