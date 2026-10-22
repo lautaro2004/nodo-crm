@@ -16,6 +16,8 @@ import { Pagination } from "@/components/ui/pagination";
 import { ListToolbar } from "@/components/views/list-toolbar";
 import { RecordTable } from "@/components/custom-modules/record-table";
 import { CustomModuleIcon } from "@/components/custom-modules/custom-module-icon";
+import { RecordSelection } from "@/components/records/selection";
+import { nounFromLabels } from "@/lib/record-nouns";
 
 const SORT_OPTIONS = [
   { value: "recent", label: "Más recientes" },
@@ -124,7 +126,14 @@ export default async function CustomModulePage({ params, searchParams }: { param
         )
       ) : (
         <>
-          <RecordTable basePath={basePath} records={result.items} columns={columns} custom={custom} ownerName={(id) => names.get(id)} thumbs={thumbs} />
+          <RecordSelection
+            entityType={entity}
+            ids={result.items.map((r) => r.id)}
+            noun={nounFromLabels(mod.labelSingular, mod.labelPlural)}
+            canDelete={hasRole(ctx.role, "admin")}
+          >
+            <RecordTable basePath={basePath} records={result.items} columns={columns} custom={custom} ownerName={(id) => names.get(id)} thumbs={thumbs} />
+          </RecordSelection>
           <Pagination basePath={basePath} params={sp} page={result.page} pageSize={result.pageSize} total={result.total} />
         </>
       )}

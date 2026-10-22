@@ -8,6 +8,7 @@ import { Card, Table, Th, Td } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/status/status-badge";
 import { LEAD_COLUMNS } from "@/lib/views/columns";
 import { LEAD_SOURCE_LABELS } from "@/lib/labels";
+import { SelectAllHeader, SelectCell, SelectableRow } from "@/components/records/selection";
 
 interface LeadRow {
   id: string;
@@ -99,6 +100,7 @@ export function LeadTable({
       <Table>
         <thead>
           <tr className="border-b border-slate-100">
+            <SelectAllHeader />
             {columns.map((c) => (
               <Th key={c}>{label(c)}</Th>
             ))}
@@ -106,11 +108,12 @@ export function LeadTable({
         </thead>
         <tbody>
           {leads.map((l) => (
-            <tr key={l.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+            <SelectableRow key={l.id} id={l.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+              <SelectCell id={l.id} label={l.name} />
               {columns.map((c) => (
                 <Td key={c}>{cell[c] ? cell[c](l) : custom ? <CustomCell custom={custom} columnKey={c} entityId={l.id} /> : null}</Td>
               ))}
-            </tr>
+            </SelectableRow>
           ))}
         </tbody>
       </Table>

@@ -15,6 +15,8 @@ import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card"
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
 import { incomingLinks } from "@/modules/records/links";
 import { hasRole } from "@/lib/permissions";
+import { DeleteRecordButton } from "@/components/records/delete-record-button";
+import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { RelatedEventsList } from "@/components/calendar/related-events-list";
 import { listUpcomingEvents } from "@/modules/calendar/service";
 import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
@@ -49,9 +51,12 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
         description={company.domain ?? undefined}
         backHref="/dashboard/empresas"
         actions={
-          <Link href={`/dashboard/empresas/${id}/editar`}>
-            <Button variant="secondary">Editar</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/dashboard/empresas/${id}/editar`}>
+              <Button variant="secondary">Editar</Button>
+            </Link>
+            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="company" id={id} noun={RECORD_NOUNS.company} redirectTo="/dashboard/empresas" />}
+          </div>
         }
       />
 

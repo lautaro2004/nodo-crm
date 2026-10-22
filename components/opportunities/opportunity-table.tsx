@@ -5,6 +5,7 @@ import { CustomCell } from "@/components/custom-fields/custom-cell";
 import type { CustomCells } from "@/modules/custom-fields/columns";
 
 import { Badge, Table, Th, Td, Card } from "@/components/ui/primitives";
+import { SelectAllHeader, SelectCell, SelectableRow } from "@/components/records/selection";
 import { StatusBadge } from "@/components/status/status-badge";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
 import { stageColorKey } from "@/lib/status-colors";
@@ -65,6 +66,7 @@ export function OpportunityTable({
       <Table>
         <thead>
           <tr className="border-b border-slate-100">
+            <SelectAllHeader />
             {columns.map((c) => (
               <Th key={c} className={c === "amount" ? "text-right" : undefined}>
                 {label(c)}
@@ -74,11 +76,12 @@ export function OpportunityTable({
         </thead>
         <tbody>
           {opportunities.map((o) => (
-            <tr key={o.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+            <SelectableRow key={o.id} id={o.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/80">
+              <SelectCell id={o.id} label={o.title} />
               {columns.map((c) => (
                 <Td key={c}>{cell[c] ? cell[c](o) : custom ? <CustomCell custom={custom} columnKey={c} entityId={o.id} /> : null}</Td>
               ))}
-            </tr>
+            </SelectableRow>
           ))}
         </tbody>
       </Table>

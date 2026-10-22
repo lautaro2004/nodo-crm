@@ -106,7 +106,7 @@ export function Modal({
               </h2>
             )}
             {description && (
-              <p id={descId} className="mt-1 text-sm text-slate-500">
+              <p id={descId} className="mt-1 whitespace-pre-line text-sm text-slate-500">
                 {description}
               </p>
             )}
