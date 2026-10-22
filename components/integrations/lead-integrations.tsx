@@ -803,11 +803,36 @@ function SheetsItem({
   );
 }
 
+// Sugerencia automática por nombre de columna. Se aplica a las columnas que
+// detecta nodoCRM_probarConexion (o que se agregan a mano) y que todavía no
+// tienen un mapeo guardado; nunca pisa uno elegido por el usuario.
+function guessTarget(header: string, customFields: { id: string; label: string }[]): string {
+  const h = header.toLowerCase();
+  if (/mail/.test(h)) return "email";
+  if (/(tel|cel|whats|phone|móvil|movil)/.test(h)) return "phone";
+  if (/(nombre|name|apellido)/.test(h)) return "name";
+  if (/(mensaje|consulta|comentario|message)/.test(h)) return "note";
+  const cf = customFields.find((f) => f.label.toLowerCase() === h);
+  return cf ? `cf:${cf.id}` : "ignore";
+}
+
 function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem; customFields: { id: string; label: string }[]; onSaved: () => void }) {
   const toast = useToast();
   const config = item.config as { headers?: string[]; mapping?: Record<string, string>; required?: string[] };
   const [headers, setHeaders] = useState<string[]>(() => Array.from(new Set([...(config.headers ?? []), ...Object.keys(config.mapping ?? {})])));
-  const [mapping, setMapping] = useState<Record<string, string>>(() => ({ ...(config.mapping ?? {}) }));
+  const [mapping, setMapping] = useState<Record<string, string>>(() => {
+    const saved = config.mapping ?? {};
+    const next: Record<string, string> = { ...saved };
+    // Columnas detectadas sin mapeo: se precargan con la sugerencia (el
+    // usuario la revisa y guarda). Un solo "Nombre" sugerido: si hay varias
+    // columnas que parecen nombre, la segunda queda en "No importar".
+    for (const h of config.headers ?? []) {
+      if (next[h]) continue;
+      const t = guessTarget(h, customFields);
+      next[h] = t !== "ignore" && t !== "note" && Object.values(next).includes(t) ? "ignore" : t;
+    }
+    return next;
+  });
   const [required, setRequired] = useState<string[]>(() => config.required ?? ["name"]);
   const [newHeader, setNewHeader] = useState("");
   const [saving, setSaving] = useState(false);
@@ -828,16 +853,7 @@ function MappingEditor({ item, customFields, onSaved }: { item: IntegrationItem;
   const usedTargets = Array.from(new Set(Object.values(mapping).filter((t) => t && t !== "ignore")));
   const labelOf = (t: string) => options.find((o) => o.value === t)?.label ?? t;
 
-  // Sugerencia automática por nombre de columna (solo si no hay mapeo).
-  function guess(header: string): string {
-    const h = header.toLowerCase();
-    if (/mail/.test(h)) return "email";
-    if (/(tel|cel|whats|phone|móvil|movil)/.test(h)) return "phone";
-    if (/(nombre|name|apellido)/.test(h)) return "name";
-    if (/(mensaje|consulta|comentario|message)/.test(h)) return "note";
-    const cf = customFields.find((f) => f.label.toLowerCase() === h);
-    return cf ? `cf:${cf.id}` : "ignore";
-  }
+  const guess = (header: string) => guessTarget(header, customFields);
 
   function addHeader(e: React.FormEvent) {
     e.preventDefault();
