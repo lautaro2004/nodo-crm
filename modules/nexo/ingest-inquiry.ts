@@ -15,9 +15,15 @@ export const NEXO_INQUIRY_SOURCE = "nexo_inquiry";
 export type NexoIngestResult =
   | { outcome: "no_workspace" }
   | { outcome: "not_found" }
+  | { outcome: "held" }
   | (UpsertOutcome & { leadId?: string | null });
 
 export function nexoInquiryActivityBody(inquiry: NexoInquiry): string {
+  // Detectado por Nexo en un chat (IA apagada o antes de que el asistente
+  // lo registre): no hay "necesidad" resumida, solo el primer mensaje.
+  if (inquiry.channel === "whatsapp" && !inquiry.need) {
+    return `Contacto nuevo por WhatsApp (Nexo): ${inquiry.message}`;
+  }
   if (inquiry.channel === "whatsapp") {
     return [
       "Interesado registrado por el asistente de Nexo (WhatsApp).",
@@ -48,6 +54,12 @@ export async function ingestNexoInquiry(businessId: string, inquiryId: string): 
 
   const inquiry = await getNexoInquiry(businessId, inquiryId);
   if (!inquiry) return { outcome: "not_found" };
+  // Calificación con IA de Nexo: "pending" todavía no se decidió y
+  // "discarded" no es potencial cliente. Nexo ya no las envía, esto es la
+  // misma regla del lado de Nodo (igual que listNexoInquiries).
+  if (inquiry.qualificationStatus === "pending" || inquiry.qualificationStatus === "discarded") {
+    return { outcome: "held" };
+  }
 
   const data = nexoInquiryLeadData(inquiry);
   return upsertLeadFromSource(businessId, {

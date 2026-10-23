@@ -141,10 +141,6 @@ export async function syncLeadsFromNexoInquiries(businessId: string, options: Sy
       relatedId: lead.id,
       type: "note",
       body: nexoInquiryActivityBody(inquiry),
-      body:
-        inquiry.source === "whatsapp"
-          ? `Contacto nuevo por WhatsApp (Nexo): ${inquiry.message}`
-          : `Consulta desde el sitio web (Nexo): ${inquiry.message}`,
     });
     await runLeadCreatedAutomations(businessId, lead.id);
     created++;

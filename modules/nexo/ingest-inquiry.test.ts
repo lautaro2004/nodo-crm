@@ -27,6 +27,20 @@ const INQUIRY = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("ingestNexoInquiry", () => {
+  it.each(["pending", "discarded"])("una consulta %s queda retenida (no crea lead)", async (qualificationStatus) => {
+    workspaceFind.mockResolvedValue({ businessId: "biz_A" });
+    getNexoInquiry.mockResolvedValue({ ...INQUIRY, qualificationStatus });
+    expect(await ingestNexoInquiry("biz_A", "inq_1")).toEqual({ outcome: "held" });
+    expect(upsertLeadFromSource).not.toHaveBeenCalled();
+  });
+
+  it("nota de un contacto detectado en el chat (sin necesidad resumida)", async () => {
+    const { nexoInquiryActivityBody } = await import("./ingest-inquiry");
+    expect(nexoInquiryActivityBody({ ...INQUIRY, need: null, message: "Quiero sumar mi local" } as never)).toBe(
+      "Contacto nuevo por WhatsApp (Nexo): Quiero sumar mi local"
+    );
+  });
+
   it("negocio sin Nodo: no hace nada", async () => {
     workspaceFind.mockResolvedValue(null);
     expect(await ingestNexoInquiry("biz_A", "inq_1")).toEqual({ outcome: "no_workspace" });

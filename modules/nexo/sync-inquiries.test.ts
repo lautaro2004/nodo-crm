@@ -7,6 +7,7 @@ const listNexoInquiries = vi.fn();
 const activityCreate = vi.fn();
 const leadFindFirst = vi.fn();
 const queryRaw = vi.fn();
+const workspaceFindMany = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -16,6 +17,9 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: (...args: unknown[]) => leadFindFirst(...args),
     },
     $queryRaw: (...args: unknown[]) => queryRaw(...args),
+    workspace: {
+      findMany: (...args: unknown[]) => workspaceFindMany(...args),
+    },
   },
 }));
 
@@ -64,6 +68,7 @@ beforeEach(() => {
   activityCreate.mockReset();
   leadFindFirst.mockReset().mockResolvedValue(null);
   queryRaw.mockReset().mockResolvedValue([]);
+  workspaceFindMany.mockReset();
 });
 
 describe("syncLeadsFromNexoInquiries", () => {
