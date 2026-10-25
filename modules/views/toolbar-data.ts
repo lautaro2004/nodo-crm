@@ -1,4 +1,5 @@
 import type { OkWorkspaceContext } from "@/lib/workspace";
+import { resolveAccess } from "@/modules/access/service";
 import { LEAD_SOURCE_LABELS, OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
 import { listWorkspaceMembers, type WorkspaceMember } from "@/modules/business/members";
 import { listCustomFieldDefinitions } from "@/modules/custom-fields/service";
@@ -10,6 +11,7 @@ import type { FilterConfig, SavedViewItem } from "@/components/views/list-toolba
 // Datos que necesita la barra de lista (opciones de filtros + vistas
 // guardadas visibles para este usuario). Server-only.
 export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntityType) {
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
   const isCustomModule = entity.startsWith("cm:");
   const [members, tags, allCustomFields, views, leadStatuses] = await Promise.all([
     listWorkspaceMembers(ctx.businessId),
@@ -18,7 +20,7 @@ export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntity
     listViews(ctx.businessId, entity, ctx),
     entity === "lead" ? listStatusOptions(ctx.businessId, "lead") : Promise.resolve([] as StatusOption[]),
   ]);
-  const canShare = canManageSharedViews(ctx.role);
+  const canShare = canManageSharedViews({ ...ctx, access });
   // Imagen y relación no se filtran por texto (ni son columnas de texto).
   const customFields = allCustomFields.filter((c) => c.type !== "image" && c.type !== "relation");
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { can, canAdminister, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { getCompany } from "@/modules/companies/service";
 import { listActivitiesForEntity } from "@/modules/activities/service";
 import { listTags, listTagsForEntity } from "@/modules/tags/service";
@@ -14,7 +15,6 @@ import { TagPicker } from "@/components/tags/tag-picker";
 import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
 import { RelatedGroups } from "@/components/custom-modules/related-groups";
 import { incomingLinks } from "@/modules/records/links";
-import { hasRole } from "@/lib/permissions";
 import { DeleteRecordButton } from "@/components/records/delete-record-button";
 import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { RelatedEventsList } from "@/components/calendar/related-events-list";
@@ -30,6 +30,10 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const company = await getCompany(ctx.businessId, id);
   if (!company) notFound();
+  // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "company", company)) notFound();
+  const canEdit = can(access, "company", "edit");
 
   const [activities, assignedTags, allTags, customFields, members, upcomingEvents, statusOptions, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "company", id),
@@ -39,7 +43,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     listWorkspaceMembers(ctx.businessId),
     listUpcomingEvents(ctx.businessId, { companyId: id }),
     listStatusOptions(ctx.businessId, "company"),
-    incomingLinks(ctx.businessId, "company", id),
+    incomingLinks(ctx.businessId, "company", id, (t) => can(access, t, "view")),
   ]);
   const status = findStatusOption(statusOptions, company.status);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -52,16 +56,18 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
         backHref="/dashboard/empresas"
         actions={
           <div className="flex items-center gap-2">
-            <Link href={`/dashboard/empresas/${id}/editar`}>
-              <Button variant="secondary">Editar</Button>
-            </Link>
-            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="company" id={id} noun={RECORD_NOUNS.company} redirectTo="/dashboard/empresas" />}
+            {canEdit && (
+              <Link href={`/dashboard/empresas/${id}/editar`}>
+                <Button variant="secondary">Editar</Button>
+              </Link>
+            )}
+            {can(access, "company", "delete") && <DeleteRecordButton entityType="company" id={id} noun={RECORD_NOUNS.company} redirectTo="/dashboard/empresas" />}
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Información</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -86,7 +92,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={canAdminister(access, "fields")} readOnly={!canEdit} />
 
           <RelatedGroups groups={relatedGroups} emptyText={null} />
 

@@ -32,6 +32,107 @@ export interface CustomFieldTypeInfo {
   type: string;
   options: string[];
   label: string;
+  /** Validaciones extra (CustomFieldDefinition.validation). */
+  validation?: FieldValidation | null;
+}
+
+// ── Validaciones configurables por tipo ─────────────────────────────────
+// Se guardan en CustomFieldDefinition.validation (JSON). Solo se aceptan
+// las claves que tienen sentido para el tipo del campo (ver
+// VALIDATION_KEYS_BY_TYPE): un "mínimo" en un campo de texto no existe.
+
+export interface FieldValidation {
+  minLength?: number | null;
+  maxLength?: number | null;
+  min?: number | null;
+  max?: number | null;
+  /** aaaa-mm-dd */
+  minDate?: string | null;
+  maxDate?: string | null;
+}
+
+export const VALIDATION_KEYS_BY_TYPE: Record<string, (keyof FieldValidation)[]> = {
+  text: ["minLength", "maxLength"],
+  phone: ["minLength", "maxLength"],
+  number: ["min", "max"],
+  currency: ["min", "max"],
+  date: ["minDate", "maxDate"],
+  datetime: ["minDate", "maxDate"],
+};
+
+export const VALIDATION_LABELS: Record<keyof FieldValidation, string> = {
+  minLength: "Mínimo de caracteres",
+  maxLength: "Máximo de caracteres",
+  min: "Valor mínimo",
+  max: "Valor máximo",
+  minDate: "Fecha mínima",
+  maxDate: "Fecha máxima",
+};
+
+/** Tipos con lista de opciones editable. */
+export const OPTION_TYPES = new Set(["select", "multiselect"]);
+/** Tipos que admiten valor predeterminado. */
+export const DEFAULTABLE_TYPES = new Set(["text", "number", "currency", "date", "boolean", "select", "multiselect", "email", "phone", "url"]);
+
+/**
+ * Deja solo las validaciones que corresponden al tipo, con valores
+ * coherentes. Devuelve el objeto limpio (null si no queda ninguna) o un
+ * mensaje de error.
+ */
+export function sanitizeValidation(type: string, input: FieldValidation | null | undefined): { ok: true; value: FieldValidation | null } | { ok: false; message: string } {
+  if (!input) return { ok: true, value: null };
+  const allowed = VALIDATION_KEYS_BY_TYPE[type] ?? [];
+  const out: FieldValidation = {};
+  for (const key of allowed) {
+    const v = input[key];
+    if (v === null || v === undefined || v === "") continue;
+    if (key === "minDate" || key === "maxDate") {
+      const iso = toIsoDate(String(v));
+      if (!iso) return { ok: false, message: `${VALIDATION_LABELS[key]}: fecha inválida.` };
+      out[key] = iso;
+    } else {
+      const n = typeof v === "number" ? v : toNumber(String(v));
+      if (n === null || !Number.isFinite(n)) return { ok: false, message: `${VALIDATION_LABELS[key]}: número inválido.` };
+      if ((key === "minLength" || key === "maxLength") && (n < 0 || !Number.isInteger(n) || n > 2000)) {
+        return { ok: false, message: `${VALIDATION_LABELS[key]}: usá un entero entre 0 y 2000.` };
+      }
+      out[key] = n;
+    }
+  }
+  if (out.minLength != null && out.maxLength != null && out.minLength > out.maxLength) return { ok: false, message: "El mínimo de caracteres supera al máximo." };
+  if (out.min != null && out.max != null && out.min > out.max) return { ok: false, message: "El valor mínimo supera al máximo." };
+  if (out.minDate && out.maxDate && out.minDate > out.maxDate) return { ok: false, message: "La fecha mínima es posterior a la máxima." };
+  return { ok: true, value: Object.keys(out).length ? out : null };
+}
+
+function checkValidation(info: CustomFieldTypeInfo, value: string): string | null {
+  const v = info.validation;
+  if (!v) return null;
+  const { label } = info;
+  if (info.type === "text" || info.type === "phone") {
+    if (v.minLength != null && value.length < v.minLength) return `"${label}" necesita al menos ${v.minLength} caracteres.`;
+    if (v.maxLength != null && value.length > v.maxLength) return `"${label}" admite hasta ${v.maxLength} caracteres.`;
+  }
+  if (info.type === "number" || info.type === "currency") {
+    const n = toNumber(value);
+    if (n !== null && v.min != null && n < v.min) return `"${label}" no puede ser menor que ${v.min.toLocaleString("es-AR")}.`;
+    if (n !== null && v.max != null && n > v.max) return `"${label}" no puede ser mayor que ${v.max.toLocaleString("es-AR")}.`;
+  }
+  if (info.type === "date" || info.type === "datetime") {
+    const iso = toIsoDate(value.split(/[T ]/)[0] ?? "");
+    const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+    if (iso && v.minDate && iso < v.minDate) return `"${label}" no puede ser anterior al ${fmt(v.minDate)}.`;
+    if (iso && v.maxDate && iso > v.maxDate) return `"${label}" no puede ser posterior al ${fmt(v.maxDate)}.`;
+  }
+  return null;
+}
+
+/** Valores elegidos en un multiselect guardado ("A, B"). */
+export function splitMultiValue(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .split(/[,;]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 }
 
 const pad = (n: string) => n.padStart(2, "0");
@@ -86,8 +187,12 @@ function splitOptions(raw: string) {
 /** Mensaje de error en español, o null si el valor es válido (vacío = válido). */
 export function validateCustomValue(info: CustomFieldTypeInfo, raw: string): string | null {
   const value = raw.trim();
-  const { label } = info;
   if (!value) return null;
+  return validateType(info, value) ?? checkValidation(info, value);
+}
+
+function validateType(info: CustomFieldTypeInfo, value: string): string | null {
+  const { label } = info;
   switch (info.type) {
     case "number":
     case "currency":

@@ -9,7 +9,7 @@ import { isEncryptionConfigured } from "@/lib/crypto/secret-box";
 // Usuario y negocio salen de la sesión; el `state` firmado los liga a esta
 // operación y el nonce viaja además en una cookie httpOnly.
 export async function POST() {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "settings" });
   if (!ctx) return response;
   const config = getInstagramAppConfig();
   if (!config) return NextResponse.json({ error: "instagram_not_configured" }, { status: 503 });

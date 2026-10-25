@@ -8,7 +8,7 @@ import { syncLeadsFromNexo } from "@/modules/nexo/sync-leads";
 // (ver app/api/cron/sync-nexo-leads y docs/architecture/crm-fase4-nexo-leads.md).
 // businessId SIEMPRE resuelto de la sesión, nunca del body — no hay body.
 export async function POST() {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "lead", action: "create" } });
   if (!ctx) return response;
 
   const result = await syncLeadsFromNexo(ctx.businessId);

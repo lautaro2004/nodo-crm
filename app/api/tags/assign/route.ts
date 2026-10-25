@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, requireRecordAccess } from "@/lib/api-guard";
 import { tagAssignSchema } from "@/lib/schemas";
 import { assignTag } from "@/modules/tags/service";
 
@@ -13,6 +13,8 @@ export async function POST(request: Request) {
 
   const { data, response: badRequest } = await parseBody(request, bodySchema);
   if (!data) return badRequest;
+  const denied = await requireRecordAccess(ctx, data.entityType, data.entityId, "edit");
+  if (denied) return denied;
 
   const link = await assignTag(ctx.businessId, data.tagId, data.entityType, data.entityId);
   if (!link) return notFound();

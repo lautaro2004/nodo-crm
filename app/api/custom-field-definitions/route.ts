@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "fields" });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, customFieldDefinitionCreateSchema);

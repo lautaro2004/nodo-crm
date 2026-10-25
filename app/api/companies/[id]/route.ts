@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, domainErrorResponse, requireRecordAccess } from "@/lib/api-guard";
 import { companyUpdateSchema } from "@/lib/schemas";
 import { getCompany, updateCompany, deleteCompany } from "@/modules/companies/service";
 
@@ -9,9 +9,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
-  const company = await getCompany(ctx.businessId, id);
-  if (!company) return notFound();
-  return NextResponse.json(company);
+  const denied = await requireRecordAccess(ctx, "company", id, "view");
+  if (denied) return denied;
+  const record = await getCompany(ctx.businessId, id);
+  if (!record) return notFound();
+  return NextResponse.json(record);
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,24 +21,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "company", id, "edit");
+  if (denied) return denied;
   const { data, response: badRequest } = await parseBody(request, companyUpdateSchema);
   if (!data) return badRequest;
 
   try {
-    const company = await updateCompany(ctx.businessId, id, data);
-    if (!company) return notFound();
-    return NextResponse.json(company);
+    const record = await updateCompany(ctx.businessId, id, data, ctx.userId);
+    if (!record) return notFound();
+    return NextResponse.json(record);
   } catch (err) {
     return domainErrorResponse(err);
   }
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
 
   const { id } = await params;
-  const ok = await deleteCompany(ctx.businessId, id);
+  const denied = await requireRecordAccess(ctx, "company", id, "delete");
+  if (denied) return denied;
+  const ok = await deleteCompany(ctx.businessId, id, ctx.userId);
   if (!ok) return notFound();
   return NextResponse.json({ ok: true });
 }

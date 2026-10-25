@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, notFound, requireRecordAccess } from "@/lib/api-guard";
 import { calendarEventUpdateSchema } from "@/lib/schemas";
 import { calendarErrorResponse } from "@/modules/calendar/errors";
 import { getEvent, updateEvent, deleteEvent } from "@/modules/calendar/service";
@@ -10,6 +10,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "calendar", id, "view");
+  if (denied) return denied;
   const event = await getEvent(ctx.businessId, id);
   if (!event) return notFound();
   return NextResponse.json(event);
@@ -20,6 +22,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "calendar", id, "edit");
+  if (denied) return denied;
   const { data, response: badRequest } = await parseBody(request, calendarEventUpdateSchema);
   if (!data) return badRequest;
 
@@ -37,6 +41,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "calendar", id, "delete");
+  if (denied) return denied;
   const ok = await deleteEvent(ctx.businessId, id, ctx.userId);
   if (!ok) return notFound();
   return NextResponse.json({ ok: true });

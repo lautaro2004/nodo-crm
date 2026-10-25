@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import type { FieldValidation } from "@/lib/custom-fields";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 import { AdminOnly } from "@/components/team/admin-only";
 import { PageHeader } from "@/components/ui/primitives";
 import { getModuleById, listModuleFields, listModules } from "@/modules/custom-modules/service";
@@ -12,7 +13,7 @@ import { moduleEntityType, STANDARD_RELATION_TARGETS } from "@/lib/custom-module
 export default async function ModuleSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "fields")) return <AdminOnly />;
 
   const { id } = await params;
   const mod = await getModuleById(ctx.businessId, id);
@@ -35,6 +36,11 @@ export default async function ModuleSettingsPage({ params }: { params: Promise<{
     targetEntity: f.targetEntity,
     targetLabel: f.targetEntity ? (targetLabel.get(f.targetEntity) ?? "Módulo archivado") : null,
     multiple: f.multiple,
+    exclusive: f.exclusive,
+    inverseLabel: f.inverseLabel,
+    description: f.description,
+    defaultValue: f.defaultValue,
+    validation: (f.validation as FieldValidation | null) ?? null,
   }));
 
   return (

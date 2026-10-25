@@ -15,10 +15,11 @@ export interface RecordOption {
 
 // Búsqueda para los selectores de relación / productos. Scopeada por
 // negocio y por entidad; tope de 20 resultados.
-export async function searchRecords(businessId: string, entityType: string, q: string, ids?: string[]): Promise<RecordOption[]> {
+// `scope`: alcance de permisos (fragmento where de scopeWhere).
+export async function searchRecords(businessId: string, entityType: string, q: string, ids?: string[], scope: Record<string, unknown> = {}): Promise<RecordOption[]> {
   const take = 20;
   const text = q.trim();
-  const byIds = ids?.length ? { id: { in: ids } } : {};
+  const byIds = { ...(ids?.length ? { id: { in: ids } } : {}), ...(Object.keys(scope).length ? { AND: [scope] } : {}) };
   if (entityType === "contact") {
     const rows = await prisma.contact.findMany({
       where: { businessId, ...byIds, ...(text ? { OR: [{ name: { contains: text, mode: "insensitive" } }, { email: { contains: text, mode: "insensitive" } }] } : {}) },
@@ -46,6 +47,15 @@ export async function searchRecords(businessId: string, entityType: string, q: s
     });
     return rows.map((r) => ({ id: r.id, label: r.name, sub: r.email }));
   }
+  if (entityType === "task") {
+    const rows = await prisma.task.findMany({
+      where: { businessId, ...byIds, ...(text ? { title: { contains: text, mode: "insensitive" } } : {}) },
+      select: { id: true, title: true, status: true },
+      orderBy: { updatedAt: "desc" },
+      take,
+    });
+    return rows.map((r) => ({ id: r.id, label: r.title, sub: null }));
+  }
   if (entityType === "opportunity") {
     const rows = await prisma.opportunity.findMany({
       where: { businessId, ...byIds, ...(text ? { title: { contains: text, mode: "insensitive" } } : {}) },
@@ -60,7 +70,7 @@ export async function searchRecords(businessId: string, entityType: string, q: s
   const mod = await prisma.customModule.findFirst({ where: { id: moduleId, businessId } });
   if (!mod) return [];
   const rows = await prisma.customRecord.findMany({
-    where: { businessId, moduleId, ...(ids?.length ? byIds : { archivedAt: null }), ...(text ? { title: { contains: text, mode: "insensitive" } } : {}) },
+    where: { businessId, moduleId, ...byIds, ...(ids?.length ? {} : { archivedAt: null }), ...(text ? { title: { contains: text, mode: "insensitive" } } : {}) },
     select: { id: true, title: true },
     orderBy: { title: "asc" },
     take,

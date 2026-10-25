@@ -11,6 +11,12 @@ import { DownloadIcon } from "@/components/ui/icons";
 import { HBars, TimeBars } from "@/components/reports/charts";
 import { LEAD_SOURCE_LABELS } from "@/lib/labels";
 import { stageColorKey } from "@/lib/status-colors";
+import { can, canAdminister, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getPreference } from "@/modules/preferences/service";
+import { computeWidgets, listDashboards, parseWidgets } from "@/modules/reports/dashboards";
+import { getModuleCatalog } from "@/modules/entities/registry";
+import { DashboardPanel, DashboardTabs } from "@/components/reports/dashboard-panel";
+import { NoAccess } from "@/components/team/admin-only";
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -20,9 +26,63 @@ const money = (n: number) => `$${n.toLocaleString("es-AR", { maximumFractionDigi
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-
   const sp = await searchParams;
-  const f = parseReportFilters(sp, ctx.userId);
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+
+  // Paneles: "General" (el informe fijo de siempre) + los paneles guardados
+  // del usuario y los compartidos. El que se abre por defecto es una
+  // preferencia por usuario (crm.UserPreference "reports:default").
+  const [dashboards, defaultPanel] = await Promise.all([
+    listDashboards(ctx.businessId, { userId: ctx.userId, access }),
+    getPreference<string>(ctx.businessId, ctx.userId, "reports:default"),
+  ]);
+  const requested = typeof sp.panel === "string" ? sp.panel : (defaultPanel ?? "general");
+  const active = dashboards.find((d) => d.id === requested) ?? null;
+  const tabs = (
+    <DashboardTabs
+      active={active?.id ?? "general"}
+      defaultId={defaultPanel ?? "general"}
+      dashboards={dashboards.map((d) => ({ id: d.id, name: d.name, shared: d.shared }))}
+    />
+  );
+
+  if (active) {
+    const widgets = parseWidgets(active.widgets);
+    const [data, catalog, members] = await Promise.all([
+      computeWidgets(ctx.businessId, access, widgets),
+      getModuleCatalog(ctx.businessId),
+      listWorkspaceMembers(ctx.businessId),
+    ]);
+    const canEdit = active.createdBy === ctx.userId || (active.shared && canAdminister(access, "reports"));
+    return (
+      <div>
+        <PageHeader title="Informes" description={active.shared ? "Panel compartido con el equipo" : "Panel personal"} />
+        {tabs}
+        <DashboardPanel
+          key={active.id}
+          dashboard={{ id: active.id, name: active.name, shared: active.shared, widgets }}
+          data={data}
+          canEdit={canEdit}
+          startEditing={sp.edit === "1"}
+          canShare={canAdminister(access, "reports")}
+          isDefault={defaultPanel === active.id}
+          modules={catalog.filter((m) => can(access, m.entityType, "view")).map((m) => ({ entityType: m.entityType, singular: m.singular, plural: m.plural, fields: m.fields }))}
+          members={members.map((m) => ({ userId: m.userId, name: m.name || m.email, role: m.role }))}
+        />
+      </div>
+    );
+  }
+
+  if (!can(access, "lead", "view") && !can(access, "opportunity", "view")) {
+    return (
+      <div>
+        <PageHeader title="Informes" />
+        {tabs}
+        <NoAccess what="los datos del informe general" />
+      </div>
+    );
+  }
+  const f = { ...parseReportFilters(sp, ctx.userId), scopes: { lead: scopeWhere(access, "lead"), opportunity: scopeWhere(access, "opportunity") } };
   const [leads, opps, members, pipelines, moduleLabel] = await Promise.all([
     getLeadReport(ctx.businessId, f),
     getOpportunityReport(ctx.businessId, f),
@@ -44,9 +104,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader title="Informes" description={`Del ${f.from.toLocaleDateString("es-AR")} al ${f.to.toLocaleDateString("es-AR")}`} />
+      {tabs}
 
       <Card className="mb-6 p-4">
         <form method="get" className="flex flex-wrap items-end gap-3 text-sm">
+          <input type="hidden" name="panel" value="general" />
           <FormField label="Período">
             <Select name="range" defaultValue={range} className="w-44">
               <option value="7">Últimos 7 días</option>

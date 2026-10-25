@@ -1,14 +1,14 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
 import { AdminOnly } from "@/components/team/admin-only";
 import { listPipelines } from "@/modules/pipelines/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { PipelineManager } from "@/components/pipelines/pipeline-manager";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export default async function PipelinesPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings")) return <AdminOnly />;
 
   const pipelines = await listPipelines(ctx.businessId);
 

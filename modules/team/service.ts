@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { assignableRoles, canManage, hasRole, normalizeRole, type Product, type Role } from "@/lib/permissions";
 import { businessHasNexo } from "@/modules/nexo/subscription";
 import { INVITATION_TTL_DAYS, hashInvitationToken, newInvitationToken } from "@/modules/team/tokens";
+import { applyInvitationAccess, removeMemberAccessData } from "@/modules/access/service";
 
 // Equipo de un negocio — compartido por Nodo y Nexo (public.Membership).
 // Lo que se cambia acá vale para los dos productos: quitar a alguien lo
@@ -149,6 +150,8 @@ export async function removeMember(businessId: string, actor: Actor, membershipI
     prisma.googleConnection.deleteMany({ where: { businessId, userId: target.userId } }),
     prisma.membership.deleteMany({ where: { id: target.id, businessId } }),
   ]);
+  // Equipos, rol y excepciones de Nodo de quien se va.
+  await removeMemberAccessData(businessId, target.userId);
   return true;
 }
 
@@ -188,7 +191,8 @@ export async function acceptInvitation(token: string, user: { id: string; email:
   if (state.status !== "pending") throw new Error(`invitation_${state.status}`);
   if (state.email !== user.email.trim().toLowerCase()) throw new Error("invitation_wrong_email");
 
-  return prisma.$transaction(async (tx) => {
+  let created = false;
+  const membership = await prisma.$transaction(async (tx) => {
     const existing = await tx.membership.findFirst({ where: { userId: user.id } });
     if (existing && existing.businessId !== state.businessId) throw new Error("email_in_other_business");
 
@@ -201,8 +205,12 @@ export async function acceptInvitation(token: string, user: { id: string; email:
     if (claimed.count === 0) throw new Error("invitation_accepted");
 
     if (existing) return existing; // ya era miembro (ej. reinvitación): no se pisa su rol
+    created = true;
     return tx.membership.create({
       data: { userId: user.id, businessId: state.businessId, role: state.role, products: state.products },
     });
   });
+  // Rol de Nodo elegido al invitar (ej. "Solo lectura" para un externo).
+  if (created) await applyInvitationAccess(state.id, user.id);
+  return membership;
 }

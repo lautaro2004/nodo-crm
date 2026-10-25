@@ -22,7 +22,8 @@ import {
 import { ModuleIcon } from "@/components/ui/module-icon";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
 import { hasRole, ROLE_LABELS, type Role } from "@/lib/permissions";
-import { useRole } from "@/components/dashboard/role-context";
+import { useAccess, useRole } from "@/components/dashboard/role-context";
+import { canAdmin, type AdminPermission } from "@/lib/access";
 import { CustomModuleIcon } from "@/components/custom-modules/custom-module-icon";
 
 export interface CustomModuleNav {
@@ -37,6 +38,7 @@ interface NavItem {
   icon: ReactNode;
   module?: string; // si está seteado, el item se oculta cuando el módulo no está activo
   minRole?: Role; // rol mínimo para verlo (ver lib/permissions.ts)
+  adminPermission?: AdminPermission; // permiso administrativo de Nodo (lib/access.ts)
 }
 
 // Agrupado en secciones (pedido explícito de la fase de pulido UX: "el
@@ -78,7 +80,7 @@ function buildNavGroups(opportunityLabel: ModuleLabel): { label: string | null; 
       label: "Herramientas",
       items: [
         { href: "/dashboard/buscar", label: "Búsqueda", icon: <SearchIcon /> },
-        { href: "/dashboard/importar", label: "Importar", icon: <UploadIcon />, minRole: "admin" },
+        { href: "/dashboard/importar", label: "Importar", icon: <UploadIcon />, adminPermission: "import" },
       ],
     },
   ];
@@ -131,6 +133,7 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const role = useRole();
+  const access = useAccess();
   const navGroups = buildNavGroups(opportunityLabel);
   // Módulos creados por el negocio (Productos, Citas…), después del núcleo
   // del CRM. La URL usa la key estable del módulo.
@@ -153,7 +156,7 @@ function SidebarContent({
             {businessName.trim()[0]?.toUpperCase() ?? "·"}
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espacio de trabajo · {ROLE_LABELS[role]}</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">Espacio de trabajo · {role === "owner" ? ROLE_LABELS[role] : access.roleName}</p>
             <p className="truncate text-sm font-semibold text-slate-900">{businessName}</p>
           </div>
         </div>
@@ -162,7 +165,10 @@ function SidebarContent({
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {navGroups.map((group, i) => {
           const visibleItems = group.items.filter(
-            (item) => (!item.module || activeModules.includes(item.module)) && (!item.minRole || hasRole(role, item.minRole))
+            (item) =>
+              (!item.module || activeModules.includes(item.module)) &&
+              (!item.minRole || hasRole(role, item.minRole)) &&
+              (!item.adminPermission || canAdmin(access.policy, item.adminPermission))
           );
           if (visibleItems.length === 0) return null;
           return (

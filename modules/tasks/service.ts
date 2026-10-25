@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { createActivity } from "@/modules/activities/service";
 import { assertUserBelongsToBusiness } from "@/modules/business/members";
 import { cleanupDeletedRecord } from "@/modules/records/cleanup";
+import { prepareCustomValues } from "@/modules/custom-fields/service";
+import { proposedFrom, trackChange } from "@/modules/automations/workflow";
 
 export const TASK_STATUSES = ["todo", "in_progress", "completed", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -19,6 +21,8 @@ export interface CreateTaskInput {
   contactId?: string | null;
   leadId?: string | null;
   opportunityId?: string | null;
+  /** Campos personalizados (definitionId → valor). Ver prepareCustomValues. */
+  customValues?: Record<string, string | null>;
 }
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   status?: TaskStatus;
@@ -51,7 +55,24 @@ async function assertRelationsBelongToBusiness(
   }
 }
 
-export async function createTask(businessId: string, data: CreateTaskInput, createdById: string | null) {
+export async function createTask(businessId: string, input: CreateTaskInput, createdById: string | null, options: { enforceRequired?: boolean; actorUserId?: string | null } = {}) {
+  const { customValues, ...data } = input;
+  // trackChange: validaciones "antes de guardar" y automatizaciones
+  // genéricas (modules/automations/workflow.ts).
+  return trackChange(
+    { businessId, entityType: "task", kind: "create", proposed: proposedFrom(data, customValues), actorUserId: options.actorUserId ?? createdById },
+    async () => {
+      // Valida los campos personalizados ANTES de crear (nunca un registro a medias).
+      const writeCustom = await prepareCustomValues(businessId, "task", customValues ?? {}, { creating: true, enforceRequired: options.enforceRequired });
+      const created = await insertTask(businessId, data, createdById);
+      await writeCustom(created.id);
+      return created;
+    },
+    (created) => created.id
+  );
+}
+
+async function insertTask(businessId: string, data: Omit<CreateTaskInput, "customValues">, createdById: string | null) {
   await assertRelationsBelongToBusiness(businessId, data);
 
   const task = await prisma.task.create({
@@ -97,6 +118,8 @@ export interface ListTasksFilters {
   search?: string;
   view?: "all" | "mine" | "overdue" | "today" | "upcoming" | "completed";
   currentUserId?: string; // requerido cuando view === "mine"
+  /** Alcance de permisos (responsable o creador visibles para el usuario). */
+  scope?: Record<string, unknown>;
 }
 
 export async function listTasks(businessId: string, filters: ListTasksFilters = {}) {
@@ -125,6 +148,7 @@ export async function listTasks(businessId: string, filters: ListTasksFilters = 
   return prisma.task.findMany({
     where: {
       businessId,
+      ...(filters.scope && Object.keys(filters.scope).length ? { AND: [filters.scope] } : {}),
       ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.priority ? { priority: filters.priority } : {}),
@@ -147,7 +171,21 @@ export async function getTask(businessId: string, id: string) {
   return prisma.task.findFirst({ where: { id, businessId }, include: INCLUDE_RELATIONS });
 }
 
-export async function updateTask(businessId: string, id: string, data: UpdateTaskInput, actorUserId: string | null) {
+export async function updateTask(businessId: string, id: string, input: UpdateTaskInput, actorUserId: string | null = null) {
+  const { customValues, ...data } = input;
+  return trackChange(
+    { businessId, entityType: "task", kind: "update", recordId: id, proposed: proposedFrom(data, customValues), actorUserId },
+    async () => {
+      const writeCustom = customValues ? await prepareCustomValues(businessId, "task", customValues, { recordId: id }) : null;
+      const updated = await applyTaskUpdate(businessId, id, data, actorUserId);
+      if (updated && writeCustom) await writeCustom(id);
+      return updated;
+    },
+    (updated) => updated?.id
+  );
+}
+
+async function applyTaskUpdate(businessId: string, id: string, data: Omit<UpdateTaskInput, "customValues">, actorUserId: string | null) {
   await assertRelationsBelongToBusiness(businessId, data);
 
   const current = await prisma.task.findFirst({ where: { id, businessId } });
@@ -207,10 +245,16 @@ export async function reopenTask(businessId: string, id: string, actorUserId: st
   return updateTask(businessId, id, { status: "todo" }, actorUserId);
 }
 
-export async function deleteTask(businessId: string, id: string) {
-  const result = await prisma.task.deleteMany({ where: { id, businessId } });
-  if (result.count > 0) await cleanupDeletedRecord(businessId, "task", id);
-  return result.count > 0;
+export async function deleteTask(businessId: string, id: string, actorUserId: string | null = null) {
+  return trackChange(
+    { businessId, entityType: "task", kind: "delete", recordId: id, actorUserId },
+    async () => {
+      const result = await prisma.task.deleteMany({ where: { id, businessId } });
+      if (result.count > 0) await cleanupDeletedRecord(businessId, "task", id);
+      return result.count > 0;
+    },
+    (ok) => (ok ? id : null)
+  );
 }
 
 // Comentario = Activity de tipo "comment" — ver la nota en

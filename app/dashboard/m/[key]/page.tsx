@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { can, canAdminister, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getRestorableListParams } from "@/lib/views/remember";
+import { ListPreferenceSync } from "@/components/views/list-preference-sync";
+import { NoAccess } from "@/components/team/admin-only";
 import { moduleEntityType } from "@/lib/custom-modules";
 import { RECORD_COLUMNS, customColumns, recordDefaultColumns, resolveColumns } from "@/lib/views/columns";
 import { getModuleByKey } from "@/modules/custom-modules/service";
@@ -36,7 +39,10 @@ export default async function CustomModulePage({ params, searchParams }: { param
 
   const sp = await searchParams;
   const entity = moduleEntityType(mod.id);
-  const filters = parseRecordFilters(sp, ctx.userId);
+  const restore = await getRestorableListParams(ctx, entity, sp);
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!can(access, entity, "view")) return <NoAccess what={mod.labelPlural.toLowerCase()} />;
+  const filters = { ...parseRecordFilters(sp, ctx.userId), scope: scopeWhere(access, entity, { createdByField: "createdById" }) };
   const [result, toolbar] = await Promise.all([listRecords(ctx.businessId, mod.id, filters), getToolbarData(ctx, entity)]);
   const names = memberNames(toolbar.members);
 
@@ -61,7 +67,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
         backLabel={mod.labelPlural}
         actions={
           <>
-            {hasRole(ctx.role, "admin") && (
+            {canAdminister(access, "fields") && (
               <Link href={`/dashboard/configuracion/modulos/${mod.id}`}>
                 <Button variant="ghost">Configurar</Button>
               </Link>
@@ -71,12 +77,14 @@ export default async function CustomModulePage({ params, searchParams }: { param
                 <Button variant="secondary">Archivados</Button>
               </Link>
             )}
-            <Link href={`${basePath}/nuevo`}>
-              <Button>
-                <PlusIcon className="h-4 w-4" />
-                Nuevo {singular}
-              </Button>
-            </Link>
+            {can(access, entity, "create") && (
+              <Link href={`${basePath}/nuevo`}>
+                <Button>
+                  <PlusIcon className="h-4 w-4" />
+                  Nuevo {singular}
+                </Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -95,7 +103,9 @@ export default async function CustomModulePage({ params, searchParams }: { param
         defaultDisplay="list"
         displays={["list"]}
         exportPath={`/api/export/modules/${mod.id}`}
+        canExport={can(access, entity, "export")}
       />
+      <ListPreferenceSync entity={entity} restore={restore} />
 
       {result.items.length === 0 ? (
         hasFilters ? (
@@ -115,7 +125,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
                     Nuevo {singular}
                   </Button>
                 </Link>
-                {hasRole(ctx.role, "admin") && (
+                {canAdminister(access, "import") && can(access, entity, "create") && (
                   <Link href="/dashboard/importar">
                     <Button variant="secondary">Importar</Button>
                   </Link>
@@ -130,7 +140,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
             entityType={entity}
             ids={result.items.map((r) => r.id)}
             noun={nounFromLabels(mod.labelSingular, mod.labelPlural)}
-            canDelete={hasRole(ctx.role, "admin")}
+            canDelete={can(access, entity, "delete")}
           >
             <RecordTable basePath={basePath} records={result.items} columns={columns} custom={custom} ownerName={(id) => names.get(id)} thumbs={thumbs} />
           </RecordSelection>

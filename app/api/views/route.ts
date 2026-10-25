@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const raw = new URL(request.url).searchParams.get("entityType") ?? "";
-  const entityType: ViewEntityType = raw === "opportunity" ? "opportunity" : /^cm:[a-z0-9]{10,40}$/.test(raw) ? (raw as ViewEntityType) : "lead";
+  const entityType: ViewEntityType = ["opportunity", "contact", "company", "task"].includes(raw) || /^cm:[a-z0-9]{10,40}$/.test(raw) ? (raw as ViewEntityType) : "lead";
   return NextResponse.json(await listViews(ctx.businessId, entityType, ctx));
 }
 

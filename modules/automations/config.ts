@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { workflowRuleCreateSchema } from "@/modules/automations/workflow-config";
+
 // Tipos de regla y su configuración (JSON en AutomationRule.config),
 // validada con Zod en el servidor al crear/editar Y al ejecutar: si una
 // regla quedó con una config inválida (ej. editada a mano), no corre.
@@ -58,6 +60,7 @@ export function parseConfig<T extends AutomationType>(type: T, config: unknown):
 }
 
 export const automationRuleCreateSchema = z.discriminatedUnion("type", [
+  workflowRuleCreateSchema,
   z.object({ type: z.literal("assign_lead"), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional(), config: assignLeadConfig }),
   z.object({ type: z.literal("lead_unattended"), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional(), config: leadUnattendedConfig }),
   z.object({ type: z.literal("lead_status_change"), name: z.string().trim().min(1).max(80), enabled: z.boolean().optional(), config: leadStatusChangeConfig }),

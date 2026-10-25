@@ -9,6 +9,9 @@ import { ZapIcon } from "@/components/ui/icons";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
+import { WorkflowBuilder, type BuilderMeta, type WorkflowDraft } from "@/components/automations/workflow-builder";
+import { ACTION_LABELS, WORKFLOW_EVENT_LABELS, type WorkflowConfig } from "@/modules/automations/workflow-config";
+import { OPERATOR_LABELS } from "@/lib/entities";
 
 interface Option {
   value: string;
@@ -18,17 +21,24 @@ interface Rule {
   id: string;
   name: string;
   type: string;
+  module?: string | null;
   enabled: boolean;
   config: Record<string, unknown>;
 }
 interface Run {
   id: string;
+  ruleId?: string;
   ruleName: string;
   status: string;
   message: string | null;
   entityId: string;
+  entityType?: string;
+  trigger?: string | null;
+  depth?: number;
+  details?: { type: string; status: string; message: string }[] | null;
   createdAt: string;
 }
+type Stats = Record<string, { total: number; errors: number; blocked: number; lastAt: string | null }>;
 
 type RuleType = "assign_lead" | "lead_unattended" | "lead_status_change";
 
@@ -38,8 +48,8 @@ const TYPE_INFO: Record<RuleType, { title: string; hint: string }> = {
   lead_status_change: { title: "Acciones por cambio de estado", hint: "Al pasar un lead a un estado: asignar, crear una tarea o avisar al responsable." },
 };
 
-const RUN_BADGE: Record<string, "success" | "neutral" | "danger" | "warning"> = { success: "success", skipped: "neutral", error: "danger", running: "warning" };
-const RUN_LABEL: Record<string, string> = { success: "Ejecutada", skipped: "Omitida", error: "Error", running: "En curso" };
+const RUN_BADGE: Record<string, "success" | "neutral" | "danger" | "warning"> = { success: "success", skipped: "neutral", error: "danger", running: "warning", blocked: "warning" };
+const RUN_LABEL: Record<string, string> = { success: "Ejecutada", skipped: "Omitida", error: "Error", running: "En curso", blocked: "Cambio frenado" };
 
 export function AutomationsManager({
   canManage,
@@ -48,6 +58,8 @@ export function AutomationsManager({
   members,
   statuses,
   sources,
+  meta,
+  stats = {},
 }: {
   canManage: boolean;
   rules: Rule[];
@@ -55,6 +67,8 @@ export function AutomationsManager({
   members: Option[];
   statuses: Option[];
   sources: Option[];
+  meta: BuilderMeta;
+  stats?: Stats;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -62,6 +76,49 @@ export function AutomationsManager({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState<RuleType | null>(null);
+  const [workflow, setWorkflow] = useState<WorkflowDraft | "new" | null>(null);
+  const [savingWf, setSavingWf] = useState(false);
+  const [wfError, setWfError] = useState<string | null>(null);
+  const [runFilter, setRunFilter] = useState<{ ruleId: string; status: string }>({ ruleId: "", status: "" });
+  const [openRun, setOpenRun] = useState<string | null>(null);
+  const moduleLabel = (entityType?: string | null) => meta.modules.find((m) => m.entityType === entityType)?.plural ?? "módulo eliminado";
+  const fieldLabel = (module: string | null | undefined, key: string) => meta.modules.find((m) => m.entityType === module)?.fields.find((f) => f.key === key)?.label ?? "campo eliminado";
+  const recordHref = (run: Run) => {
+    const mod = meta.modules.find((m) => m.entityType === (run.entityType ?? "lead"));
+    if (!mod || run.entityId === "nuevo" || run.trigger === "deleted") return null;
+    return mod.href ? `${mod.href}/${run.entityId}` : null;
+  };
+
+  async function saveWorkflow(draft: WorkflowDraft) {
+    setSavingWf(true);
+    setWfError(null);
+    const res = await fetch(draft.id ? `/api/automations/${draft.id}` : "/api/automations", {
+      method: draft.id ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft.id ? { name: draft.name, config: draft.config } : { type: "workflow", name: draft.name, module: draft.module, config: draft.config }),
+    }).catch(() => null);
+    setSavingWf(false);
+    if (!res) return setWfError("Sin conexión. La automatización no se guardó.");
+    if (!res.ok) {
+      const body = await res.clone().json().catch(() => ({}));
+      const zod = body.details?.formErrors?.[0] ?? (Object.values(body.details?.fieldErrors ?? {}).flat()[0] as string | undefined);
+      return setWfError(body.message ?? zod ?? (await readApiError(res)));
+    }
+    toast.success(draft.id ? "Automatización actualizada" : "Automatización creada");
+    setWorkflow(null);
+    startTransition(() => router.refresh());
+  }
+
+  function describeWorkflow(rule: Rule) {
+    const c = rule.config as unknown as WorkflowConfig;
+    const when = `${moduleLabel(rule.module)} · ${WORKFLOW_EVENT_LABELS[c.trigger?.event] ?? ""}${c.trigger?.field ? ` (si cambia «${fieldLabel(rule.module, c.trigger.field)}»)` : ""}`;
+    const conds = (c.conditions?.conditions ?? [])
+      .map((x) => ("conditions" in x ? `(${x.conditions.length} condiciones)` : `«${fieldLabel(rule.module, x.field)}» ${OPERATOR_LABELS[x.op] ?? x.op}${x.value ? ` ${x.value}` : ""}`))
+      .join(c.conditions?.match === "any" ? " o " : " y ");
+    const acts = (c.actions ?? []).map((a) => ACTION_LABELS[a.type]).join(" → ");
+    return `${when}${conds ? ` · si ${conds}` : ""} · ${acts}`;
+  }
+  const visibleRuns = runs.filter((r) => (!runFilter.ruleId || r.ruleId === runFilter.ruleId) && (!runFilter.status || r.status === runFilter.status));
 
   const memberLabel = (id: unknown) => members.find((m) => m.value === id)?.label ?? "usuario eliminado";
   const statusLabel = (key: unknown) => statuses.find((s) => s.value === key)?.label ?? String(key);
@@ -109,12 +166,31 @@ export function AutomationsManager({
       )}
 
       {canManage && (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => {
+              setCreating(null);
+              setWfError(null);
+              setWorkflow(workflow === "new" ? null : "new");
+            }}
+            aria-expanded={workflow === "new"}
+            className={`rounded-2xl border p-4 text-left transition-colors ${workflow === "new" ? "border-brand-300 bg-brand-50/60" : "border-slate-200/80 bg-white hover:border-slate-300"}`}
+          >
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <ZapIcon className="h-4 w-4 text-brand-600" />
+              Automatización personalizada
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Cualquier módulo (también los tuyos): cuándo, condiciones Y/O y acciones encadenadas. Ej.: pedir motivo al rechazar.</p>
+          </button>
           {(Object.keys(TYPE_INFO) as RuleType[]).map((t) => (
             <button
               key={t}
               type="button"
-              onClick={() => setCreating(creating === t ? null : t)}
+              onClick={() => {
+                setWorkflow(null);
+                setCreating(creating === t ? null : t);
+              }}
               aria-expanded={creating === t}
               className={`rounded-2xl border p-4 text-left transition-colors ${
                 creating === t ? "border-brand-300 bg-brand-50/60" : "border-slate-200/80 bg-white hover:border-slate-300"
@@ -128,6 +204,18 @@ export function AutomationsManager({
             </button>
           ))}
         </div>
+      )}
+
+      {workflow && (
+        <WorkflowBuilder
+          key={workflow === "new" ? "new" : workflow.id}
+          meta={meta}
+          initial={workflow === "new" ? undefined : workflow}
+          saving={savingWf}
+          error={wfError}
+          onCancel={() => setWorkflow(null)}
+          onSave={saveWorkflow}
+        />
       )}
 
       {creating && (
@@ -160,10 +248,32 @@ export function AutomationsManager({
                     {r.name}
                     <Badge variant={r.enabled ? "success" : "neutral"}>{r.enabled ? "Activa" : "Pausada"}</Badge>
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-500">{describe(r)}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{r.type === "workflow" ? describeWorkflow(r) : describe(r)}</p>
+                  {stats[r.id] && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      Últimos 30 días: {stats[r.id].total} {stats[r.id].total === 1 ? "ejecución" : "ejecuciones"}
+                      {stats[r.id].errors ? ` · ${stats[r.id].errors} con error` : ""}
+                      {stats[r.id].blocked ? ` · ${stats[r.id].blocked} cambios frenados` : ""}
+                    </p>
+                  )}
                 </div>
                 {canManage && (
                   <>
+                    {r.type === "workflow" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setCreating(null);
+                          setWfError(null);
+                          setWorkflow({ id: r.id, name: r.name, module: r.module ?? "lead", config: r.config as unknown as WorkflowConfig });
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        Editar
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -195,24 +305,65 @@ export function AutomationsManager({
 
       <Card className="overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Últimas ejecuciones</h2>
-          <p className="text-xs text-slate-500">Cada regla corre una sola vez por evento; las omitidas indican que la condición ya no se cumplía al ejecutar.</p>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Últimas ejecuciones</h2>
+              <p className="text-xs text-slate-500">Cada regla corre una sola vez por evento; las omitidas indican que la condición ya no se cumplía al ejecutar.</p>
+            </div>
+            <div className="flex gap-2">
+              <Select aria-label="Filtrar por regla" value={runFilter.ruleId} onChange={(e) => setRunFilter({ ...runFilter, ruleId: e.target.value })} className="h-9 w-auto">
+                <option value="">Todas las reglas</option>
+                {rules.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+              <Select aria-label="Filtrar por resultado" value={runFilter.status} onChange={(e) => setRunFilter({ ...runFilter, status: e.target.value })} className="h-9 w-auto">
+                <option value="">Todos los resultados</option>
+                {Object.entries(RUN_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
         </div>
-        {runs.length === 0 ? (
+        {visibleRuns.length === 0 ? (
           <p className="px-5 py-6 text-sm text-slate-500">Sin ejecuciones todavía.</p>
         ) : (
           <ul className="divide-y divide-slate-100 text-sm">
-            {runs.map((run) => (
+            {visibleRuns.map((run) => (
               <li key={run.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5">
                 <span className="w-32 shrink-0 text-xs tabular-nums text-slate-500">
                   {new Date(run.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </span>
                 <Badge variant={RUN_BADGE[run.status] ?? "neutral"}>{RUN_LABEL[run.status] ?? run.status}</Badge>
                 <span className="font-medium text-slate-800">{run.ruleName}</span>
+                {!!run.depth && <Badge>Encadenada (nivel {run.depth})</Badge>}
                 <span className="min-w-0 flex-1 truncate text-slate-600">{run.message}</span>
-                <Link href={`/dashboard/leads/${run.entityId}`} className="text-xs font-medium text-brand-700 hover:underline">
-                  Ver lead
-                </Link>
+                {run.details?.length ? (
+                  <button type="button" className="text-xs font-medium text-slate-500 hover:text-slate-900" onClick={() => setOpenRun(openRun === run.id ? null : run.id)} aria-expanded={openRun === run.id}>
+                    {openRun === run.id ? "Ocultar detalle" : "Detalle"}
+                  </button>
+                ) : null}
+                {recordHref(run) && (
+                  <Link href={recordHref(run)!} className="text-xs font-medium text-brand-700 hover:underline">
+                    Ver registro
+                  </Link>
+                )}
+                {openRun === run.id && run.details && (
+                  <ul className="w-full space-y-0.5 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                    {run.details.map((d, i) => (
+                      <li key={i} className="flex gap-2">
+                        <Badge variant={RUN_BADGE[d.status] ?? "neutral"}>{RUN_LABEL[d.status] ?? d.status}</Badge>
+                        <span className="font-medium text-slate-700">{ACTION_LABELS[d.type as keyof typeof ACTION_LABELS] ?? d.type}</span>
+                        <span className="text-slate-600">{d.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

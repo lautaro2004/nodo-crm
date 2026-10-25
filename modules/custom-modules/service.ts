@@ -75,6 +75,9 @@ export async function createModule(businessId: string, data: CreateModuleInput) 
         type: f.type,
         options: f.options,
         required: f.required,
+        defaultValue: f.defaultValue,
+        description: f.description,
+        ...(f.type === "relation" ? { targetEntity: f.targetEntity, multiple: f.multiple, inverseLabel: f.inverseLabel } : {}),
       });
       if (f.role) roles[`${f.role}FieldId`] = def.id;
     }

@@ -7,6 +7,8 @@ import { listCompanies } from "@/modules/companies/service";
 import { listContacts } from "@/modules/contacts/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { OpportunityForm } from "@/components/opportunities/opportunity-form";
+import { can, canSeeRecord, resolveAccess } from "@/modules/access/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 export default async function EditOpportunityPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await resolveWorkspaceContext();
@@ -20,6 +22,9 @@ export default async function EditOpportunityPage({ params }: { params: Promise<
     listContacts(ctx.businessId),
   ]);
   if (!opportunity) notFound();
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "opportunity", opportunity)) notFound();
+  if (!can(access, "opportunity", "edit")) return <NoAccess what="editar este registro" />;
 
   return (
     <div>

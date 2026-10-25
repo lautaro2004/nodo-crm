@@ -6,7 +6,7 @@ import { calendarErrorResponse } from "@/modules/calendar/errors";
 import { createEvent, listEvents, EVENT_TYPES, EVENT_STATUSES, type EventType, type EventStatus } from "@/modules/calendar/service";
 
 export async function GET(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "calendar", action: "view" } });
   if (!ctx) return response;
 
   const sp = new URL(request.url).searchParams;
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "calendar", action: "create" } });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, calendarEventCreateSchema);

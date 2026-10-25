@@ -6,6 +6,8 @@ import { listCompanies } from "@/modules/companies/service";
 import { listStatusDefinitions } from "@/modules/status-definitions/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { LeadForm } from "@/components/leads/lead-form";
+import { can, canSeeRecord, resolveAccess } from "@/modules/access/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 export default async function EditLeadPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await resolveWorkspaceContext();
@@ -18,6 +20,9 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
     listStatusDefinitions(ctx.businessId, "lead"),
   ]);
   if (!lead) notFound();
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "lead", lead)) notFound();
+  if (!can(access, "lead", "edit")) return <NoAccess what="editar este registro" />;
 
   return (
     <div>

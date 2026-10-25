@@ -1,5 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// Motor de automatizaciones y campos personalizados: fuera de alcance de
+// este test (tienen sus propios tests); se reemplazan por pasamanos.
+vi.mock("@/modules/automations/workflow", () => ({
+  trackChange: (_input: unknown, write: () => unknown) => write(),
+  proposedFrom: () => ({}),
+  emitCreated: vi.fn(),
+  AutomationRequirementError: class extends Error {},
+}));
+vi.mock("@/modules/custom-fields/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/modules/custom-fields/service")>()),
+  prepareCustomValues: async () => async () => {},
+}));
+
 const taskCreate = vi.fn();
 const taskFindMany = vi.fn();
 const taskFindFirst = vi.fn();

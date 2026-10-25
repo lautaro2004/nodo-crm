@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
+import { CustomFieldsFormSection, customValuesPayload, initialCustomValues, type FormCustomField } from "@/components/custom-fields/custom-fields-form-section";
 
 interface CompanyFormValues {
   name: string;
@@ -18,7 +19,10 @@ export function CompanyForm({
   initial,
   companyId,
   statusOptions,
+  customFields,
 }: {
+  /** Solo en el alta: campos personalizados del módulo (ver CustomFieldsFormSection). */
+  customFields?: FormCustomField[];
   initial?: Partial<CompanyFormValues>;
   companyId?: string;
   statusOptions: { key: string; label: string }[];
@@ -31,6 +35,7 @@ export function CompanyForm({
     phone: initial?.phone ?? "",
     status: initial?.status ?? "prospect",
   });
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() => initialCustomValues(customFields));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -47,7 +52,7 @@ export function CompanyForm({
       res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, ...(customFields?.length ? { customValues: customValuesPayload(customValues) } : {}) }),
       });
     } catch {
       setLoading(false);
@@ -92,6 +97,8 @@ export function CompanyForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {customFields && customFields.length > 0 && <CustomFieldsFormSection fields={customFields} values={customValues} onChange={setCustomValues} />}
+
       <Button type="submit" loading={loading || navigating}>
         {loading || navigating ? "Guardando…" : companyId ? "Guardar cambios" : "Crear empresa"}
       </Button>

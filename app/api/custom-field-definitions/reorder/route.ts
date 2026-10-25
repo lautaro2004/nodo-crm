@@ -5,7 +5,7 @@ import { customFieldReorderSchema } from "@/lib/schemas";
 import { reorderCustomFieldDefinitions, type CustomFieldEntityType } from "@/modules/custom-fields/service";
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "fields" });
   if (!ctx) return response;
   const { data, response: badRequest } = await parseBody(request, customFieldReorderSchema);
   if (!data) return badRequest;

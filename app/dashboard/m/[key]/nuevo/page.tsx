@@ -5,6 +5,8 @@ import { Card, PageHeader } from "@/components/ui/primitives";
 import { getModuleByKey } from "@/modules/custom-modules/service";
 import { loadRecordFormData } from "@/modules/custom-modules/view";
 import { RecordForm } from "@/components/custom-modules/record-form";
+import { can, resolveAccess } from "@/modules/access/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 export default async function NewRecordPage({ params }: { params: Promise<{ key: string }> }) {
   const ctx = await resolveWorkspaceContext();
@@ -12,6 +14,7 @@ export default async function NewRecordPage({ params }: { params: Promise<{ key:
   const { key } = await params;
   const mod = await getModuleByKey(ctx.businessId, key);
   if (!mod || mod.archivedAt) notFound();
+  if (!can(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), `cm:${mod.id}`, "create")) return <NoAccess what="crear registros acá" />;
   const data = await loadRecordFormData(ctx.businessId, mod.id);
   const basePath = `/dashboard/m/${mod.key}`;
 

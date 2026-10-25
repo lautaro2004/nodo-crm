@@ -3,6 +3,13 @@ import type { ZodType } from "zod";
 
 import { resolveWorkspaceContext, type OkWorkspaceContext } from "@/lib/workspace";
 import { hasRole, type Role } from "@/lib/permissions";
+import type { AdminPermission, ModuleAction } from "@/lib/access";
+import { canAdminister, can, canSeeRecord, resolveAccess, type ResolvedAccess } from "@/modules/access/service";
+import { loadRecordOwnership } from "@/modules/access/ownership";
+import { AutomationRequirementError } from "@/modules/automations/workflow";
+import { CustomValuesError } from "@/modules/custom-fields/service";
+
+export type GuardedContext = OkWorkspaceContext & { access: ResolvedAccess };
 
 const STATUS_BY_ERROR = {
   unauthenticated: 401,
@@ -15,11 +22,17 @@ const STATUS_BY_ERROR = {
 // nunca deja que la route reciba un businessId del cliente. Toda mutación
 // que necesite el negocio actual pasa por acá.
 //
-// `minRole`: acción restringida por rol (ver lib/permissions.ts). Un rol
-// insuficiente responde 403 { error: "forbidden" }.
-export async function requireWorkspace(options: { minRole?: Role } = {}): Promise<
-  { ctx: OkWorkspaceContext; response: null } | { ctx: null; response: NextResponse }
-> {
+// Permisos (todos se validan acá, en el servidor; ver lib/access.ts):
+// - `minRole`: rol de EQUIPO (public.Membership.role). Solo para la
+//   gestión del equipo y de los permisos.
+// - `admin`: permiso administrativo de Nodo (campos, automatizaciones…).
+// - `permission`: acción operativa sobre un módulo (ver/crear/editar/
+//   eliminar/exportar). El alcance por registro (todos/equipo/propios) se
+//   chequea aparte con requireRecordAccess.
+// Un permiso insuficiente responde 403 { error: "forbidden" }.
+export async function requireWorkspace(
+  options: { minRole?: Role; admin?: AdminPermission; permission?: { entity: string; action: ModuleAction } } = {}
+): Promise<{ ctx: GuardedContext; response: null } | { ctx: null; response: NextResponse }> {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") {
     return {
@@ -27,10 +40,28 @@ export async function requireWorkspace(options: { minRole?: Role } = {}): Promis
       response: NextResponse.json({ error: ctx.status }, { status: STATUS_BY_ERROR[ctx.status] }),
     };
   }
-  if (options.minRole && !hasRole(ctx.role, options.minRole)) {
-    return { ctx: null, response: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
-  }
-  return { ctx, response: null };
+  if (options.minRole && !hasRole(ctx.role, options.minRole)) return { ctx: null, response: forbidden() };
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (options.admin && !canAdminister(access, options.admin)) return { ctx: null, response: forbidden() };
+  if (options.permission && !can(access, options.permission.entity, options.permission.action)) return { ctx: null, response: forbidden() };
+  return { ctx: { ...ctx, access }, response: null };
+}
+
+export function forbidden(): NextResponse {
+  return NextResponse.json({ error: "forbidden" }, { status: 403 });
+}
+
+/**
+ * Acción sobre UN registro: permiso del módulo + alcance (un vendedor con
+ * alcance "propios" no puede editar ni borrar el lead de otro aunque
+ * conozca el id). Devuelve una respuesta de error (404 si no existe o no
+ * lo puede ver, 403 si lo ve pero no puede hacer esa acción) o null.
+ */
+export async function requireRecordAccess(ctx: GuardedContext, entityType: string, id: string, action: ModuleAction): Promise<NextResponse | null> {
+  const record = await loadRecordOwnership(ctx.businessId, entityType, id);
+  if (!record || !canSeeRecord(ctx.access, entityType, record)) return notFound();
+  if (!can(ctx.access, entityType, action)) return forbidden();
+  return null;
 }
 
 export async function parseBody<T>(
@@ -114,9 +145,38 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   integration_not_connected: 409,
   mapping_required: 400,
   event_not_retryable: 409,
+  invalid_input: 400,
+  invalid_default: 400,
+  invalid_validation: 400,
+  invalid_option_rename: 400,
+  invalid_option_replacement: 400,
+  relation_has_multiple: 409,
+  relation_not_exclusive: 409,
+  relation_target_taken: 409,
+  role_not_found: 404,
+  system_role: 400,
+  cannot_edit_self: 400,
+  team_not_found: 404,
+  team_cycle: 400,
+  team_name_taken: 409,
+  dashboard_not_found: 404,
+  too_many_dashboards: 400,
+  too_many_widgets: 400,
+  lead_not_found: 400,
+  field_not_writable: 400,
 };
 
 export function domainErrorResponse(err: unknown): NextResponse {
+  // Una automatización "antes de guardar" exige campos o impide el cambio:
+  // 422 con el detalle, para que la UI pida esos datos y reintente (ver
+  // components/automations/automation-prompt.tsx). No se guardó nada.
+  if (err instanceof AutomationRequirementError) {
+    return NextResponse.json({ error: "automation_required", ...err.requirement }, { status: 422 });
+  }
+  if (err instanceof CustomValuesError) {
+    const first = Object.values(err.fields)[0];
+    return NextResponse.json({ error: "invalid_value", message: first, fields: err.fields }, { status: 400 });
+  }
   const code = err instanceof Error ? err.message : "";
   const status = DOMAIN_ERROR_STATUS[code];
   if (!status) throw err;

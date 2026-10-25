@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, requireRecordAccess } from "@/lib/api-guard";
 import { convertLeadSchema } from "@/lib/schemas";
+import { can } from "@/modules/access/service";
 import { convertLead, ConversionError, AlreadyConvertedError } from "@/modules/leads/conversion";
 
 const STATUS_BY_ERROR: Record<string, number> = {
@@ -18,8 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "lead", id, "edit");
+  if (denied) return denied;
   const { data, response: badRequest } = await parseBody(request, convertLeadSchema);
   if (!data) return badRequest;
+  // Convertir crea un contacto (si es nuevo) y, opcionalmente, una oportunidad.
+  if ((data.contact.mode === "new" && !can(ctx.access, "contact", "create")) || (data.createOpportunity && !can(ctx.access, "opportunity", "create"))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   if (data.createOpportunity && !data.opportunity) {
     return NextResponse.json({ error: "opportunity_data_missing" }, { status: 400 });
   }

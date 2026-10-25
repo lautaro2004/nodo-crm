@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, domainErrorResponse, requireRecordAccess } from "@/lib/api-guard";
 import { opportunityItemCreateSchema } from "@/lib/schemas";
 import { addItem } from "@/modules/opportunity-items/service";
 
@@ -9,6 +9,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "opportunity", id, "edit");
+  if (denied) return denied;
   const { data, response: badRequest } = await parseBody(request, opportunityItemCreateSchema);
   if (!data) return badRequest;
   try {

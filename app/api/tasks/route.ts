@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guard";
 import { taskCreateSchema } from "@/lib/schemas";
 import { createTask, listTasks, TASK_STATUSES, TASK_PRIORITIES, type TaskStatus, type TaskPriority } from "@/modules/tasks/service";
+import { defaultOwnerFor, scopeWhere } from "@/modules/access/service";
 
 const VIEWS = ["all", "mine", "overdue", "today", "upcoming", "completed"] as const;
 
 export async function GET(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "task", action: "view" } });
   if (!ctx) return response;
 
   const { searchParams } = new URL(request.url);
@@ -25,17 +26,27 @@ export async function GET(request: Request) {
     priority,
     search,
     currentUserId: ctx.userId,
+    scope: scopeWhere(ctx.access, "task", { createdByField: "createdById" }),
   });
   return NextResponse.json(tasks);
 }
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "task", action: "create" } });
   if (!ctx) return response;
 
   const { data, response: badRequest } = await parseBody(request, taskCreateSchema);
   if (!data) return badRequest;
 
-  const task = await createTask(ctx.businessId, data, ctx.userId);
-  return NextResponse.json(task, { status: 201 });
+  try {
+    const task = await createTask(
+      ctx.businessId,
+      { ...data, ownerId: defaultOwnerFor(ctx.access, "task", data.ownerId) },
+      ctx.userId,
+      { enforceRequired: data.customValues !== undefined, actorUserId: ctx.userId }
+    );
+    return NextResponse.json(task, { status: 201 });
+  } catch (err) {
+    return domainErrorResponse(err);
+  }
 }

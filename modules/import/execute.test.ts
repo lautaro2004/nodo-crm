@@ -1,5 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// Motor de automatizaciones y campos personalizados: fuera de alcance de
+// este test (tienen sus propios tests); se reemplazan por pasamanos.
+vi.mock("@/modules/automations/workflow", () => ({
+  trackChange: (_input: unknown, write: () => unknown) => write(),
+  proposedFrom: () => ({}),
+  emitCreated: vi.fn(),
+  AutomationRequirementError: class extends Error {},
+}));
+
 const contactFindFirst = vi.fn();
 const contactCreate = vi.fn();
 const contactUpdateMany = vi.fn();

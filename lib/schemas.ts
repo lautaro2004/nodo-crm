@@ -17,12 +17,19 @@ export const onboardingSchema = z.object({
   activeModules: z.array(z.enum(["companies", "contacts", "leads", "opportunities", "tasks"])).min(1).optional(),
 });
 
+// Campos personalizados enviados junto con el alta/edición de un registro
+// estándar: definitionId → valor (texto; las relaciones, ids separados por
+// coma). Se validan contra las definiciones REALES en el servidor
+// (prepareCustomValues).
+const customValuesSchema = z.record(z.string().max(60), z.string().max(2000).nullable()).optional();
+
 export const companyCreateSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(160),
   domain: z.string().trim().max(160).optional().nullable(),
   phone: z.string().trim().max(60).optional().nullable(),
   status: z.string().trim().min(1).max(40).optional(),
   ownerId: z.string().trim().max(60).optional().nullable(),
+  customValues: customValuesSchema,
 });
 export const companyUpdateSchema = companyCreateSchema.partial();
 
@@ -32,6 +39,7 @@ export const contactCreateSchema = z.object({
   phone: z.string().trim().max(60).optional().nullable(),
   companyId: z.string().trim().max(60).optional().nullable(),
   ownerId: z.string().trim().max(60).optional().nullable(),
+  customValues: customValuesSchema,
 });
 export const contactUpdateSchema = contactCreateSchema.partial();
 
@@ -44,6 +52,7 @@ export const leadCreateSchema = z.object({
   status: z.string().trim().min(1).max(40).optional(),
   statusReason: z.string().trim().max(200).optional().nullable(),
   source: z.string().trim().max(40).optional(),
+  customValues: customValuesSchema,
 });
 export const leadUpdateSchema = leadCreateSchema.partial();
 
@@ -96,6 +105,7 @@ export const opportunityCreateSchema = z.object({
   stageId: z.string().trim().min(1, "Elegí una etapa"),
   amount: z.number().nonnegative().optional().nullable(),
   ownerId: z.string().trim().max(60).optional().nullable(),
+  customValues: customValuesSchema,
 });
 export const opportunityUpdateSchema = opportunityCreateSchema.partial().extend({
   status: z.enum(["open", "won", "lost"]).optional(),
@@ -118,6 +128,7 @@ export const taskCreateSchema = z.object({
   contactId: z.string().trim().max(60).optional().nullable(),
   leadId: z.string().trim().max(60).optional().nullable(),
   opportunityId: z.string().trim().max(60).optional().nullable(),
+  customValues: customValuesSchema,
 });
 export const taskUpdateSchema = taskCreateSchema.partial().extend({
   status: taskStatusEnum.optional(),
@@ -239,14 +250,27 @@ export const customFieldTypes = [
 
 // Módulos estándar o personalizados ("cm:<moduleId>"). Que el módulo sea
 // del negocio se valida en el servicio, nunca acá.
-const fieldEntityTypeSchema = z.union([
-  z.enum(["lead", "contact", "company", "opportunity"]),
+export const fieldEntityTypeSchema = z.union([
+  z.enum(["lead", "contact", "company", "opportunity", "task"]),
   z.string().regex(/^cm:[a-z0-9]{10,40}$/, "Módulo inválido"),
 ]);
 const relationTargetSchema = z.union([
-  z.enum(["lead", "contact", "company", "opportunity"]),
+  z.enum(["lead", "contact", "company", "opportunity", "task"]),
   z.string().regex(/^cm:[a-z0-9]{10,40}$/),
 ]);
+
+// Validaciones extra por tipo (ver lib/custom-fields.ts, sanitizeValidation:
+// el servidor descarta las que no corresponden al tipo).
+const fieldValidationSchema = z
+  .object({
+    minLength: z.number().int().min(0).max(2000).nullable().optional(),
+    maxLength: z.number().int().min(0).max(2000).nullable().optional(),
+    min: z.number().finite().nullable().optional(),
+    max: z.number().finite().nullable().optional(),
+    minDate: z.string().trim().max(10).nullable().optional(),
+    maxDate: z.string().trim().max(10).nullable().optional(),
+  })
+  .strict();
 
 export const customFieldDefinitionCreateSchema = z.object({
   entityType: fieldEntityTypeSchema,
@@ -263,12 +287,29 @@ export const customFieldDefinitionCreateSchema = z.object({
   order: z.number().int().min(0).optional(),
   targetEntity: relationTargetSchema.optional().nullable(),
   multiple: z.boolean().optional(),
+  exclusive: z.boolean().optional(),
+  inverseLabel: z.string().trim().max(80).optional().nullable(),
+  description: z.string().trim().max(300).optional().nullable(),
+  defaultValue: z.string().trim().max(2000).optional().nullable(),
+  validation: fieldValidationSchema.optional().nullable(),
 });
 // El tipo y el destino de una relación no se cambian después de crear el
-// campo (reinterpretaría los valores ya cargados).
+// campo (reinterpretaría los valores ya cargados). Las opciones sí:
+// renombrar migra los valores cargados, y quitar una opción en uso exige
+// elegir qué hacer con esos registros (ver updateCustomFieldDefinition).
+const removedOptionStrategySchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("keep") }),
+  z.object({ action: z.literal("clear") }),
+  z.object({ action: z.literal("replace"), replaceWith: z.string().trim().min(1).max(80) }),
+]);
 export const customFieldDefinitionUpdateSchema = customFieldDefinitionCreateSchema
   .omit({ entityType: true, key: true, type: true, targetEntity: true })
-  .partial();
+  .partial()
+  .extend({
+    options: z.array(z.string().trim().min(1).max(80)).max(200).optional(),
+    optionRenames: z.array(z.object({ from: z.string().trim().min(1).max(80), to: z.string().trim().min(1).max(80) })).max(200).optional(),
+    removedOptions: z.record(z.string(), removedOptionStrategySchema).optional(),
+  });
 
 export const customFieldReorderSchema = z.object({
   entityType: fieldEntityTypeSchema,
@@ -335,7 +376,7 @@ export const statusDefinitionReorderSchema = z.object({
 });
 
 export const savedViewCreateSchema = z.object({
-  entityType: z.union([z.enum(["lead", "opportunity"]), z.string().regex(/^cm:[a-z0-9]{10,40}$/)]),
+  entityType: z.union([z.enum(["lead", "opportunity", "contact", "company", "task"]), z.string().regex(/^cm:[a-z0-9]{10,40}$/)]),
   name: z.string().trim().min(1, "Poné un nombre").max(60),
   params: z.string().max(2000),
   shared: z.boolean().optional(),
@@ -346,6 +387,8 @@ export const invitationCreateSchema = z.object({
   email: z.string().trim().toLowerCase().email("Email inválido").max(160),
   role: z.enum(["admin", "member"]),
   products: z.array(z.enum(["crm", "nexo"])).min(1, "Elegí al menos un producto").max(2),
+  /** Rol de Nodo que se aplica al aceptar (ej. "viewer" = solo lectura). */
+  accessRole: z.string().trim().min(1).max(60).optional().nullable(),
 });
 export const memberUpdateSchema = z
   .object({

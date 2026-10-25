@@ -3,6 +3,8 @@ import { listEntityIdsForTag } from "@/modules/tags/service";
 import { assertOptionalOwner } from "@/modules/business/members";
 import { assertValidStatus } from "@/modules/status-definitions/service";
 import { cleanupDeletedRecord } from "@/modules/records/cleanup";
+import { prepareCustomValues } from "@/modules/custom-fields/service";
+import { proposedFrom, trackChange } from "@/modules/automations/workflow";
 
 // Todo módulo de dominio del CRM recibe businessId como PRIMER argumento y
 // lo aplica en cada where — nunca se confía en un id sin scopear (ver
@@ -14,10 +16,29 @@ export interface CreateCompanyInput {
   phone?: string | null;
   status?: string;
   ownerId?: string | null;
+  /** Campos personalizados (definitionId → valor). Ver prepareCustomValues. */
+  customValues?: Record<string, string | null>;
 }
 export type UpdateCompanyInput = Partial<CreateCompanyInput>;
 
-export async function createCompany(businessId: string, data: CreateCompanyInput) {
+export async function createCompany(businessId: string, input: CreateCompanyInput, options: { enforceRequired?: boolean; actorUserId?: string | null } = {}) {
+  const { customValues, ...data } = input;
+  // trackChange: validaciones "antes de guardar" y automatizaciones
+  // genéricas (modules/automations/workflow.ts).
+  return trackChange(
+    { businessId, entityType: "company", kind: "create", proposed: proposedFrom(data, customValues), actorUserId: options.actorUserId },
+    async () => {
+      // Valida los campos personalizados ANTES de crear (nunca un registro a medias).
+      const writeCustom = await prepareCustomValues(businessId, "company", customValues ?? {}, { creating: true, enforceRequired: options.enforceRequired });
+      const created = await insertCompany(businessId, data);
+      await writeCustom(created.id);
+      return created;
+    },
+    (created) => created.id
+  );
+}
+
+async function insertCompany(businessId: string, data: Omit<CreateCompanyInput, "customValues">) {
   await assertOptionalOwner(businessId, data.ownerId);
   await assertValidStatus(businessId, "company", data.status);
   return prisma.company.create({
@@ -37,6 +58,8 @@ export interface ListCompaniesFilters {
   status?: string;
   ownerId?: string;
   tagId?: string;
+  /** Alcance de permisos (registros visibles para el usuario). */
+  scope?: Record<string, unknown>;
 }
 
 export async function listCompanies(businessId: string, filters: ListCompaniesFilters = {}) {
@@ -48,6 +71,7 @@ export async function listCompanies(businessId: string, filters: ListCompaniesFi
   return prisma.company.findMany({
     where: {
       businessId,
+      ...(filters.scope && Object.keys(filters.scope).length ? { AND: [filters.scope] } : {}),
       ...(taggedIds ? { id: { in: taggedIds } } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
@@ -78,7 +102,21 @@ export async function getCompany(businessId: string, id: string) {
   });
 }
 
-export async function updateCompany(businessId: string, id: string, data: UpdateCompanyInput) {
+export async function updateCompany(businessId: string, id: string, input: UpdateCompanyInput, actorUserId: string | null = null) {
+  const { customValues, ...data } = input;
+  return trackChange(
+    { businessId, entityType: "company", kind: "update", recordId: id, proposed: proposedFrom(data, customValues), actorUserId },
+    async () => {
+      const writeCustom = customValues ? await prepareCustomValues(businessId, "company", customValues, { recordId: id }) : null;
+      const updated = await applyCompanyUpdate(businessId, id, data);
+      if (updated && writeCustom) await writeCustom(id);
+      return updated;
+    },
+    (updated) => updated?.id
+  );
+}
+
+async function applyCompanyUpdate(businessId: string, id: string, data: Omit<UpdateCompanyInput, "customValues">) {
   await assertOptionalOwner(businessId, data.ownerId);
   await assertValidStatus(businessId, "company", data.status);
   const result = await prisma.company.updateMany({ where: { id, businessId }, data });
@@ -98,8 +136,14 @@ export async function archiveCompany(businessId: string, id: string) {
   return result.count > 0;
 }
 
-export async function deleteCompany(businessId: string, id: string) {
-  const result = await prisma.company.deleteMany({ where: { id, businessId } });
-  if (result.count > 0) await cleanupDeletedRecord(businessId, "company", id);
-  return result.count > 0;
+export async function deleteCompany(businessId: string, id: string, actorUserId: string | null = null) {
+  return trackChange(
+    { businessId, entityType: "company", kind: "delete", recordId: id, actorUserId },
+    async () => {
+      const result = await prisma.company.deleteMany({ where: { id, businessId } });
+      if (result.count > 0) await cleanupDeletedRecord(businessId, "company", id);
+      return result.count > 0;
+    },
+    (ok) => (ok ? id : null)
+  );
 }

@@ -6,10 +6,14 @@ import { listLeads } from "@/modules/leads/service";
 import { listOpportunities } from "@/modules/opportunities/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { TaskForm } from "@/components/tasks/task-form";
+import { can, resolveAccess } from "@/modules/access/service";
+import { customFieldsForForm } from "@/modules/custom-fields/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 export default async function NewTaskPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
+  if (!can(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "task", "create")) return <NoAccess what="crear registros acá" />;
 
   const [members, companies, contacts, leads, opportunities] = await Promise.all([
     listWorkspaceMembers(ctx.businessId),
@@ -22,7 +26,7 @@ export default async function NewTaskPage() {
   return (
     <div>
       <PageHeader title="Nueva tarea" />
-      <TaskForm
+      <TaskForm customFields={await customFieldsForForm(ctx.businessId, "task")}
         members={members}
         companies={companies.map((c) => ({ id: c.id, name: c.name }))}
         contacts={contacts.map((c) => ({ id: c.id, name: c.name }))}

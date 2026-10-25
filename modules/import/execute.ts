@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { moduleEntityType } from "@/lib/custom-modules";
+import type { FieldValidation } from "@/lib/custom-fields";
+import { AutomationRequirementError, emitCreated } from "@/modules/automations/workflow";
 import { createCompany } from "@/modules/companies/service";
 import { createContact } from "@/modules/contacts/service";
 import { createLead } from "@/modules/leads/service";
@@ -75,11 +78,14 @@ async function findExisting(businessId: string, module: ImportModule, standard: 
 // El chequeo de "required" ya corrió en executeImport antes de llegar
 // acá (una fila sin `name` termina en `errors`, nunca en createEntity) —
 // el cast sólo le informa a TypeScript esa garantía de runtime.
-async function createEntity(businessId: string, module: ImportModule, standard: Record<string, string> & { name: string }) {
-  if (module === "contact") return createContact(businessId, standard);
-  if (module === "company") return createCompany(businessId, standard);
+// Los campos personalizados viajan en el alta (customValues): así las
+// automatizaciones de "se crea un registro" ya ven esos valores.
+async function createEntity(businessId: string, module: ImportModule, standard: Record<string, string> & { name: string }, custom: Record<string, string>, userId: string | null) {
+  const customValues = Object.keys(custom).length ? custom : undefined;
+  if (module === "contact") return createContact(businessId, { ...standard, customValues }, { actorUserId: userId });
+  if (module === "company") return createCompany(businessId, { ...standard, customValues }, { actorUserId: userId });
   // source: "import" (no "manual") — trazable en el historial de dónde vino cada Lead, mismo campo que ya usa la sincronización de Nexo.
-  return createLead(businessId, { ...standard, source: "import" });
+  return createLead(businessId, { ...standard, source: "import", customValues }, { actorUserId: userId });
 }
 
 async function updateEntity(businessId: string, module: ImportModule, id: string, standard: Record<string, string>) {
@@ -95,7 +101,11 @@ async function updateEntity(businessId: string, module: ImportModule, id: string
 interface ImportAdapter {
   moduleDef: ImportModuleDef;
   findExisting(standard: Record<string, string>, custom: Record<string, string>): Promise<{ id: string } | null>;
-  create(standard: Record<string, string> & { name: string }): Promise<{ id: string }>;
+  create(standard: Record<string, string> & { name: string }, custom: Record<string, string>): Promise<{ id: string }>;
+  /** true si `create` ya escribió los campos personalizados. */
+  createWritesCustom?: boolean;
+  /** Después del alta y de sus campos (eventos de automatización). */
+  afterCreate?(id: string): Promise<void>;
   update(id: string, standard: Record<string, string>): Promise<void>;
   /** Campos personalizados que no pueden quedar vacíos al crear. */
   requiredCustom?: { id: string; label: string }[];
@@ -104,12 +114,14 @@ interface ImportAdapter {
 export async function executeImport(
   businessId: string,
   module: ImportModule,
-  rows: ImportRowInput[]
+  rows: ImportRowInput[],
+  userId: string | null = null
 ): Promise<ImportResult> {
   return runImport(businessId, rows, {
     moduleDef: IMPORT_MODULE_DEFS[module],
     findExisting: (standard) => findExisting(businessId, module, standard),
-    create: (standard) => createEntity(businessId, module, standard),
+    create: (standard, custom) => createEntity(businessId, module, standard, custom, userId),
+    createWritesCustom: true,
     update: (id, standard) => updateEntity(businessId, module, id, standard),
   });
 }
@@ -143,6 +155,7 @@ export async function executeCustomModuleImport(
       return prisma.customRecord.findFirst({ where: { id: match.entityId, businessId, moduleId }, select: { id: true } });
     },
     create: (standard) => prisma.customRecord.create({ data: { businessId, moduleId, title: standard.name, createdById: userId }, select: { id: true } }),
+    afterCreate: (id) => emitCreated(businessId, moduleEntityType(moduleId), id, userId),
     update: async (id, standard) => {
       await prisma.customRecord.updateMany({
         where: { id, businessId, moduleId },
@@ -189,7 +202,7 @@ async function runImport(businessId: string, rows: ImportRowInput[], adapter: Im
         messages.push("Uno de los campos personalizados mapeados ya no existe.");
         continue;
       }
-      const error = validateCustomValue({ type: definition.type, options: definition.options, label: definition.label }, raw);
+      const error = validateCustomValue({ type: definition.type, options: definition.options, label: definition.label, validation: (definition.validation as FieldValidation | null) ?? null }, raw);
       if (error) messages.push(error);
       else if (raw.trim()) cleanCustom[definitionId] = raw.trim();
     }
@@ -207,13 +220,17 @@ async function runImport(businessId: string, rows: ImportRowInput[], adapter: Im
         continue;
       }
       let entityId: string;
+      let customWritten = false;
+      let isNew = false;
       if (existing) {
         await adapter.update(existing.id, cleanStandard);
         entityId = existing.id;
         updated++;
       } else if (cleanStandard.name) {
-        const created_ = await adapter.create(cleanStandard as Record<string, string> & { name: string });
+        const created_ = await adapter.create(cleanStandard as Record<string, string> & { name: string }, cleanCustom);
         entityId = created_.id;
+        customWritten = !!adapter.createWritesCustom;
+        isNew = true;
         created++;
       } else {
         // No debería pasar (name es requerido y ya se validó arriba),
@@ -222,14 +239,19 @@ async function runImport(businessId: string, rows: ImportRowInput[], adapter: Im
         errors.push({ row: fileRow, messages: ['Falta "Nombre"'] });
         continue;
       }
-      for (const [definitionId, value] of Object.entries(cleanCustom)) {
+      for (const [definitionId, value] of customWritten ? [] : Object.entries(cleanCustom)) {
         // El registro es de este negocio (recién creado o encontrado por
         // findExisting, ambos scopeados): no hace falta re-chequearlo.
         // setCustomFieldValue normaliza el valor (fechas dd/mm → ISO,
         // "sí" → true, "1.234,5" → 1234.5) igual que el editor del registro.
-        await setCustomFieldValue(businessId, definitionId, entityId, value, { skipEntityCheck: true });
+        await setCustomFieldValue(businessId, definitionId, entityId, value, { skipEntityCheck: true, skipRequired: true });
       }
+      if (isNew && adapter.afterCreate) await adapter.afterCreate(entityId);
     } catch (err) {
+      if (err instanceof AutomationRequirementError) {
+        errors.push({ row: fileRow, messages: [err.requirement.message] });
+        continue;
+      }
       // Una fila que falla en la escritura (ej. constraint de base) no
       // aborta el resto del archivo — importación parcial, no atómica
       // (Fase 6/7: "150 filas procesadas, 143 creadas, 4 actualizadas, 3

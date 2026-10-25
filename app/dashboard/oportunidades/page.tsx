@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { can, canAdminister, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getRestorableListParams } from "@/lib/views/remember";
+import { ListPreferenceSync } from "@/components/views/list-preference-sync";
+import { NoAccess } from "@/components/team/admin-only";
 import { nounFromLabels } from "@/lib/record-nouns";
 import { RecordSelection, SelectAllBar } from "@/components/records/selection";
 import { getModuleLabel } from "@/modules/workspace/module-config";
@@ -32,6 +35,9 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   if (ctx.status !== "ok") return null;
 
   const sp = await searchParams;
+  const restore = await getRestorableListParams(ctx, "opportunity", sp, OPPORTUNITY_PRESETS.map((p) => p.id));
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!can(access, "opportunity", "view")) return <NoAccess />;
   const [pipelines, moduleLabel, toolbar] = await Promise.all([
     listPipelines(ctx.businessId),
     getModuleLabel(ctx.businessId, "opportunity"),
@@ -43,7 +49,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   const display = sp.display === "list" ? "list" : "kanban";
 
   // Mismos filtros en Lista y Kanban (alternar vistas no los pierde).
-  const filters = { ...parseOpportunityFilters(sp, ctx.userId), pipelineId: pipeline?.id };
+  const filters = { ...parseOpportunityFilters(sp, ctx.userId), pipelineId: pipeline?.id, scope: scopeWhere(access, "opportunity") };
   const opportunities = pipeline ? await listOpportunities(ctx.businessId, filters) : [];
   const names = memberNames(toolbar.members);
   const allColumns = [...OPPORTUNITY_COLUMNS, ...customColumns(toolbar.customFieldDefs)];
@@ -81,12 +87,12 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
         }
         actions={
           <>
-            {hasRole(ctx.role, "admin") && (
+            {canAdminister(access, "settings") && (
               <Link href="/dashboard/oportunidades/pipelines">
                 <Button variant="secondary">Gestionar pipelines</Button>
               </Link>
             )}
-            {pipeline && (
+            {pipeline && can(access, "opportunity", "create") && (
               <Link href="/dashboard/oportunidades/nueva">
                 <Button>
                   <PlusIcon className="h-4 w-4" />
@@ -147,7 +153,9 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
             display={display}
             defaultDisplay="kanban"
             exportPath="/api/export/opportunities"
+            canExport={can(access, "opportunity", "export")}
           />
+          <ListPreferenceSync entity="opportunity" restore={restore} />
 
           {opportunities.length === 0 ? (
             hasFilters ? (
@@ -172,7 +180,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
               entityType="opportunity"
               ids={rows.map((o) => o.id)}
               noun={nounFromLabels(moduleLabel.labelSingular, moduleLabel.labelPlural)}
-              canDelete={hasRole(ctx.role, "admin")}
+              canDelete={can(access, "opportunity", "delete")}
             >
               {display === "kanban" ? (
                 <>

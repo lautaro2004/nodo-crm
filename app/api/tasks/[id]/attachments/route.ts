@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace } from "@/lib/api-guard";
+import { requireWorkspace, requireRecordAccess } from "@/lib/api-guard";
 import { listTaskAttachments, uploadTaskAttachment } from "@/modules/tasks/attachments";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,6 +8,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "task", id, "view");
+  if (denied) return denied;
   const attachments = await listTaskAttachments(ctx.businessId, id);
   return NextResponse.json(attachments);
 }
@@ -17,6 +19,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "task", id, "edit");
+  if (denied) return denied;
 
   let formData: FormData;
   try {
