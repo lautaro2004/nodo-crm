@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
+import { CustomFieldsFormSection, customValuesPayload, initialCustomValues, type FormCustomField } from "@/components/custom-fields/custom-fields-form-section";
 
 interface Stage {
   id: string;
@@ -33,7 +34,10 @@ export function OpportunityForm({
   pipelines,
   companies,
   contacts,
+  customFields,
 }: {
+  /** Solo en el alta: campos personalizados del módulo (ver CustomFieldsFormSection). */
+  customFields?: FormCustomField[];
   initial?: Partial<OpportunityFormValues>;
   opportunityId?: string;
   pipelines: Pipeline[];
@@ -51,6 +55,7 @@ export function OpportunityForm({
     stageId: initial?.stageId ?? pipelines.find((p) => p.id === defaultPipeline)?.stages[0]?.id ?? "",
     amount: initial?.amount ?? "",
   });
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() => initialCustomValues(customFields));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -69,14 +74,14 @@ export function OpportunityForm({
       res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify({ ...{
           title: values.title,
           companyId: values.companyId || null,
           contactId: values.contactId || null,
           pipelineId: values.pipelineId,
           stageId: values.stageId,
           amount: values.amount ? Number(values.amount) : null,
-        }),
+        }, ...(customFields?.length ? { customValues: customValuesPayload(customValues) } : {}) }),
       });
     } catch {
       setLoading(false);
@@ -164,6 +169,8 @@ export function OpportunityForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {customFields && customFields.length > 0 && <CustomFieldsFormSection fields={customFields} values={customValues} onChange={setCustomValues} />}
+
       <Button type="submit" loading={loading || navigating} disabled={!values.pipelineId || !values.stageId}>
         {loading || navigating ? "Guardando…" : opportunityId ? "Guardar cambios" : "Crear oportunidad"}
       </Button>

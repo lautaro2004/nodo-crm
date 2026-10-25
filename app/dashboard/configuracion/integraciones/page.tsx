@@ -1,17 +1,17 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
 import { Card, PageHeader, SectionTitle } from "@/components/ui/primitives";
 import { GoogleIntegrations } from "@/components/configuracion/google-integrations";
 import { LeadIntegrations } from "@/components/integrations/lead-integrations";
 import { integrationsEnvironment, listIntegrations } from "@/modules/integrations/service";
 import { leadCustomFields } from "@/modules/integrations/sheets";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function IntegrationsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  const canManage = hasRole(ctx.role, "admin");
+  const canManage = canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings");
   const [integrations, customFields] = canManage ? await Promise.all([listIntegrations(ctx.businessId), leadCustomFields(ctx.businessId)]) : [[], []];
 
   return (

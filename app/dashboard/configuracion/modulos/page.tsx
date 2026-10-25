@@ -1,16 +1,16 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
 import { AdminOnly } from "@/components/team/admin-only";
 import { PageHeader } from "@/components/ui/primitives";
 import { listModules } from "@/modules/custom-modules/service";
 import { prisma } from "@/lib/prisma";
 import { ModulesAdmin } from "@/components/custom-modules/modules-admin";
 import { MODULE_TEMPLATES, MAX_CUSTOM_MODULES } from "@/lib/custom-modules";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export default async function ModulesSettingsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "fields")) return <AdminOnly />;
 
   const modules = await listModules(ctx.businessId, { includeArchived: true });
   const counts = await prisma.customRecord.groupBy({

@@ -2,23 +2,20 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { endOfDay, getCustomFieldFilters, getDay, getParam, type SearchParamsLike } from "@/lib/filters/params";
-import { validateCustomValue } from "@/lib/custom-fields";
+import { validateCustomValue, type FieldValidation } from "@/lib/custom-fields";
 import { RECORDS_PAGE_SIZE, moduleEntityType } from "@/lib/custom-modules";
-import { entityIdsMatchingCustomFilter, setCustomFieldValue } from "@/modules/custom-fields/service";
+import { CustomValuesError, entityIdsMatchingCustomFilter, setCustomFieldValue } from "@/modules/custom-fields/service";
 import { assertUserBelongsToBusiness } from "@/modules/business/members";
 import { cleanupDeletedRecord } from "@/modules/records/cleanup";
 import { parseIdList, setRelationLinks } from "@/modules/records/links";
 import { getModuleById, listModuleFields } from "@/modules/custom-modules/service";
+import { proposedFrom, trackChange } from "@/modules/automations/workflow";
 
 // Registros de módulos personalizados. Toda operación revalida que el
 // módulo sea del negocio (y el registro, del módulo).
 
 /** Errores por campo (definitionId → mensaje) para mostrarlos en el form. */
-export class RecordValidationError extends Error {
-  constructor(public fields: Record<string, string>) {
-    super("invalid_value");
-  }
-}
+export class RecordValidationError extends CustomValuesError {}
 
 export interface RecordListFilters {
   search?: string;
@@ -30,6 +27,8 @@ export interface RecordListFilters {
   dateField?: string;
   sort?: string;
   page?: number;
+  /** Alcance de permisos (responsable o creador visibles para el usuario). */
+  scope?: Prisma.CustomRecordWhereInput;
 }
 
 /** Filtros desde la URL (mismos nombres que Leads/Oportunidades). */
@@ -52,6 +51,7 @@ export function parseRecordFilters(sp: SearchParamsLike, userId: string): Record
 export async function listRecords(businessId: string, moduleId: string, f: RecordListFilters = {}) {
   const entityType = moduleEntityType(moduleId);
   const and: Prisma.CustomRecordWhereInput[] = [];
+  if (f.scope && Object.keys(f.scope).length) and.push(f.scope);
   if (f.search) and.push({ title: { contains: f.search, mode: "insensitive" } });
   if (f.ownerId) and.push({ ownerId: f.ownerId === "none" ? null : f.ownerId });
   if (f.from || f.to) {
@@ -113,14 +113,14 @@ function validateValues(fields: FieldDef[], values: Record<string, string | null
     }
     if (def.type === "image") continue; // se sube por su propio endpoint
     if (def.type === "relation") continue; // se valida contra la base al guardar
-    const message = validateCustomValue({ type: def.type, options: def.options, label: def.label }, raw ?? "");
+    const message = validateCustomValue({ type: def.type, options: def.options, label: def.label, validation: (def.validation as FieldValidation | null) ?? null }, raw ?? "");
     if (message) errors[id] = message;
   }
   for (const def of fields) {
     if (!def.required || def.type === "image") continue;
     const provided = def.id in values;
     const empty = !(values[def.id] ?? "").trim();
-    if ((creating && empty) || (!creating && provided && empty)) errors[def.id] = `"${def.label}" es obligatorio.`;
+    if ((creating && empty && !(!provided && def.defaultValue)) || (!creating && provided && empty)) errors[def.id] = `"${def.label}" es obligatorio.`;
   }
   if (Object.keys(errors).length) throw new RecordValidationError(errors);
 }
@@ -134,13 +134,20 @@ async function writeValues(businessId: string, moduleId: string, recordId: strin
     if (def.type === "relation") {
       try {
         await setRelationLinks(businessId, def, entityType, recordId, parseIdList(raw));
-      } catch {
-        throw new RecordValidationError({ [def.id]: `"${def.label}": alguno de los registros elegidos no existe.` });
+      } catch (err) {
+        const taken = err instanceof Error && err.message === "relation_target_taken";
+        throw new RecordValidationError({
+          [def.id]: taken ? `"${def.label}": alguno de los registros elegidos ya está vinculado a otro registro.` : `"${def.label}": alguno de los registros elegidos no existe.`,
+        });
       }
       continue;
     }
-    await setCustomFieldValue(businessId, id, recordId, raw, { skipEntityCheck: true });
+    await setCustomFieldValue(businessId, id, recordId, raw, { skipEntityCheck: true, skipRequired: true });
   }
+}
+
+function defaultValues(fields: FieldDef[]): Record<string, string> {
+  return Object.fromEntries(fields.filter((f) => f.defaultValue && f.type !== "relation" && f.type !== "image").map((f) => [f.id, f.defaultValue!]));
 }
 
 async function loadWritableModule(businessId: string, moduleId: string) {
@@ -153,10 +160,25 @@ async function loadWritableModule(businessId: string, moduleId: string) {
 export async function createRecord(businessId: string, moduleId: string, userId: string, data: RecordInput) {
   await loadWritableModule(businessId, moduleId);
   const fields = await listModuleFields(businessId, moduleId);
-  const values = data.values ?? {};
+  // Valores predeterminados de los campos que no vinieron en el alta.
+  const values = { ...defaultValues(fields), ...(data.values ?? {}) };
   validateValues(fields, values, true);
   if (data.ownerId) await assertUserBelongsToBusiness(businessId, data.ownerId);
 
+  return trackChange(
+    {
+      businessId,
+      entityType: moduleEntityType(moduleId),
+      kind: "create",
+      proposed: proposedFrom({ title: data.title, ownerId: data.ownerId ?? null }, values),
+      actorUserId: userId,
+    },
+    () => insertRecord(businessId, moduleId, userId, data, fields, values),
+    (record) => record.id
+  );
+}
+
+async function insertRecord(businessId: string, moduleId: string, userId: string, data: RecordInput, fields: FieldDef[], values: Record<string, string | null>) {
   const record = await prisma.customRecord.create({
     data: { businessId, moduleId, title: (data.title ?? "").trim(), ownerId: data.ownerId ?? null, createdById: userId },
   });
@@ -171,7 +193,13 @@ export async function createRecord(businessId: string, moduleId: string, userId:
   return record;
 }
 
-export async function updateRecord(businessId: string, moduleId: string, id: string, data: RecordInput & { archived?: boolean }) {
+export async function updateRecord(
+  businessId: string,
+  moduleId: string,
+  id: string,
+  data: RecordInput & { archived?: boolean },
+  actorUserId: string | null = null
+) {
   const record = await getRecord(businessId, moduleId, id);
   if (!record) return null;
   const fields = await listModuleFields(businessId, moduleId);
@@ -179,7 +207,24 @@ export async function updateRecord(businessId: string, moduleId: string, id: str
   validateValues(fields, values, false);
   if (data.ownerId) await assertUserBelongsToBusiness(businessId, data.ownerId);
 
-  await writeValues(businessId, moduleId, id, fields, values);
+  return trackChange(
+    {
+      businessId,
+      entityType: moduleEntityType(moduleId),
+      kind: "update",
+      recordId: id,
+      proposed: proposedFrom({ title: data.title, ownerId: data.ownerId }, values),
+      actorUserId,
+    },
+    async () => {
+      await writeValues(businessId, moduleId, id, fields, values);
+      return applyRecordUpdate(id, data);
+    },
+    (updated) => updated.id
+  );
+}
+
+function applyRecordUpdate(id: string, data: RecordInput & { archived?: boolean }) {
   return prisma.customRecord.update({
     where: { id },
     data: {
@@ -192,8 +237,14 @@ export async function updateRecord(businessId: string, moduleId: string, id: str
   });
 }
 
-export async function deleteRecord(businessId: string, moduleId: string, id: string) {
-  const result = await prisma.customRecord.deleteMany({ where: { id, businessId, moduleId } });
-  if (result.count > 0) await cleanupDeletedRecord(businessId, moduleEntityType(moduleId), id);
-  return result.count > 0;
+export async function deleteRecord(businessId: string, moduleId: string, id: string, actorUserId: string | null = null) {
+  return trackChange(
+    { businessId, entityType: moduleEntityType(moduleId), kind: "delete", recordId: id, actorUserId },
+    async () => {
+      const result = await prisma.customRecord.deleteMany({ where: { id, businessId, moduleId } });
+      if (result.count > 0) await cleanupDeletedRecord(businessId, moduleEntityType(moduleId), id);
+      return result.count > 0;
+    },
+    (ok) => (ok ? id : null)
+  );
 }

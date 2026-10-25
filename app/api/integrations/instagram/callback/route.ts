@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 import { getInstagramAppConfig } from "@/lib/instagram/graph";
 import { IG_COOKIE_PATH, IG_NONCE_COOKIE, verifyInstagramState } from "@/lib/instagram/oauth-state";
 import { completeInstagramConnection } from "@/modules/integrations/instagram";
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status === "unauthenticated") return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(RETURN_TO)}`, base));
   if (ctx.status !== "ok") return done("no_workspace");
-  if (!hasRole(ctx.role, "admin")) return done("forbidden");
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings")) return done("forbidden");
 
   const cookieNonce = request.headers.get("cookie")?.match(new RegExp(`${IG_NONCE_COOKIE}=([^;]+)`))?.[1] ?? null;
   const state = verifyInstagramState(url.searchParams.get("state"), cookieNonce);

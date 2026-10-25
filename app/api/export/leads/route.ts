@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
-import { resolveWorkspaceContext } from "@/lib/workspace";
+import { requireWorkspace } from "@/lib/api-guard";
+import { scopeWhere } from "@/modules/access/service";
 import { csvResponse, toCsv, todayStamp } from "@/lib/csv";
 import { LEAD_SOURCE_LABELS } from "@/lib/labels";
 import { LEAD_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
@@ -16,12 +15,13 @@ import { listWorkspaceMembers } from "@/modules/business/members";
 // función parseLeadFilters/buildLeadWhere) y, si viene `cols`, las mismas
 // columnas en el mismo orden. Sin `cols`, exporta todas.
 export async function GET(request: Request) {
-  const ctx = await resolveWorkspaceContext();
-  if (ctx.status !== "ok") return NextResponse.json({ error: ctx.status }, { status: 401 });
+  // Exportar es un permiso propio (lib/access.ts) y respeta el alcance.
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "lead", action: "export" } });
+  if (!ctx) return response;
 
   const sp = new URL(request.url).searchParams;
   const [leads, statuses, members] = await Promise.all([
-    listLeads(ctx.businessId, parseLeadFilters(sp, ctx.userId)),
+    listLeads(ctx.businessId, { ...parseLeadFilters(sp, ctx.userId), scope: scopeWhere(ctx.access, "lead") }),
     listStatusOptions(ctx.businessId, "lead"),
     listWorkspaceMembers(ctx.businessId),
   ]);

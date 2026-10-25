@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { can, canAdminister, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { DeleteRecordButton } from "@/components/records/delete-record-button";
 import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
@@ -38,6 +38,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const lead = await getLead(ctx.businessId, id);
   if (!lead) notFound();
+  // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "lead", lead)) notFound();
+  const canEdit = can(access, "lead", "edit");
 
   const [statuses, activities, assignedTags, allTags, nexoAppointment, contacts, pipelines, members, upcomingEvents, emailTemplates, customFields, relatedGroups] = await Promise.all([
     listStatusDefinitions(ctx.businessId, "lead"),
@@ -62,7 +66,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     listUpcomingEvents(ctx.businessId, { leadId: id }),
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "lead", id),
-    incomingLinks(ctx.businessId, "lead", id),
+    incomingLinks(ctx.businessId, "lead", id, (t) => can(access, t, "view")),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -86,16 +90,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 members={members}
               />
             )}
-            <Link href={`/dashboard/leads/${id}/editar`}>
-              <Button variant="secondary">Editar</Button>
-            </Link>
-            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="lead" id={id} noun={RECORD_NOUNS.lead} redirectTo="/dashboard/leads" />}
+            {canEdit && (
+              <Link href={`/dashboard/leads/${id}/editar`}>
+                <Button variant="secondary">Editar</Button>
+              </Link>
+            )}
+            {can(access, "lead", "delete") && <DeleteRecordButton entityType="lead" id={id} noun={RECORD_NOUNS.lead} redirectTo="/dashboard/leads" />}
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Información</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -168,7 +174,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </div>
           </Card>
 
-          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={canAdminister(access, "fields")} readOnly={!canEdit} />
 
           <RelatedGroups groups={relatedGroups} emptyText={null} />
 

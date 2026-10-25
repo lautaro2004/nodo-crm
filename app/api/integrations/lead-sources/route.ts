@@ -7,7 +7,7 @@ import { createSheetsIntegration, integrationsEnvironment, listIntegrations } fr
 // Integraciones de captura de leads del negocio actual. Solo owner/admin:
 // la configuración de integraciones es parte de "configurar Nodo".
 export async function GET() {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "settings" });
   if (!ctx) return response;
   return NextResponse.json({ integrations: await listIntegrations(ctx.businessId), environment: integrationsEnvironment() });
 }
@@ -15,7 +15,7 @@ export async function GET() {
 const createSchema = z.object({ type: z.literal("google_sheets"), name: z.string().trim().min(1).max(80) });
 
 export async function POST(request: Request) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "settings" });
   if (!ctx) return response;
   const { data, response: bad } = await parseBody(request, createSchema);
   if (!data) return bad;

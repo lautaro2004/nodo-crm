@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace } from "@/lib/api-guard";
+import { requireWorkspace, requireRecordAccess } from "@/lib/api-guard";
 import { calendarErrorResponse } from "@/modules/calendar/errors";
 import { addTaskToGoogleCalendar, getTaskGoogleLink, removeTaskFromGoogleCalendar } from "@/modules/tasks/google-calendar";
 
@@ -13,6 +13,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "task", id, "view");
+  if (denied) return denied;
   try {
     return NextResponse.json(await getTaskGoogleLink(ctx.businessId, ctx.userId, id));
   } catch (err) {
@@ -26,6 +28,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "task", id, "edit");
+  if (denied) return denied;
   try {
     const { created } = await addTaskToGoogleCalendar(ctx.businessId, ctx.userId, id);
     return NextResponse.json({ linked: true, created }, { status: created ? 201 : 200 });
@@ -39,6 +43,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!ctx) return response;
 
   const { id } = await params;
+  const denied = await requireRecordAccess(ctx, "task", id, "edit");
+  if (denied) return denied;
   try {
     const removed = await removeTaskFromGoogleCalendar(ctx.businessId, ctx.userId, id);
     return NextResponse.json({ linked: false, removed });

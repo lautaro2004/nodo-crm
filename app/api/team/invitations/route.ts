@@ -4,6 +4,7 @@ import { requireWorkspace, parseBody, domainErrorResponse } from "@/lib/api-guar
 import { invitationCreateSchema } from "@/lib/schemas";
 import { prisma } from "@/lib/prisma";
 import { createInvitation } from "@/modules/team/service";
+import { listRoles, setInvitationAccess } from "@/modules/access/service";
 import { appBaseUrl, sendInvitationEmail } from "@/modules/team/invite-email";
 import type { Product } from "@/lib/permissions";
 
@@ -17,7 +18,10 @@ export async function POST(request: Request) {
   if (!data) return badRequest;
 
   try {
+    // Validar el rol de Nodo ANTES de crear la invitación.
+    if (data.accessRole && !(await listRoles(ctx.businessId)).some((r) => r.key === data.accessRole)) throw new Error("role_not_found");
     const { invitation, token } = await createInvitation(ctx.businessId, ctx, data);
+    if (data.accessRole && data.products.includes("crm")) await setInvitationAccess(ctx.businessId, invitation.id, data.accessRole);
     const link = `${appBaseUrl(request)}/invitacion/${token}`;
     const [business, inviter] = await Promise.all([
       prisma.business.findUnique({ where: { id: ctx.businessId }, select: { name: true } }),

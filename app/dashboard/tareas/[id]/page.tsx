@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
+import { incomingLinks } from "@/modules/records/links";
+import { CustomFieldsCard } from "@/components/custom-fields/custom-fields-card";
+import { RelatedGroups } from "@/components/custom-modules/related-groups";
+import { can, canAdminister, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { getTask } from "@/modules/tasks/service";
 import { listWorkspaceMembers } from "@/modules/business/members";
 import { listTaskAttachments } from "@/modules/tasks/attachments";
@@ -25,11 +30,17 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const task = await getTask(ctx.businessId, id);
   if (!task) notFound();
+  // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "task", task)) notFound();
+  const canEdit = can(access, "task", "edit");
 
-  const [members, activities, attachments] = await Promise.all([
+  const [members, activities, attachments, customFields, relatedGroups] = await Promise.all([
     listWorkspaceMembers(ctx.businessId),
     listActivitiesForEntity(ctx.businessId, "task", id),
     listTaskAttachments(ctx.businessId, id),
+    getCustomFieldsForEntity(ctx.businessId, "task", id),
+    incomingLinks(ctx.businessId, "task", id, (t) => can(access, t, "view")),
   ]);
   const googleStatus = await getConnectionStatus({ businessId: ctx.businessId, userId: ctx.userId }).catch(() => null);
   const googleLink = googleStatus?.features.calendar
@@ -44,14 +55,16 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
         title={task.title}
         backHref="/dashboard/tareas"
         actions={
-          <Link href={`/dashboard/tareas/${id}/editar`}>
-            <Button variant="secondary">Editar</Button>
-          </Link>
+          canEdit ? (
+            <Link href={`/dashboard/tareas/${id}/editar`}>
+              <Button variant="secondary">Editar</Button>
+            </Link>
+          ) : undefined
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4">
             <div className="flex flex-wrap items-center gap-4">
               <div>
@@ -124,6 +137,9 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               </div>
             </div>
           </Card>
+
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={canAdminister(access, "fields")} readOnly={!canEdit} />
+          <RelatedGroups groups={relatedGroups} emptyText={null} />
 
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Relacionado con</h2>

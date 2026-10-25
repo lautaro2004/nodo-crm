@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Permisos de Nodo: este test no cubre roles/alcances (ver modules/access).
+vi.mock("@/modules/access/service", async (importOriginal) => {
+  const { OWNER_POLICY, SYSTEM_ROLES } = await import("@/lib/access");
+  return {
+    ...(await importOriginal<typeof import("@/modules/access/service")>()),
+    resolveAccess: async (businessId: string, userId: string, role: string) => ({ businessId, userId, isOwner: role === "owner", roleKey: role, roleName: role, policy: role === "owner" || role === "admin" ? OWNER_POLICY : SYSTEM_ROLES.member.policy, teamUserIds: [userId] }),
+  };
+});
+vi.mock("@/modules/access/ownership", () => ({ loadRecordOwnership: async () => ({ ownerId: null }) }));
+
 const mocks = vi.hoisted(() => ({
   ctx: { status: "ok", userId: "u1", businessId: "b1", role: "owner" } as Record<string, unknown>,
   complete: vi.fn(),

@@ -9,6 +9,10 @@ import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { TaskGroupSelect } from "@/components/tasks/task-group-select";
 import { TASK_PRIORITY_LABELS } from "@/lib/labels";
+import { can, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getRestorableListParams } from "@/lib/views/remember";
+import { ListPreferenceSync } from "@/components/views/list-preference-sync";
+import { NoAccess } from "@/components/team/admin-only";
 
 const TABS = [
   { key: "all", label: "Todas" },
@@ -29,7 +33,11 @@ export default async function TasksPage({
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
-  const { view, q, priority, display, group } = await searchParams;
+  const sp = await searchParams;
+  const restore = await getRestorableListParams(ctx, "task", sp);
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!can(access, "task", "view")) return <NoAccess what="las tareas" />;
+  const { view, q, priority, display, group } = sp;
   const activeView = (TABS.find((t) => t.key === view)?.key ?? "all") as (typeof TABS)[number]["key"];
   const isKanban = display === "kanban";
   const activeGroup = (["owner", "priority", "related"].includes(group ?? "") ? group : "") as GroupKey;
@@ -40,6 +48,7 @@ export default async function TasksPage({
       search: q,
       priority: priority as never,
       currentUserId: ctx.userId,
+      scope: scopeWhere(access, "task", { createdByField: "createdById" }),
     }),
     listWorkspaceMembers(ctx.businessId),
   ]);
@@ -70,9 +79,11 @@ export default async function TasksPage({
       <PageHeader
         title="Tareas"
         actions={
-          <Link href="/dashboard/tareas/nueva">
-            <Button>Nueva tarea</Button>
-          </Link>
+          can(access, "task", "create") ? (
+            <Link href="/dashboard/tareas/nueva">
+              <Button>Nueva tarea</Button>
+            </Link>
+          ) : undefined
         }
       />
 
@@ -101,6 +112,7 @@ export default async function TasksPage({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-1 flex-wrap items-center gap-2">
           <TaskFilterBar searchPlaceholder="Buscar por título o descripción…" />
+          <ListPreferenceSync entity="task" restore={restore} />
           {!isKanban && <TaskGroupSelect />}
         </div>
         <ViewToggle basePath="/dashboard/tareas" params={params} value={isKanban ? "kanban" : "list"} />

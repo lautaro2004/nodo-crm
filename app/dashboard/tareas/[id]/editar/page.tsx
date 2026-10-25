@@ -10,6 +10,8 @@ import { listLeads } from "@/modules/leads/service";
 import { listOpportunities } from "@/modules/opportunities/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { TaskForm } from "@/components/tasks/task-form";
+import { can, canSeeRecord, resolveAccess } from "@/modules/access/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 function toDateInputValue(date: Date | null): string {
   return date ? date.toISOString().slice(0, 10) : "";
@@ -34,6 +36,9 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
     getReminderForTask(ctx.businessId, id),
   ]);
   if (!task) notFound();
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "task", task)) notFound();
+  if (!can(access, "task", "edit")) return <NoAccess what="editar este registro" />;
 
   return (
     <div>

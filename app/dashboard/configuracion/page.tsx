@@ -7,6 +7,7 @@ import { Card, PageHeader } from "@/components/ui/primitives";
 import { ModulesToggle } from "@/components/configuracion/modules-toggle";
 import { INDUSTRY_TEMPLATES, type IndustryKey } from "@/lib/industry-templates";
 import { hasRole, ROLE_LABELS } from "@/lib/permissions";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export default async function SettingsPage() {
   const ctx = await resolveWorkspaceContext();
@@ -19,22 +20,24 @@ export default async function SettingsPage() {
   if (!workspace) return null;
 
   const isAdmin = hasRole(ctx.role, "admin");
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  // `allowed`: rol de equipo (gestión del equipo y permisos) o permiso
+  // administrativo de Nodo (lib/access.ts). Las APIs lo exigen igual.
   const ALL_LINKS = [
-    { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", admin: true },
-    { href: "/dashboard/configuracion/modulos", label: "Módulos (productos, citas, propiedades… propios del negocio)", admin: true },
-    { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", admin: true },
-    { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", admin: true },
-    { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)", admin: true },
-    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (asignación, alertas, reglas por estado)", admin: true },
-    { href: "/dashboard/oportunidades/pipelines", label: "Pipelines", admin: true },
-    { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")`, admin: true },
-    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)", admin: false },
-    { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)", admin: true },
-    { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email", admin: true },
+    { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", allowed: isAdmin },
+    { href: "/dashboard/configuracion/permisos", label: "Equipos y permisos (roles, excepciones, jerarquías)", allowed: isAdmin },
+    { href: "/dashboard/configuracion/modulos", label: "Módulos (productos, citas, colaboraciones… propios del negocio)", allowed: canAdminister(access, "fields") },
+    { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", allowed: canAdminister(access, "settings") },
+    { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", allowed: canAdminister(access, "fields") },
+    { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)", allowed: canAdminister(access, "settings") },
+    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (cualquier módulo: validaciones, asignación, alertas, acciones)", allowed: canAdminister(access, "automations") },
+    { href: "/dashboard/oportunidades/pipelines", label: "Pipelines", allowed: canAdminister(access, "settings") },
+    { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")`, allowed: canAdminister(access, "settings") },
+    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)", allowed: true },
+    { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)", allowed: canAdminister(access, "settings") },
+    { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email", allowed: canAdminister(access, "settings") },
   ];
-  // Un miembro solo ve lo personal (su conexión de Google); el resto lo
-  // configuran dueño/administradores (las APIs lo exigen igual).
-  const SETTINGS_LINKS = ALL_LINKS.filter((l) => isAdmin || !l.admin);
+  const SETTINGS_LINKS = ALL_LINKS.filter((l) => l.allowed);
 
   return (
     <div>

@@ -2,20 +2,25 @@ import { prisma } from "@/lib/prisma";
 import { normalizeViewParams } from "@/lib/views/presets";
 
 import { moduleIdFromEntityType } from "@/lib/custom-modules";
+import { canAdmin, type AccessPolicy } from "@/lib/access";
 
-export type ViewEntityType = "lead" | "opportunity" | `cm:${string}`;
+export type ViewEntityType = "lead" | "opportunity" | "contact" | "company" | "task" | `cm:${string}`;
 
 // Permisos de vistas:
 // - Cualquier miembro crea vistas personales y ve las compartidas.
-// - Compartir (o editar/borrar una compartida) requiere rol owner/admin.
+// - Compartir (o editar/borrar una compartida) requiere el permiso
+//   administrativo "Vistas compartidas" (por defecto, owner/admin).
 // - Una vista personal solo la ve y la modifica quien la creó.
-export function canManageSharedViews(role: string) {
+export function canManageSharedViews(actor: string | Actor) {
+  if (typeof actor !== "string" && actor.access) return canAdmin(actor.access.policy, "views");
+  const role = typeof actor === "string" ? actor : actor.role;
   return role === "owner" || role === "admin";
 }
 
 interface Actor {
   userId: string;
   role: string;
+  access?: { policy: AccessPolicy };
 }
 
 export async function listViews(businessId: string, entityType: ViewEntityType, actor: Actor) {
@@ -30,7 +35,7 @@ export async function createView(
   actor: Actor,
   data: { entityType: ViewEntityType; name: string; params: string; shared?: boolean }
 ) {
-  if (data.shared && !canManageSharedViews(actor.role)) throw new Error("forbidden");
+  if (data.shared && !canManageSharedViews(actor)) throw new Error("forbidden");
   const moduleId = moduleIdFromEntityType(data.entityType);
   if (moduleId && !(await prisma.customModule.count({ where: { id: moduleId, businessId } }))) throw new Error("module_not_found");
   return prisma.savedView.create({
@@ -49,7 +54,7 @@ async function findEditable(businessId: string, id: string, actor: Actor) {
   const view = await prisma.savedView.findFirst({ where: { id, businessId } });
   if (!view) return null;
   const isMine = view.createdBy === actor.userId;
-  if (view.shared ? !canManageSharedViews(actor.role) : !isMine) throw new Error("forbidden");
+  if (view.shared ? !canManageSharedViews(actor) : !isMine) throw new Error("forbidden");
   return view;
 }
 
@@ -61,7 +66,7 @@ export async function updateView(
 ) {
   const view = await findEditable(businessId, id, actor);
   if (!view) return null;
-  if (data.shared !== undefined && data.shared !== view.shared && !canManageSharedViews(actor.role)) throw new Error("forbidden");
+  if (data.shared !== undefined && data.shared !== view.shared && !canManageSharedViews(actor)) throw new Error("forbidden");
   return prisma.savedView.update({
     where: { id: view.id },
     data: {

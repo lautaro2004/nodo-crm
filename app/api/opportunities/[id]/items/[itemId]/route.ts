@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, parseBody, domainErrorResponse, notFound } from "@/lib/api-guard";
+import { requireWorkspace, parseBody, domainErrorResponse, notFound, requireRecordAccess } from "@/lib/api-guard";
 import { opportunityItemUpdateSchema } from "@/lib/schemas";
 import { removeItem, updateItem } from "@/modules/opportunity-items/service";
 
@@ -10,6 +10,8 @@ export async function PATCH(request: Request, { params }: Params) {
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const { id, itemId } = await params;
+  const denied = await requireRecordAccess(ctx, "opportunity", id, "edit");
+  if (denied) return denied;
   const { data, response: badRequest } = await parseBody(request, opportunityItemUpdateSchema);
   if (!data) return badRequest;
   try {
@@ -23,6 +25,8 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const { id, itemId } = await params;
+  const denied = await requireRecordAccess(ctx, "opportunity", id, "edit");
+  if (denied) return denied;
   try {
     return (await removeItem(ctx.businessId, id, itemId)) ? NextResponse.json({ ok: true }) : notFound();
   } catch (err) {

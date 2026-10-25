@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
-import { resolveWorkspaceContext } from "@/lib/workspace";
+import { requireWorkspace, forbidden } from "@/lib/api-guard";
+import { can, scopeWhere } from "@/modules/access/service";
 import { csvResponse, toCsv } from "@/lib/csv";
 import { LEAD_SOURCE_LABELS, OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
 import { getLeadReport, getOpportunityReport, parseReportFilters } from "@/modules/reports/service";
@@ -9,17 +8,19 @@ import { listWorkspaceMembers } from "@/modules/business/members";
 
 // CSV de cada sección de Informes, con los mismos filtros de la pantalla.
 export async function GET(request: Request) {
-  const ctx = await resolveWorkspaceContext();
-  if (ctx.status !== "ok") return NextResponse.json({ error: ctx.status }, { status: 401 });
+  const { ctx, response } = await requireWorkspace();
+  if (!ctx) return response;
 
   const sp = new URL(request.url).searchParams;
-  const f = parseReportFilters(sp, ctx.userId);
+  const f = { ...parseReportFilters(sp, ctx.userId), scopes: { lead: scopeWhere(ctx.access, "lead"), opportunity: scopeWhere(ctx.access, "opportunity") } };
   const section = sp.get("section") ?? "leads";
   const suffix = `${f.fromKey}_${f.toKey}`;
   const [members, statuses] = await Promise.all([listWorkspaceMembers(ctx.businessId), listStatusOptions(ctx.businessId, "lead")]);
   const owner = (id: string | null) => (id ? (members.find((m) => m.userId === id)?.name ?? "") : "");
 
-  if (["leads", "reasons", "sources", "nofollowup"].includes(section)) {
+  const leadSection = ["leads", "reasons", "sources", "nofollowup"].includes(section);
+  if (!can(ctx.access, leadSection ? "lead" : "opportunity", "export")) return forbidden();
+  if (leadSection) {
     const r = await getLeadReport(ctx.businessId, f);
     if (section === "reasons") return csvResponse(`motivos-rechazo-${suffix}.csv`, toCsv(["Motivo", "Leads"], r.reasons.map((x) => [x.label, x.count])));
     if (section === "sources")

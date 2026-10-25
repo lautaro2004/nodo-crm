@@ -14,7 +14,10 @@ import { ListToolbar } from "@/components/views/list-toolbar";
 import { LEAD_COLUMNS, LEAD_DEFAULT_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
 import { loadCustomCells } from "@/modules/custom-fields/columns";
 import { LEAD_PRESETS } from "@/lib/views/presets";
-import { hasRole } from "@/lib/permissions";
+import { can, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getRestorableListParams } from "@/lib/views/remember";
+import { ListPreferenceSync } from "@/components/views/list-preference-sync";
+import { NoAccess } from "@/components/team/admin-only";
 import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { RecordSelection, SelectAllBar } from "@/components/records/selection";
 
@@ -32,8 +35,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   if (ctx.status !== "ok") return null;
 
   const sp = await searchParams;
+  const restore = await getRestorableListParams(ctx, "lead", sp, LEAD_PRESETS.map((p) => p.id));
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!can(access, "lead", "view")) return <NoAccess what="los leads" />;
   const display = sp.display === "kanban" ? "kanban" : "list";
-  const filters = parseLeadFilters(sp, ctx.userId);
+  const filters = { ...parseLeadFilters(sp, ctx.userId), scope: scopeWhere(access, "lead") };
   const [leads, toolbar] = await Promise.all([listLeads(ctx.businessId, filters), getToolbarData(ctx, "lead")]);
   const names = memberNames(toolbar.members);
   const allColumns = [...LEAD_COLUMNS, ...customColumns(toolbar.customFieldDefs)];
@@ -49,13 +55,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         description={`${leads.length} ${leads.length === 1 ? "lead" : "leads"}${hasFilters ? " con estos filtros" : ""}`}
         actions={
           <>
-            <SyncNexoButton />
-            <Link href="/dashboard/leads/nuevo">
-              <Button>
-                <PlusIcon className="h-4 w-4" />
-                Nuevo lead
-              </Button>
-            </Link>
+            {can(access, "lead", "create") && <SyncNexoButton />}
+            {can(access, "lead", "create") && (
+              <Link href="/dashboard/leads/nuevo">
+                <Button>
+                  <PlusIcon className="h-4 w-4" />
+                  Nuevo lead
+                </Button>
+              </Link>
+            )}
           </>
         }
       />
@@ -73,7 +81,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         display={display}
         defaultDisplay="list"
         exportPath="/api/export/leads"
+        canExport={can(access, "lead", "export")}
       />
+      <ListPreferenceSync entity="lead" restore={restore} />
 
       {leads.length === 0 ? (
         hasFilters ? (
@@ -99,7 +109,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           />
         )
       ) : (
-        <RecordSelection entityType="lead" ids={leads.map((l) => l.id)} noun={RECORD_NOUNS.lead} canDelete={hasRole(ctx.role, "admin")}>
+        <RecordSelection entityType="lead" ids={leads.map((l) => l.id)} noun={RECORD_NOUNS.lead} canDelete={can(access, "lead", "delete")}>
           {display === "kanban" ? (
             <>
               <SelectAllBar />

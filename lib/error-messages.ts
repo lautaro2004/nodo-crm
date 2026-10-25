@@ -43,7 +43,7 @@ const MESSAGES: Record<string, string> = {
   invitation_accepted: "Esta invitación ya fue usada.",
   invitation_wrong_email: "Esta invitación es para otro email. Iniciá sesión con el email invitado.",
   no_access: "No tenés acceso a Nodo en este negocio.",
-  forbidden: "No tenés permiso para hacer esto (solo dueños o administradores del espacio).",
+  forbidden: "No tenés permiso para hacer esto. Si lo necesitás, pedíselo a un administrador del espacio.",
   reason_required: "Este estado exige indicar un motivo.",
   invalid_reason: "Elegí uno de los motivos configurados para este estado.",
   status_key_taken: "Ya existe un estado con ese nombre.",
@@ -62,6 +62,25 @@ const MESSAGES: Record<string, string> = {
   mapping_required: "Mapeá al menos una columna antes de activar la integración.",
   event_not_retryable: "Ese evento ya no se puede reintentar.",
   network_error: "Sin conexión con el servidor. Revisá tu conexión y probá de nuevo.",
+  automation_required: "El cambio no se guardó: una automatización pide completar datos.",
+  option_in_use: "Hay registros que usan esa opción. Elegí qué hacer con ellos antes de quitarla.",
+  invalid_default: "El valor predeterminado no es válido para este campo.",
+  invalid_validation: "Revisá las validaciones del campo.",
+  invalid_option_rename: "No se pudo renombrar la opción. Recargá la página e intentá de nuevo.",
+  invalid_option_replacement: "La opción de reemplazo tiene que ser una de las opciones del campo.",
+  relation_has_multiple: "Hay registros con varios vínculos en este campo: no se puede pasar a «uno solo» sin perder datos.",
+  relation_not_exclusive: "Hay registros vinculados más de una vez: no se puede hacer exclusiva la relación sin perder datos.",
+  relation_target_taken: "Ese registro ya está vinculado a otro por este campo.",
+  role_not_found: "Ese rol ya no existe.",
+  system_role: "Los roles del sistema no se borran (se pueden restaurar).",
+  cannot_edit_self: "No podés cambiar tus propios permisos.",
+  team_not_found: "Ese equipo ya no existe.",
+  team_cycle: "Esa jerarquía no es válida: un equipo no puede depender de sí mismo ni de un sub-equipo suyo.",
+  team_name_taken: "Ya existe un equipo con ese nombre.",
+  dashboard_not_found: "Ese panel ya no existe.",
+  too_many_dashboards: "Llegaste al máximo de paneles.",
+  too_many_widgets: "Llegaste al máximo de componentes en este panel.",
+  field_not_writable: "Ese campo no se puede modificar.",
 };
 
 export function errorMessage(code: string | undefined | null): string {
@@ -69,6 +88,8 @@ export function errorMessage(code: string | undefined | null): string {
 }
 
 export async function readApiError(res: Response): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+  // Mensajes con detalle armados en el servidor (automatizaciones, validación de campos, configuración).
+  if (body?.message && (body.error === "automation_required" || body.error === "invalid_value" || body.error === "invalid_config")) return body.message;
   return errorMessage(body?.error);
 }

@@ -9,5 +9,5 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
-  return NextResponse.json(await globalSearch(ctx.businessId, q));
+  return NextResponse.json(await globalSearch(ctx.businessId, q, 5, ctx.access));
 }

@@ -1,9 +1,9 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
 import { AdminOnly } from "@/components/team/admin-only";
 import { getModuleLabel } from "@/modules/workspace/module-config";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { ModuleLabelForm } from "@/components/configuracion/module-label-form";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 // URL interna estable ("modulo-oportunidades") aunque el negocio lo haya
 // renombrado a "Ventas"/"Casos"/etc. — mismo criterio que
@@ -11,7 +11,7 @@ import { ModuleLabelForm } from "@/components/configuracion/module-label-form";
 export default async function ModuleLabelSettingsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings")) return <AdminOnly />;
 
   const moduleLabel = await getModuleLabel(ctx.businessId, "opportunity");
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { requireWorkspace, domainErrorResponse } from "@/lib/api-guard";
+import { requireWorkspace, domainErrorResponse, requireRecordAccess } from "@/lib/api-guard";
+import { moduleEntityType } from "@/lib/custom-modules";
 import { MAX_IMAGE_BYTES, removeRecordImage, uploadRecordImage } from "@/modules/records/images";
 
 type Params = { params: Promise<{ id: string; recordId: string; definitionId: string }> };
@@ -12,6 +13,8 @@ export async function POST(request: Request, { params }: Params) {
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const { id, recordId, definitionId } = await params;
+  const denied = await requireRecordAccess(ctx, moduleEntityType(id), recordId, "edit");
+  if (denied) return denied;
 
   const length = Number(request.headers.get("content-length") ?? 0);
   if (length > MAX_IMAGE_BYTES + 64 * 1024) return NextResponse.json({ error: "file_too_large" }, { status: 413 });
@@ -32,6 +35,8 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { ctx, response } = await requireWorkspace();
   if (!ctx) return response;
   const { id, recordId, definitionId } = await params;
+  const denied = await requireRecordAccess(ctx, moduleEntityType(id), recordId, "edit");
+  if (denied) return denied;
   try {
     await removeRecordImage(ctx.businessId, id, recordId, definitionId);
     return NextResponse.json({ ok: true });

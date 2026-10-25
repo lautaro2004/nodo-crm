@@ -24,6 +24,8 @@ export interface LeadFilters {
   tagId?: string;
   customFields?: { definitionId: string; value: string }[];
   sort?: string;
+  /** Alcance de permisos (registros visibles para el usuario). Ver scopeWhere. */
+  scope?: Prisma.LeadWhereInput;
 }
 
 export function parseLeadFilters(sp: SearchParamsLike, currentUserId?: string): LeadFilters {
@@ -51,6 +53,7 @@ export async function buildLeadWhere(businessId: string, f: LeadFilters, now: Da
   const and: Prisma.LeadWhereInput[] = [];
   const statuses = typeof f.status === "string" ? [f.status] : f.status;
 
+  if (f.scope && Object.keys(f.scope).length) and.push(f.scope);
   if (statuses?.length) and.push({ status: { in: statuses } });
   if (f.ownerId) and.push({ ownerId: f.ownerId === "none" ? null : f.ownerId });
   if (f.source?.length) and.push({ source: { in: f.source } });

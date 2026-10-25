@@ -16,7 +16,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "settings" });
   if (!ctx) return response;
   const { id } = await params;
   const { data, response: bad } = await parseBody(request, schema);

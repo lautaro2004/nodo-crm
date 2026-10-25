@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { can, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { moduleEntityType } from "@/lib/custom-modules";
 import { Badge, Card, InlineAlert, PageHeader } from "@/components/ui/primitives";
 import { getModuleByKey } from "@/modules/custom-modules/service";
@@ -26,15 +26,18 @@ export default async function RecordDetailPage({ params, searchParams }: { param
   if (!mod) notFound();
   const record = await getRecord(ctx.businessId, mod.id, id);
   if (!record) notFound();
+  const entity = moduleEntityType(mod.id);
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, entity, record)) notFound();
   const sp = await searchParams;
 
   const [data, incoming, opportunities] = await Promise.all([
     loadRecordFormData(ctx.businessId, mod.id, id),
-    incomingLinks(ctx.businessId, moduleEntityType(mod.id), id),
+    incomingLinks(ctx.businessId, moduleEntityType(mod.id), id, (t) => can(access, t, "view")),
     listOpportunitiesForRecord(ctx.businessId, id),
   ]);
   const basePath = `/dashboard/m/${mod.key}`;
-  const editable = !mod.archivedAt;
+  const editable = !mod.archivedAt && can(access, entity, "edit");
 
   return (
     <div>
@@ -49,7 +52,7 @@ export default async function RecordDetailPage({ params, searchParams }: { param
             recordId={id}
             basePath={basePath}
             archived={!!record.archivedAt}
-            canDelete={hasRole(ctx.role, "admin")}
+            canDelete={can(access, entity, "delete")}
             disabled={!editable}
             noun={nounFromLabels(mod.labelSingular, mod.labelPlural)}
           />
@@ -57,8 +60,8 @@ export default async function RecordDetailPage({ params, searchParams }: { param
       />
       {sp.imageError === "1" && <InlineAlert>El registro se creó, pero alguna imagen no se pudo subir. Probá subirla de nuevo desde acá.</InlineAlert>}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <h2 className="text-sm font-semibold text-slate-900">Datos</h2>

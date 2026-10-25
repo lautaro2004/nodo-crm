@@ -1,5 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Motor de automatizaciones y campos personalizados: fuera de alcance de
+// este test (tienen sus propios tests); se reemplazan por pasamanos.
+vi.mock("@/modules/automations/workflow", () => ({
+  trackChange: (_input: unknown, write: () => unknown) => write(),
+  proposedFrom: () => ({}),
+  emitCreated: vi.fn(),
+  AutomationRequirementError: class extends Error {},
+}));
+vi.mock("@/modules/custom-fields/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/modules/custom-fields/service")>()),
+  prepareCustomValues: async () => async () => {},
+}));
+
 const deleteLead = vi.fn();
 const deleteRecord = vi.fn();
 vi.mock("@/modules/leads/service", () => ({ deleteLead: (...a: unknown[]) => deleteLead(...a) }));
@@ -35,9 +48,9 @@ describe("deleteRecords", () => {
     deleteLead.mockResolvedValueOnce(true).mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("db"));
     const r = await deleteRecords("biz_A", "lead", ["l1", "l2", "l3", "l1"]);
     expect(deleteLead.mock.calls).toEqual([
-      ["biz_A", "l1"],
-      ["biz_A", "l2"],
-      ["biz_A", "l3"],
+      ["biz_A", "l1", null],
+      ["biz_A", "l2", null],
+      ["biz_A", "l3", null],
     ]);
     expect(r).toEqual({ deleted: ["l1"], notFound: ["l2"], failed: ["l3"] });
   });
@@ -45,7 +58,7 @@ describe("deleteRecords", () => {
   it("módulos personalizados: el moduleId sale del entityType", async () => {
     deleteRecord.mockResolvedValue(true);
     await deleteRecords("biz_A", "cm:mod_1", ["r1"]);
-    expect(deleteRecord).toHaveBeenCalledWith("biz_A", "mod_1", "r1");
+    expect(deleteRecord).toHaveBeenCalledWith("biz_A", "mod_1", "r1", null);
   });
 
   it("solo acepta tipos conocidos", () => {

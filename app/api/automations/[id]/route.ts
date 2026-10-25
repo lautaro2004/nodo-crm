@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireWorkspace, parseBody, notFound, domainErrorResponse } from "@/lib/api-guard";
 import { automationRuleUpdateSchema } from "@/modules/automations/config";
-import { deleteRule, updateRule } from "@/modules/automations/service";
+import { WorkflowConfigError, deleteRule, updateRule } from "@/modules/automations/service";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ admin: "automations" });
   if (!ctx) return response;
   const { id } = await params;
   const { data, response: badRequest } = await parseBody(request, automationRuleUpdateSchema);
@@ -15,12 +15,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!rule) return notFound();
     return NextResponse.json(rule);
   } catch (err) {
+    if (err instanceof WorkflowConfigError) return NextResponse.json({ error: "invalid_config", message: err.detail }, { status: 400 });
     return domainErrorResponse(err);
   }
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ admin: "automations" });
   if (!ctx) return response;
   const { id } = await params;
   try {

@@ -17,6 +17,8 @@ export interface RecordFormField {
   required: boolean;
   targetEntity: string | null;
   multiple: boolean;
+  description?: string | null;
+  defaultValue?: string | null;
 }
 
 // Alta y edición de un registro de módulo personalizado. Un solo envío con
@@ -50,7 +52,7 @@ export function RecordForm({
   const [title, setTitle] = useState(record?.title ?? "");
   const [ownerId, setOwnerId] = useState(record?.ownerId ?? "");
   const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(fields.filter((f) => f.type !== "relation" && f.type !== "image").map((f) => [f.id, toInputValue(f.type, record?.values[f.id])]))
+    Object.fromEntries(fields.filter((f) => f.type !== "relation" && f.type !== "image").map((f) => [f.id, toInputValue(f.type, record ? record.values[f.id] : f.defaultValue)]))
   );
   const [relations, setRelations] = useState<Record<string, PickedRecord[]>>(
     Object.fromEntries(fields.filter((f) => f.type === "relation").map((f) => [f.id, record?.relations[f.id] ?? []]))
@@ -90,7 +92,7 @@ export function RecordForm({
       setSaving(false);
       if (body.fields) setErrors(body.fields);
       const zodMsg = body.details ? (Object.values(body.details.fieldErrors ?? {}).flat()[0] as string | undefined) : undefined;
-      setFormError(body.fields ? "Revisá los campos marcados." : zodMsg ?? errorMessage(body.error));
+      setFormError(body.fields ? "Revisá los campos marcados." : body.error === "automation_required" ? body.message : zodMsg ?? errorMessage(body.error));
       return;
     }
 
@@ -164,6 +166,7 @@ export function RecordForm({
                   invalid={!!errors[f.id]}
                 />
               )}
+              {f.description && <p className="mt-1 text-xs text-slate-500">{f.description}</p>}
               {errors[f.id] && <p className="mt-1 text-xs text-red-600">{errors[f.id]}</p>}
             </div>
           );

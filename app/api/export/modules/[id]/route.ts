@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { resolveWorkspaceContext } from "@/lib/workspace";
+import { requireWorkspace, forbidden } from "@/lib/api-guard";
+import { can, scopeWhere } from "@/modules/access/service";
 import { csvResponse, toCsv, todayStamp } from "@/lib/csv";
 import { formatCustomValue } from "@/lib/custom-fields";
 import { slugifyModuleKey } from "@/lib/custom-modules";
@@ -17,15 +18,16 @@ import { resolveLabels } from "@/modules/records/links";
 // incluidas las relaciones (nombres separados por "; "). Las imágenes no
 // se exportan (son archivos privados).
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const ctx = await resolveWorkspaceContext();
-  if (ctx.status !== "ok") return NextResponse.json({ error: ctx.status }, { status: 401 });
+  const { ctx, response } = await requireWorkspace();
+  if (!ctx) return response;
   const { id } = await params;
+  if (!can(ctx.access, `cm:${id}`, "export")) return forbidden();
   const mod = await getModuleById(ctx.businessId, id);
   if (!mod) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const sp = new URL(request.url).searchParams;
   const [records, fields, members] = await Promise.all([
-    listAllRecords(ctx.businessId, id, parseRecordFilters(sp, ctx.userId)),
+    listAllRecords(ctx.businessId, id, { ...parseRecordFilters(sp, ctx.userId), scope: scopeWhere(ctx.access, `cm:${id}`, { createdByField: "createdById" }) }),
     listModuleFields(ctx.businessId, id),
     listWorkspaceMembers(ctx.businessId),
   ]);

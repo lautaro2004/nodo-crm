@@ -3,11 +3,15 @@ import Link from "next/link";
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listCompanies } from "@/modules/companies/service";
 import { listTags } from "@/modules/tags/service";
+import { listWorkspaceMembers } from "@/modules/business/members";
 import { PageHeader, Card, Button, EmptyState } from "@/components/ui/primitives";
 import { SearchFilterBar } from "@/components/dashboard/search-filter-bar";
 import { listStatusOptions, findStatusOption } from "@/modules/status-definitions/service";
 import { StatusBadge } from "@/components/status/status-badge";
-import { hasRole } from "@/lib/permissions";
+import { can, resolveAccess, scopeWhere } from "@/modules/access/service";
+import { getRestorableListParams } from "@/lib/views/remember";
+import { ListPreferenceSync } from "@/components/views/list-preference-sync";
+import { NoAccess } from "@/components/team/admin-only";
 import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { RecordSelection, SelectAllHeader, SelectCell, SelectableRow } from "@/components/records/selection";
 
@@ -19,12 +23,18 @@ export default async function CompaniesPage({
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
-  const { q, status, tagId } = await searchParams;
+  const sp = await searchParams;
+  const restore = await getRestorableListParams(ctx, "company", sp);
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!can(access, "company", "view")) return <NoAccess what="las empresas" />;
+  const { q, status, tagId } = sp;
   const [companies, tags, statusOptions] = await Promise.all([
-    listCompanies(ctx.businessId, { search: q, status, tagId }),
+    listCompanies(ctx.businessId, { search: q, status, tagId, scope: scopeWhere(access, "company") }),
     listTags(ctx.businessId),
     listStatusOptions(ctx.businessId, "company"),
   ]);
+  const members = await listWorkspaceMembers(ctx.businessId);
+  const ownerName = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
   return (
     <div>
@@ -32,9 +42,11 @@ export default async function CompaniesPage({
         title="Empresas / Clientes"
         description="Cuentas del negocio — prospectos y clientes."
         actions={
-          <Link href="/dashboard/empresas/nueva">
-            <Button>Nueva empresa</Button>
-          </Link>
+          can(access, "company", "create") ? (
+            <Link href="/dashboard/empresas/nueva">
+              <Button>Nueva empresa</Button>
+            </Link>
+          ) : undefined
         }
       />
 
@@ -43,6 +55,7 @@ export default async function CompaniesPage({
         statusOptions={statusOptions.map((s) => ({ value: s.key, label: s.label }))}
         tagOptions={tags.map((t) => ({ value: t.id, label: t.name }))}
       />
+      <ListPreferenceSync entity="company" restore={restore} />
 
       {companies.length === 0 ? (
         <EmptyState
@@ -55,7 +68,7 @@ export default async function CompaniesPage({
           }
         />
       ) : (
-        <RecordSelection entityType="company" ids={companies.map((c) => c.id)} noun={RECORD_NOUNS.company} canDelete={hasRole(ctx.role, "admin")}>
+        <RecordSelection entityType="company" ids={companies.map((c) => c.id)} noun={RECORD_NOUNS.company} canDelete={can(access, "company", "delete")}>
           <Card className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -64,6 +77,8 @@ export default async function CompaniesPage({
                   <th className="px-4 py-3">Nombre</th>
                   <th className="px-4 py-3">Teléfono</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="hidden px-4 py-3 lg:table-cell">Responsable</th>
+                  <th className="hidden px-4 py-3 xl:table-cell">Última actualización</th>
                   <th className="px-4 py-3">Creada</th>
                 </tr>
               </thead>
@@ -81,6 +96,8 @@ export default async function CompaniesPage({
                     <td className="px-4 py-3">
                       <StatusBadge label={findStatusOption(statusOptions, c.status).label} color={findStatusOption(statusOptions, c.status).color} />
                     </td>
+                    <td className="hidden px-4 py-3 text-slate-600 lg:table-cell">{c.ownerId ? (ownerName.get(c.ownerId) ?? "—") : "Sin asignar"}</td>
+                    <td className="hidden px-4 py-3 text-slate-500 xl:table-cell">{c.updatedAt.toLocaleDateString("es-AR")}</td>
                     <td className="px-4 py-3 text-slate-500">{c.createdAt.toLocaleDateString("es-AR")}</td>
                   </SelectableRow>
                 ))}

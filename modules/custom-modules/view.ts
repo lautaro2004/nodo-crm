@@ -15,6 +15,8 @@ export async function loadRecordFormData(businessId: string, moduleId: string, r
     required: f.required,
     targetEntity: f.targetEntity,
     multiple: f.multiple,
+    description: f.description,
+    defaultValue: f.defaultValue,
   }));
   const memberOptions = members.map((m) => ({ userId: m.userId, name: m.name || m.email }));
   if (!recordId) return { fields: formFields, members: memberOptions, values: {}, relations: {}, images: {} };

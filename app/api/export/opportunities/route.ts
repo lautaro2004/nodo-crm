@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
-import { resolveWorkspaceContext } from "@/lib/workspace";
+import { requireWorkspace } from "@/lib/api-guard";
+import { scopeWhere } from "@/modules/access/service";
 import { csvResponse, toCsv, todayStamp } from "@/lib/csv";
 import { OPPORTUNITY_STATUS_LABELS } from "@/lib/labels";
 import { OPPORTUNITY_COLUMNS, customColumns, resolveColumns } from "@/lib/views/columns";
@@ -13,12 +12,12 @@ import { listWorkspaceMembers } from "@/modules/business/members";
 
 // Mismos filtros y columnas que la lista de Oportunidades.
 export async function GET(request: Request) {
-  const ctx = await resolveWorkspaceContext();
-  if (ctx.status !== "ok") return NextResponse.json({ error: ctx.status }, { status: 401 });
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "opportunity", action: "export" } });
+  if (!ctx) return response;
 
   const sp = new URL(request.url).searchParams;
   const [opportunities, members] = await Promise.all([
-    listOpportunities(ctx.businessId, parseOpportunityFilters(sp, ctx.userId)),
+    listOpportunities(ctx.businessId, { ...parseOpportunityFilters(sp, ctx.userId), scope: scopeWhere(ctx.access, "opportunity") }),
     listWorkspaceMembers(ctx.businessId),
   ]);
   const names = new Map(members.map((m) => [m.userId, m.name || m.email]));

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { emitCreated } from "@/modules/automations/workflow";
 import { listNexoAppointments } from "@/modules/nexo/appointments";
 import { listNexoInquiries } from "@/modules/nexo/inquiries";
 import { createActivity } from "@/modules/activities/service";
@@ -88,6 +89,7 @@ export async function syncLeadsFromNexoAppointments(businessId: string, options:
       body: `Lead creado desde una reserva en Nexo (${appointment.serviceName}, ${appointment.date} ${appointment.startTime})`,
     });
     await runLeadCreatedAutomations(businessId, lead.id);
+    await emitCreated(businessId, "lead", lead.id);
     created++;
   }
 
@@ -143,6 +145,7 @@ export async function syncLeadsFromNexoInquiries(businessId: string, options: Sy
       body: nexoInquiryActivityBody(inquiry),
     });
     await runLeadCreatedAutomations(businessId, lead.id);
+    await emitCreated(businessId, "lead", lead.id);
     created++;
   }
 

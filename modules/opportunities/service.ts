@@ -3,6 +3,8 @@ import { createActivity } from "@/modules/activities/service";
 import { assertOptionalOwner } from "@/modules/business/members";
 import { buildOpportunityWhere, opportunityOrderBy, type OpportunityFilters } from "@/modules/opportunities/filters";
 import { cleanupDeletedRecord } from "@/modules/records/cleanup";
+import { prepareCustomValues } from "@/modules/custom-fields/service";
+import { proposedFrom, trackChange } from "@/modules/automations/workflow";
 
 export interface CreateOpportunityInput {
   title: string;
@@ -12,6 +14,8 @@ export interface CreateOpportunityInput {
   stageId: string;
   amount?: number | null;
   ownerId?: string | null;
+  /** Campos personalizados (definitionId → valor). Ver prepareCustomValues. */
+  customValues?: Record<string, string | null>;
 }
 export interface UpdateOpportunityInput extends Partial<CreateOpportunityInput> {
   status?: "open" | "won" | "lost";
@@ -55,7 +59,24 @@ function statusForStage(stage: { isWon?: boolean; isLost?: boolean }): "open" | 
   return stage.isWon ? "won" : stage.isLost ? "lost" : "open";
 }
 
-export async function createOpportunity(businessId: string, data: CreateOpportunityInput) {
+export async function createOpportunity(businessId: string, input: CreateOpportunityInput, options: { enforceRequired?: boolean; actorUserId?: string | null } = {}) {
+  const { customValues, ...data } = input;
+  // trackChange: validaciones "antes de guardar" y automatizaciones
+  // genéricas (modules/automations/workflow.ts).
+  return trackChange(
+    { businessId, entityType: "opportunity", kind: "create", proposed: proposedFrom(data, customValues), actorUserId: options.actorUserId },
+    async () => {
+      // Valida los campos personalizados ANTES de crear (nunca un registro a medias).
+      const writeCustom = await prepareCustomValues(businessId, "opportunity", customValues ?? {}, { creating: true, enforceRequired: options.enforceRequired });
+      const created = await insertOpportunity(businessId, data);
+      await writeCustom(created.id);
+      return created;
+    },
+    (created) => created.id
+  );
+}
+
+async function insertOpportunity(businessId: string, data: Omit<CreateOpportunityInput, "customValues">) {
   await assertBelongsToBusiness(businessId, data);
   const stage = await resolveStage(businessId, data.stageId, data.pipelineId);
   const status = statusForStage(stage);
@@ -115,7 +136,21 @@ export async function getOpportunity(businessId: string, id: string) {
   });
 }
 
-export async function updateOpportunity(businessId: string, id: string, data: UpdateOpportunityInput) {
+export async function updateOpportunity(businessId: string, id: string, input: UpdateOpportunityInput, actorUserId: string | null = null) {
+  const { customValues, ...data } = input;
+  return trackChange(
+    { businessId, entityType: "opportunity", kind: "update", recordId: id, proposed: proposedFrom(data, customValues), actorUserId },
+    async () => {
+      const writeCustom = customValues ? await prepareCustomValues(businessId, "opportunity", customValues, { recordId: id }) : null;
+      const updated = await applyOpportunityUpdate(businessId, id, data);
+      if (updated && writeCustom) await writeCustom(id);
+      return updated;
+    },
+    (updated) => updated?.id
+  );
+}
+
+async function applyOpportunityUpdate(businessId: string, id: string, data: Omit<UpdateOpportunityInput, "customValues">) {
   await assertBelongsToBusiness(businessId, data);
   const current = await prisma.opportunity.findFirst({ where: { id, businessId }, include: { stage: { select: { label: true } } } });
   if (!current) return null;
@@ -163,8 +198,14 @@ export async function updateOpportunity(businessId: string, id: string, data: Up
   return updated;
 }
 
-export async function deleteOpportunity(businessId: string, id: string) {
-  const result = await prisma.opportunity.deleteMany({ where: { id, businessId } });
-  if (result.count > 0) await cleanupDeletedRecord(businessId, "opportunity", id);
-  return result.count > 0;
+export async function deleteOpportunity(businessId: string, id: string, actorUserId: string | null = null) {
+  return trackChange(
+    { businessId, entityType: "opportunity", kind: "delete", recordId: id, actorUserId },
+    async () => {
+      const result = await prisma.opportunity.deleteMany({ where: { id, businessId } });
+      if (result.count > 0) await cleanupDeletedRecord(businessId, "opportunity", id);
+      return result.count > 0;
+    },
+    (ok) => (ok ? id : null)
+  );
 }
