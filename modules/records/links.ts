@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { moduleIdFromEntityType } from "@/lib/custom-modules";
 
@@ -23,6 +25,9 @@ export async function existingIds(businessId: string, entityType: string, ids: s
     case "lead":
       rows = await prisma.lead.findMany({ where, select });
       break;
+    case "task":
+      rows = await prisma.task.findMany({ where, select });
+      break;
     default: {
       const moduleId = moduleIdFromEntityType(entityType);
       rows = moduleId ? await prisma.customRecord.findMany({ where: { ...where, moduleId }, select }) : [];
@@ -38,30 +43,53 @@ export function parseIdList(raw: string | null | undefined): string[] {
 /**
  * Reemplaza los vínculos de un campo relación para un registro origen.
  * Lanza "invalid_relation" si algún destino no existe en el negocio/entidad
- * o si el campo es "a uno" y llegan varios.
+ * o si el campo es "a uno" y llegan varios, y "relation_target_taken" si el
+ * campo es exclusivo (uno a uno / uno a muchos) y el destino ya está
+ * vinculado a OTRO registro — eso lo garantiza además la base
+ * (unique definitionId + exclusiveTo).
  */
 export async function setRelationLinks(
   businessId: string,
-  definition: { id: string; targetEntity: string | null; multiple: boolean },
+  definition: { id: string; targetEntity: string | null; multiple: boolean; exclusive?: boolean },
   fromType: string,
   fromId: string,
   toIds: string[]
 ) {
   if (!definition.targetEntity) throw new Error("invalid_relation");
   if (!definition.multiple && toIds.length > 1) throw new Error("invalid_relation");
+  if (definition.targetEntity === fromType && toIds.includes(fromId)) throw new Error("invalid_relation");
   const found = await existingIds(businessId, definition.targetEntity, toIds);
   if (found.size !== toIds.length) throw new Error("invalid_relation");
 
-  await prisma.$transaction([
-    prisma.recordLink.deleteMany({ where: { businessId, definitionId: definition.id, fromId, toId: { notIn: toIds } } }),
-    ...toIds.map((toId) =>
-      prisma.recordLink.upsert({
-        where: { definitionId_fromId_toId: { definitionId: definition.id, fromId, toId } },
-        create: { businessId, definitionId: definition.id, fromType, fromId, toType: definition.targetEntity!, toId },
-        update: {},
-      })
-    ),
-  ]);
+  if (definition.exclusive && toIds.length) {
+    const taken = await prisma.recordLink.count({ where: { definitionId: definition.id, toId: { in: toIds }, fromId: { not: fromId } } });
+    if (taken > 0) throw new Error("relation_target_taken");
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.recordLink.deleteMany({ where: { businessId, definitionId: definition.id, fromId, toId: { notIn: toIds } } }),
+      ...toIds.map((toId) =>
+        prisma.recordLink.upsert({
+          where: { definitionId_fromId_toId: { definitionId: definition.id, fromId, toId } },
+          create: {
+            businessId,
+            definitionId: definition.id,
+            fromType,
+            fromId,
+            toType: definition.targetEntity!,
+            toId,
+            exclusiveTo: definition.exclusive ? toId : null,
+          },
+          update: {},
+        })
+      ),
+    ]);
+  } catch (err) {
+    // Carrera entre dos requests que vinculan el mismo destino exclusivo.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new Error("relation_target_taken");
+    throw err;
+  }
 }
 
 /** Vínculos salientes de un registro: definitionId → [{ id, label }]. */
@@ -78,26 +106,38 @@ export async function outgoingLinks(businessId: string, fromId: string) {
   return byDef;
 }
 
+const STANDARD_PLURAL: Record<string, string> = { lead: "Leads", contact: "Contactos", company: "Empresas", opportunity: "Oportunidades", task: "Tareas" };
+
 /**
  * Vínculos entrantes ("¿qué apunta a este registro?"), agrupados por el
- * campo relación. Solo de módulos personalizados no archivados del negocio.
+ * campo relación: desde módulos personalizados no archivados Y desde
+ * campos relación de los módulos estándar. `canSee` filtra los módulos de
+ * origen que la persona no puede ver (permisos).
  */
-export async function incomingLinks(businessId: string, toType: string, toId: string) {
+export async function incomingLinks(
+  businessId: string,
+  toType: string,
+  toId: string,
+  canSee: (entityType: string) => boolean = () => true
+) {
   const links = await prisma.recordLink.findMany({
     where: { businessId, toType, toId },
-    include: { definition: { select: { id: true, label: true, moduleId: true, module: { select: { labelPlural: true, archivedAt: true } } } } },
+    include: {
+      definition: { select: { id: true, label: true, inverseLabel: true, entityType: true, moduleId: true, module: { select: { labelPlural: true, archivedAt: true } } } },
+    },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
-  const visible = links.filter((l) => !l.definition.module?.archivedAt);
+  const visible = links.filter((l) => !l.definition.module?.archivedAt && canSee(l.fromType));
   const labels = await resolveLabels(businessId, visible.map((l) => ({ type: l.fromType, id: l.fromId })));
-  const groups = new Map<string, { title: string; items: { id: string; label: string; href: string }[] }>();
+  const groups = new Map<string, { title: string; definitionId: string; fromType: string; items: { id: string; label: string; href: string }[] }>();
   for (const l of visible) {
     const info = labels.get(`${l.fromType}:${l.fromId}`);
     if (!info) continue;
     const key = l.definition.id;
-    const title = l.definition.module ? `${l.definition.module.labelPlural} · ${l.definition.label}` : l.definition.label;
-    if (!groups.has(key)) groups.set(key, { title, items: [] });
+    const source = l.definition.module?.labelPlural ?? STANDARD_PLURAL[l.definition.entityType] ?? "";
+    const title = l.definition.inverseLabel || (source ? `${source} · ${l.definition.label}` : l.definition.label);
+    if (!groups.has(key)) groups.set(key, { title, definitionId: key, fromType: l.fromType, items: [] });
     groups.get(key)!.items.push({ id: l.fromId, ...info });
   }
   return Array.from(groups.values());
@@ -108,6 +148,7 @@ const STANDARD_HREF: Record<string, string> = {
   company: "/dashboard/empresas",
   opportunity: "/dashboard/oportunidades",
   lead: "/dashboard/leads",
+  task: "/dashboard/tareas",
 };
 
 /** Nombre + link de registros de cualquier entidad (scopeado al negocio). */
@@ -125,8 +166,11 @@ export async function resolveLabels(businessId: string, refs: { type: string; id
             ? await prisma.company.findMany({ where, select: { id: true, name: true } })
             : await prisma.lead.findMany({ where, select: { id: true, name: true } });
       for (const r of rows) out.set(`${type}:${r.id}`, { label: r.name, href: `${STANDARD_HREF[type]}/${r.id}` });
-    } else if (type === "opportunity") {
-      const rows = await prisma.opportunity.findMany({ where, select: { id: true, title: true } });
+    } else if (type === "opportunity" || type === "task") {
+      const rows =
+        type === "opportunity"
+          ? await prisma.opportunity.findMany({ where, select: { id: true, title: true } })
+          : await prisma.task.findMany({ where, select: { id: true, title: true } });
       for (const r of rows) out.set(`${type}:${r.id}`, { label: r.title, href: `${STANDARD_HREF[type]}/${r.id}` });
     } else {
       const moduleId = moduleIdFromEntityType(type);

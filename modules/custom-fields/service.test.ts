@@ -48,6 +48,10 @@ describe("createCustomFieldDefinition", () => {
         options: [],
         required: false,
         order: 5,
+        exclusive: false,
+        inverseLabel: null,
+        description: null,
+        defaultValue: null,
         moduleId: null,
         targetEntity: null,
         multiple: false,
@@ -131,8 +135,8 @@ describe("getCustomFieldsForEntity — lectura", () => {
       })
     );
     expect(fields).toEqual([
-      { definitionId: "def_1", key: "rubro", label: "Rubro", type: "text", options: [], required: false, value: "Software" },
-      { definitionId: "def_2", key: "empleados", label: "Empleados", type: "number", options: [], required: false, value: null },
+      expect.objectContaining({ definitionId: "def_1", key: "rubro", label: "Rubro", type: "text", options: [], required: false, value: "Software" }),
+      expect.objectContaining({ definitionId: "def_2", key: "empleados", label: "Empleados", type: "number", options: [], required: false, value: null }),
     ]);
   });
 });

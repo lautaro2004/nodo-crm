@@ -43,6 +43,12 @@ export interface ModuleTemplateField {
   options?: string[];
   required?: boolean;
   role?: "price" | "image" | "code";
+  defaultValue?: string;
+  description?: string;
+  /** Solo relation. */
+  targetEntity?: string;
+  multiple?: boolean;
+  inverseLabel?: string;
 }
 
 export interface ModuleTemplate {
@@ -93,6 +99,23 @@ export const MODULE_TEMPLATES: ModuleTemplate[] = [
       { key: "tipo", label: "Tipo", type: "select", options: ["Casa", "Departamento", "Local", "Terreno", "Oficina"] },
       { key: "precio", label: "Precio", type: "currency", role: "price" },
       { key: "imagen", label: "Foto", type: "image", role: "image" },
+    ],
+  },
+  {
+    id: "colaboraciones",
+    labelSingular: "Colaboración",
+    labelPlural: "Colaboraciones",
+    description: "Canjes o colaboraciones con empresas (por ejemplo, una máquina que te envían para probar).",
+    icon: "briefcase",
+    fields: [
+      { key: "contacto", label: "Contacto", type: "relation", targetEntity: "contact", inverseLabel: "Colaboraciones" },
+      { key: "empresa", label: "Empresa", type: "relation", targetEntity: "company", inverseLabel: "Colaboraciones" },
+      { key: "maquina", label: "Máquina o producto", type: "text" },
+      { key: "fecha_ingreso", label: "Fecha de ingreso", type: "date" },
+      { key: "estado", label: "Estado", type: "select", options: ["Pendiente", "En evaluación", "Aceptada", "Rechazada"], defaultValue: "Pendiente" },
+      { key: "motivo_rechazo", label: "Motivo de rechazo", type: "select", options: ["No cumple requisitos", "Sin interés comercial", "Condiciones no aceptadas", "Otro"] },
+      { key: "observaciones", label: "Observaciones", type: "text" },
+      { key: "documentacion", label: "Documentación (link)", type: "url", description: "Link a la carpeta o documento (Drive, Dropbox…)." },
     ],
   },
   {

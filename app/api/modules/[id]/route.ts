@@ -5,7 +5,7 @@ import { customModuleUpdateSchema } from "@/lib/schemas";
 import { deleteModule, getModuleById, updateModule } from "@/modules/custom-modules/service";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "fields" });
   if (!ctx) return response;
   const { id } = await params;
   const { data, response: badRequest } = await parseBody(request, customModuleUpdateSchema);
@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // Borrado definitivo (con todos sus registros): solo admin y solo si el
 // módulo ya está archivado — dos pasos explícitos para algo irreversible.
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "fields" });
   if (!ctx) return response;
   const { id } = await params;
   const mod = await getModuleById(ctx.businessId, id);

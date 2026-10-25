@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
+import { can, canAdminister, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { DeleteRecordButton } from "@/components/records/delete-record-button";
 import { RECORD_NOUNS } from "@/lib/record-nouns";
 import { getCustomFieldsForEntity } from "@/modules/custom-fields/service";
@@ -31,6 +31,10 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const contact = await getContact(ctx.businessId, id);
   if (!contact) notFound();
+  // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "contact", contact)) notFound();
+  const canEdit = can(access, "contact", "edit");
 
   const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "contact", id),
@@ -40,7 +44,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     listUpcomingEvents(ctx.businessId, { contactId: id }),
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "contact", id),
-    incomingLinks(ctx.businessId, "contact", id),
+    incomingLinks(ctx.businessId, "contact", id, (t) => can(access, t, "view")),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -53,16 +57,18 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         actions={
           <div className="flex items-center gap-2">
             <SendEmailAction entityType="contact" entityId={id} templates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))} />
-            <Link href={`/dashboard/contactos/${id}/editar`}>
-              <Button variant="secondary">Editar</Button>
-            </Link>
-            {hasRole(ctx.role, "admin") && <DeleteRecordButton entityType="contact" id={id} noun={RECORD_NOUNS.contact} redirectTo="/dashboard/contactos" />}
+            {canEdit && (
+              <Link href={`/dashboard/contactos/${id}/editar`}>
+                <Button variant="secondary">Editar</Button>
+              </Link>
+            )}
+            {can(access, "contact", "delete") && <DeleteRecordButton entityType="contact" id={id} noun={RECORD_NOUNS.contact} redirectTo="/dashboard/contactos" />}
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Información</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -93,7 +99,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={canAdminister(access, "fields")} readOnly={!canEdit} />
 
           <RelatedGroups groups={relatedGroups} emptyText={null} />
 

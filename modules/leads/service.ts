@@ -5,6 +5,8 @@ import { assertValidStatus, resolveStatusRules, validateStatusReason } from "@/m
 import { runLeadCreatedAutomations, runLeadStatusAutomations } from "@/modules/automations/engine";
 import { buildLeadWhere, leadOrderBy, type LeadFilters } from "@/modules/leads/filters";
 import { cleanupDeletedRecord } from "@/modules/records/cleanup";
+import { prepareCustomValues } from "@/modules/custom-fields/service";
+import { proposedFrom, trackChange } from "@/modules/automations/workflow";
 
 // crm.Lead — prospecto propio de CADA NEGOCIO que usa el CRM. NO es
 // public.Lead (pipeline comercial de Kodexa) — ver
@@ -34,8 +36,16 @@ export interface CreateLeadInput {
    * Solo lo usan integraciones del servidor, nunca el body de la API.
    */
   sourceRef?: string | null;
+  /** Campos personalizados (definitionId → valor). Ver prepareCustomValues. */
+  customValues?: Record<string, string | null>;
 }
 export type UpdateLeadInput = Partial<Omit<CreateLeadInput, "sourceRef">>;
+
+export interface WriteOptions {
+  /** Alta desde un formulario: exige los campos personalizados obligatorios. */
+  enforceRequired?: boolean;
+  actorUserId?: string | null;
+}
 
 async function assertCompanyBelongs(businessId: string, companyId: string | null | undefined) {
   if (!companyId) return;
@@ -43,13 +53,31 @@ async function assertCompanyBelongs(businessId: string, companyId: string | null
   if (!company) throw new Error("company_not_found");
 }
 
-export async function createLead(businessId: string, data: CreateLeadInput) {
+export async function createLead(businessId: string, input: CreateLeadInput, options: WriteOptions = {}) {
+  const { customValues, ...data } = input;
   await assertCompanyBelongs(businessId, data.companyId);
   await assertOptionalOwner(businessId, data.ownerId);
   if (data.status === "converted") throw new Error("use_convert_endpoint");
+  // trackChange: validaciones "antes de guardar" y automatizaciones
+  // genéricas (modules/automations/workflow.ts).
+  return trackChange(
+    { businessId, entityType: "lead", kind: "create", proposed: proposedFrom({ status: "new", ...data }, customValues), actorUserId: options.actorUserId },
+    () => insertLead(businessId, data, customValues, options),
+    (lead) => lead.id
+  );
+}
+
+async function insertLead(
+  businessId: string,
+  data: Omit<CreateLeadInput, "customValues">,
+  customValues: Record<string, string | null> | undefined,
+  options: WriteOptions
+) {
   let statusReason: string | null = null;
   if (data.status) statusReason = validateStatusReason(await resolveStatusRules(businessId, "lead", data.status), data.statusReason);
   else await assertValidStatus(businessId, "lead", data.status);
+  // Valida los campos personalizados ANTES de crear (nunca un lead a medias).
+  const writeCustom = await prepareCustomValues(businessId, "lead", customValues ?? {}, { creating: true, enforceRequired: options.enforceRequired });
   const lead = await prisma.lead.create({
     data: {
       businessId,
@@ -64,6 +92,7 @@ export async function createLead(businessId: string, data: CreateLeadInput) {
       sourceRef: data.sourceRef ?? null,
     },
   });
+  await writeCustom(lead.id);
   await createActivity(businessId, { relatedType: "lead", relatedId: lead.id, type: "note", body: "Lead creado" });
   // Asignación automática (solo si quedó sin responsable). Nunca rompe la
   // creación: el motor registra su propio resultado/error.
@@ -105,11 +134,26 @@ export async function getLead(businessId: string, id: string) {
 // Opportunity real detrás, rompiendo el invariante "convertedAt implica
 // convertedContactId" que el resto de la UI asume. Ver
 // docs/architecture/crm-fase5-lead-conversion.md, "Estado del Lead".
-export async function updateLead(businessId: string, id: string, data: UpdateLeadInput, actorUserId?: string | null) {
+export async function updateLead(businessId: string, id: string, input: UpdateLeadInput, actorUserId?: string | null) {
+  const { customValues, ...data } = input;
   await assertCompanyBelongs(businessId, data.companyId);
   const current = await prisma.lead.findFirst({ where: { id, businessId } });
   if (!current) return null;
+  return trackChange(
+    { businessId, entityType: "lead", kind: "update", recordId: id, proposed: proposedFrom(data, customValues), actorUserId },
+    () => applyLeadUpdate(businessId, id, current, data, customValues, actorUserId),
+    (lead) => lead?.id
+  );
+}
 
+async function applyLeadUpdate(
+  businessId: string,
+  id: string,
+  current: NonNullable<Awaited<ReturnType<typeof prisma.lead.findFirst>>>,
+  data: Omit<UpdateLeadInput, "customValues">,
+  customValues: Record<string, string | null> | undefined,
+  actorUserId?: string | null
+) {
   if (data.status === "converted") throw new Error("use_convert_endpoint");
   if (current.status === "converted" && data.status && data.status !== current.status) {
     throw new Error("lead_already_converted");
@@ -131,10 +175,12 @@ export async function updateLead(businessId: string, id: string, data: UpdateLea
     statusReason = validateStatusReason(await resolveStatusRules(businessId, "lead", current.status), requestedReason);
   }
 
+  const writeCustom = customValues ? await prepareCustomValues(businessId, "lead", customValues, { recordId: id }) : null;
   const updated = await prisma.lead.update({
     where: { id },
     data: { ...rest, ...(statusReason !== undefined ? { statusReason } : {}) },
   });
+  if (writeCustom) await writeCustom(id);
 
   if (statusChanged) {
     const activity = await createActivity(businessId, {
@@ -150,8 +196,14 @@ export async function updateLead(businessId: string, id: string, data: UpdateLea
   return updated;
 }
 
-export async function deleteLead(businessId: string, id: string) {
-  const result = await prisma.lead.deleteMany({ where: { id, businessId } });
-  if (result.count > 0) await cleanupDeletedRecord(businessId, "lead", id);
-  return result.count > 0;
+export async function deleteLead(businessId: string, id: string, actorUserId?: string | null) {
+  return trackChange(
+    { businessId, entityType: "lead", kind: "delete", recordId: id, actorUserId },
+    async () => {
+      const result = await prisma.lead.deleteMany({ where: { id, businessId } });
+      if (result.count > 0) await cleanupDeletedRecord(businessId, "lead", id);
+      return result.count > 0;
+    },
+    (ok) => (ok ? id : null)
+  );
 }

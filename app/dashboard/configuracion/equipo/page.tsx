@@ -4,6 +4,7 @@ import { availableProducts, listTeam } from "@/modules/team/service";
 import { PageHeader } from "@/components/ui/primitives";
 import { AdminOnly } from "@/components/team/admin-only";
 import { TeamManager } from "@/components/team/team-manager";
+import { listRoles } from "@/modules/access/service";
 
 export default async function TeamPage() {
   const ctx = await resolveWorkspaceContext();
@@ -26,11 +27,12 @@ export default async function TeamPage() {
     );
   }
 
-  const [team, products] = await Promise.all([listTeam(ctx.businessId), availableProducts(ctx.businessId)]);
+  const [team, products, roles] = await Promise.all([listTeam(ctx.businessId), availableProducts(ctx.businessId), listRoles(ctx.businessId)]);
   return (
     <div>
       {header}
       <TeamManager
+        accessRoles={roles.map((r) => ({ key: r.key, name: r.name }))}
         me={{ userId: ctx.userId, role: ctx.role }}
         assignable={assignableRoles(ctx.role)}
         products={products}

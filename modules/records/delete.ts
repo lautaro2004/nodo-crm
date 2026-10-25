@@ -32,7 +32,7 @@ export function isDeletableEntity(value: string): value is DeletableEntity {
   return ["lead", "contact", "company", "opportunity"].includes(value) || isModuleEntityType(value);
 }
 
-function deleterFor(entityType: DeletableEntity): (businessId: string, id: string) => Promise<boolean> {
+function deleterFor(entityType: DeletableEntity): (businessId: string, id: string, actorUserId: string | null) => Promise<boolean> {
   switch (entityType) {
     case "lead":
       return deleteLead;
@@ -44,7 +44,7 @@ function deleterFor(entityType: DeletableEntity): (businessId: string, id: strin
       return deleteOpportunity;
     default: {
       const moduleId = moduleIdFromEntityType(entityType)!;
-      return (businessId, id) => deleteRecord(businessId, moduleId, id);
+      return (businessId, id, actorUserId) => deleteRecord(businessId, moduleId, id, actorUserId);
     }
   }
 }
@@ -58,7 +58,7 @@ export interface DeleteRecordsResult {
   failed: string[];
 }
 
-export async function deleteRecords(businessId: string, entityType: DeletableEntity, ids: string[]): Promise<DeleteRecordsResult> {
+export async function deleteRecords(businessId: string, entityType: DeletableEntity, ids: string[], actorUserId: string | null = null): Promise<DeleteRecordsResult> {
   const unique = Array.from(new Set(ids)).slice(0, MAX_BULK_DELETE);
   const remove = deleterFor(entityType);
   const result: DeleteRecordsResult = { deleted: [], notFound: [], failed: [] };
@@ -66,7 +66,7 @@ export async function deleteRecords(businessId: string, entityType: DeletableEnt
   // error en un registro no deja a los demás a medias.
   for (const id of unique) {
     try {
-      if (await remove(businessId, id)) result.deleted.push(id);
+      if (await remove(businessId, id, actorUserId)) result.deleted.push(id);
       else result.notFound.push(id);
     } catch (error) {
       console.error(`[records/delete] No se pudo borrar ${entityType} ${id}:`, error instanceof Error ? error.message : error);

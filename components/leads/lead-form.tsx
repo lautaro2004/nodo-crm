@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
+import { CustomFieldsFormSection, customValuesPayload, initialCustomValues, type FormCustomField } from "@/components/custom-fields/custom-fields-form-section";
 
 interface LeadFormValues {
   name: string;
@@ -20,7 +21,10 @@ export function LeadForm({
   leadId,
   companies,
   statusOptions,
+  customFields,
 }: {
+  /** Solo en el alta: campos personalizados del módulo (ver CustomFieldsFormSection). */
+  customFields?: FormCustomField[];
   initial?: Partial<LeadFormValues>;
   leadId?: string;
   companies: { id: string; name: string }[];
@@ -35,6 +39,7 @@ export function LeadForm({
     companyId: initial?.companyId ?? "",
     status: initial?.status ?? statusOptions[0]?.key ?? "new",
   });
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() => initialCustomValues(customFields));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +56,7 @@ export function LeadForm({
       res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, companyId: values.companyId || null }),
+        body: JSON.stringify({ ...{ ...values, companyId: values.companyId || null }, ...(customFields?.length ? { customValues: customValuesPayload(customValues) } : {}) }),
       });
     } catch {
       setLoading(false);
@@ -107,6 +112,8 @@ export function LeadForm({
         </Select>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {customFields && customFields.length > 0 && <CustomFieldsFormSection fields={customFields} values={customValues} onChange={setCustomValues} />}
+
       <Button type="submit" loading={loading || navigating}>
         {loading || navigating ? "Guardando…" : leadId ? "Guardar cambios" : "Crear lead"}
       </Button>

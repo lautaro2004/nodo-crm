@@ -9,32 +9,32 @@ import { customFieldTypes } from "@/lib/schemas";
 import { slugifyKey } from "@/modules/import/shared";
 import { errorMessage, readApiError } from "@/lib/error-messages";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { CARDINALITIES, FieldDefinitionEditor, cardinalityOf, type EditableField } from "@/components/custom-fields/field-definition-editor";
 import { useToast } from "@/components/ui/toast";
 
-interface FieldRow {
-  id: string;
-  label: string;
-  type: string;
-  options: string[];
-  required: boolean;
-  targetEntity: string | null;
-  targetLabel: string | null;
-  multiple: boolean;
-}
+type FieldRow = EditableField;
 
 const TYPE_LABELS: Record<string, string> = { ...CUSTOM_FIELD_TYPE_LABELS, image: "Imagen", relation: "Relación con otro módulo" };
 
-// Campos de UN módulo personalizado: alta, edición (nombre, opciones,
-// obligatorio), orden y baja. El tipo no se cambia después de crear.
+// Campos de UN módulo (personalizado o estándar): alta, edición completa
+// (ver FieldDefinitionEditor), orden y baja. El tipo no se cambia después
+// de crear (reinterpretaría los valores cargados).
 export function ModuleFieldsEditor({
   entityType,
   fields,
   targets,
+  title = "Campos",
+  intro,
+  allowImage = true,
 }: {
-  moduleId: string;
+  moduleId?: string;
   entityType: string;
   fields: FieldRow[];
   targets: { value: string; label: string }[];
+  title?: string;
+  intro?: React.ReactNode;
+  /** Imagen: solo en módulos personalizados (se suben a su propio bucket). */
+  allowImage?: boolean;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(fields.map((f) => f.id));
@@ -97,9 +97,13 @@ export function ModuleFieldsEditor({
   return (
     <Card className="p-4">
       <div className="mb-3">
-        <h2 className="text-sm font-semibold text-slate-900">Campos</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         <p className="text-xs text-slate-500">
-          Todo registro tiene <strong>Nombre</strong> (obligatorio) y Responsable. Sumá los campos que necesites; el orden es el del formulario.
+          {intro ?? (
+            <>
+              Todo registro tiene <strong>Nombre</strong> (obligatorio) y Responsable. Sumá los campos que necesites; el orden es el del formulario.
+            </>
+          )}
         </p>
       </div>
 
@@ -131,7 +135,8 @@ export function ModuleFieldsEditor({
                   </p>
                   <p className="truncate text-xs text-slate-500">
                     {TYPE_LABELS[f.type] ?? f.type}
-                    {f.type === "relation" && f.targetLabel ? ` → ${f.targetLabel}${f.multiple ? " (varios)" : ""}` : ""}
+                    {f.type === "relation" && f.targetLabel ? ` → ${f.targetLabel} · ${CARDINALITIES.find((c) => c.value === cardinalityOf(f.multiple, !!f.exclusive))!.label}` : ""}
+                    {f.defaultValue ? ` · predeterminado: ${f.defaultValue}` : ""}
                     {f.options.length > 0 ? ` · ${f.options.join(", ")}` : ""}
                   </p>
                 </div>
@@ -142,100 +147,27 @@ export function ModuleFieldsEditor({
                   {busy === `del:${f.id}` ? "Borrando…" : "Borrar"}
                 </button>
               </div>
-              {editing === f.id && <EditField field={f} onDone={() => setEditing(null)} />}
+              {editing === f.id && <FieldDefinitionEditor field={f} onDone={() => setEditing(null)} />}
             </li>
           ))}
         </ul>
       )}
 
       {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      <NewField entityType={entityType} targets={targets} />
+      <NewField entityType={entityType} targets={targets} allowImage={allowImage} />
     </Card>
   );
 }
 
-function EditField({ field, onDone }: { field: FieldRow; onDone: () => void }) {
-  const router = useRouter();
-  const [label, setLabel] = useState(field.label);
-  const [options, setOptions] = useState(field.options.join(", "));
-  const [required, setRequired] = useState(field.required);
-  const [multiple, setMultiple] = useState(field.multiple);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const toast = useToast();
-  const hasOptions = field.type === "select" || field.type === "multiselect";
-
-  async function save() {
-    if (saving) return;
-    setSaving(true);
-    setError(null);
-    const res = await fetch(`/api/custom-field-definitions/${field.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        label,
-        required,
-        ...(hasOptions ? { options: options.split(",").map((o) => o.trim()).filter(Boolean) } : {}),
-        ...(field.type === "relation" ? { multiple } : {}),
-      }),
-    }).catch(() => null);
-    setSaving(false);
-    if (!res) return setError("Sin conexión. Los cambios no se guardaron.");
-    if (!res.ok) return setError(await readApiError(res));
-    toast.success("Campo actualizado");
-    onDone();
-    router.refresh();
-  }
-
-  return (
-    <div className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <div>
-          <Label htmlFor={`ef-label-${field.id}`}>Nombre</Label>
-          <Input id={`ef-label-${field.id}`} value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} />
-        </div>
-        {hasOptions && (
-          <div>
-            <Label htmlFor={`ef-opts-${field.id}`}>Opciones (separadas por coma)</Label>
-            <Input id={`ef-opts-${field.id}`} value={options} onChange={(e) => setOptions(e.target.value)} />
-          </div>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-4 text-sm text-slate-700">
-        {field.type !== "image" && (
-          <label className="inline-flex items-center gap-2">
-            <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={required} onChange={(e) => setRequired(e.target.checked)} />
-            Obligatorio
-          </label>
-        )}
-        {field.type === "relation" && (
-          <label className="inline-flex items-center gap-2">
-            <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={multiple} onChange={(e) => setMultiple(e.target.checked)} />
-            Permite varios
-          </label>
-        )}
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={save} disabled={!label.trim()} loading={saving}>
-          {saving ? "Guardando…" : "Guardar"}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
-          Cancelar
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function NewField({ entityType, targets }: { entityType: string; targets: { value: string; label: string }[] }) {
+function NewField({ entityType, targets, allowImage }: { entityType: string; targets: { value: string; label: string }[]; allowImage: boolean }) {
   const router = useRouter();
   const [label, setLabel] = useState("");
   const [type, setType] = useState("text");
   const [options, setOptions] = useState("");
   const [required, setRequired] = useState(false);
   const [target, setTarget] = useState(targets[0]?.value ?? "contact");
-  const [multiple, setMultiple] = useState(false);
+  const [cardinality, setCardinality] = useState<string>("many_to_one");
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const toast = useToast();
@@ -254,7 +186,13 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
         type,
         required: type === "image" ? false : required,
         options: type === "select" || type === "multiselect" ? options.split(",").map((o) => o.trim()).filter(Boolean) : [],
-        ...(type === "relation" ? { targetEntity: target, multiple } : {}),
+        description: description.trim() || null,
+        ...(type === "relation"
+          ? (() => {
+              const c = CARDINALITIES.find((x) => x.value === cardinality)!;
+              return { targetEntity: target, multiple: c.multiple, exclusive: c.exclusive };
+            })()
+          : {}),
       }),
     }).catch(() => null);
     setSaving(false);
@@ -266,6 +204,7 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
     setLabel("");
     setOptions("");
     setRequired(false);
+    setDescription("");
     router.refresh();
   }
 
@@ -286,7 +225,7 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
         <div>
           <Label htmlFor="nf-type">Tipo</Label>
           <Select id="nf-type" value={type} onChange={(e) => setType(e.target.value)}>
-            {customFieldTypes.map((t) => (
+            {customFieldTypes.filter((t) => allowImage || t !== "image").map((t) => (
               <option key={t} value={t}>
                 {TYPE_LABELS[t] ?? t}
               </option>
@@ -297,6 +236,22 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
           <div className="sm:col-span-2">
             <Label htmlFor="nf-options">Opciones (separadas por coma)</Label>
             <Input id="nf-options" value={options} onChange={(e) => setOptions(e.target.value)} placeholder="Chico, Mediano, Grande" />
+          </div>
+        )}
+        <div className="sm:col-span-2">
+          <Label htmlFor="nf-desc">Descripción (opcional)</Label>
+          <Input id="nf-desc" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="Ayuda que se ve debajo del campo" />
+        </div>
+        {type === "relation" && (
+          <div>
+            <Label htmlFor="nf-card">Tipo de relación</Label>
+            <Select id="nf-card" value={cardinality} onChange={(e) => setCardinality(e.target.value)}>
+              {CARDINALITIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
           </div>
         )}
         {type === "relation" && (
@@ -317,12 +272,6 @@ function NewField({ entityType, targets }: { entityType: string; targets: { valu
           <label className="inline-flex items-center gap-2">
             <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             Obligatorio
-          </label>
-        )}
-        {type === "relation" && (
-          <label className="inline-flex items-center gap-2">
-            <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={multiple} onChange={(e) => setMultiple(e.target.checked)} />
-            Permite varios
           </label>
         )}
         {type === "image" && <Badge>JPG, PNG, WebP o GIF · hasta 5 MB</Badge>}

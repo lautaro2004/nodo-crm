@@ -35,7 +35,10 @@ export function TeamManager({
   products,
   members,
   invitations,
+  accessRoles = [],
 }: {
+  /** Roles de Nodo para elegir al invitar (ej. «Solo lectura» para un externo). */
+  accessRoles?: { key: string; name: string }[];
   me: { userId: string; role: Role };
   assignable: Role[];
   products: Product[];
@@ -53,6 +56,7 @@ export function TeamManager({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>(assignable.includes("member") ? "member" : assignable[0]);
   const [selected, setSelected] = useState<Product[]>(products.includes("crm") ? ["crm"] : products.slice(0, 1));
+  const [accessRole, setAccessRole] = useState("");
 
   async function call(url: string, init: RequestInit) {
     setError(null);
@@ -73,7 +77,7 @@ export function TeamManager({
 
   async function invite(e: React.FormEvent) {
     e.preventDefault();
-    const result = await call("/api/team/invitations", { method: "POST", body: JSON.stringify({ email, role, products: selected }) });
+    const result = await call("/api/team/invitations", { method: "POST", body: JSON.stringify({ email, role, products: selected, accessRole: accessRole || null }) });
     if (result) {
       setNotice(result);
       setCopied(false);
@@ -138,6 +142,20 @@ export function TeamManager({
             </Select>
             <p className="mt-1 text-xs text-slate-500">{ROLE_HINTS[role]}</p>
           </div>
+          {selected.includes("crm") && accessRoles.length > 0 && (
+            <div className="md:col-span-2 md:max-w-sm">
+              <Label htmlFor="invite-access">Permisos en Nodo</Label>
+              <Select id="invite-access" value={accessRole} onChange={(e) => setAccessRole(e.target.value)}>
+                <option value="">Según el rol de equipo</option>
+                {accessRoles.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-slate-500">Para un usuario externo elegí «Solo lectura». Se aplica al aceptar la invitación; después se ajusta en Equipos y permisos.</p>
+            </div>
+          )}
           <fieldset className="md:col-span-2">
             <legend className="mb-1.5 text-[13px] font-medium text-slate-700">Acceso a</legend>
             <div className="flex flex-wrap gap-4">

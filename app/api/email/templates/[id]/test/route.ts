@@ -5,7 +5,7 @@ import { emailErrorResponse } from "@/modules/email/errors";
 import { sendTestEmail } from "@/modules/email/send";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace({ minRole: "admin" });
+  const { ctx, response } = await requireWorkspace({ admin: "settings" });
   if (!ctx) return response;
   const { id } = await params;
   try {

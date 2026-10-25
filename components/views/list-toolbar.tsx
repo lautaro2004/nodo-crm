@@ -67,6 +67,7 @@ export function ListToolbar({
   display,
   defaultDisplay,
   exportPath,
+  canExport = true,
   displays = ["list", "kanban"],
 }: {
   entity: string;
@@ -81,6 +82,8 @@ export function ListToolbar({
   display: "list" | "kanban";
   defaultDisplay: "list" | "kanban";
   exportPath: string;
+  /** Permiso "Exportar" del módulo (el servidor lo vuelve a validar). */
+  canExport?: boolean;
   /** Vistas disponibles (los módulos personalizados solo tienen Lista). */
   displays?: ("list" | "kanban")[];
 }) {
@@ -199,6 +202,7 @@ export function ListToolbar({
           </>
         )}
 
+        {canExport && (
         <a
           href={`${exportPath}?${exportQs.toString()}`}
           className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-[var(--shadow-card)] hover:border-slate-300"
@@ -207,6 +211,7 @@ export function ListToolbar({
           <DownloadIcon className="h-4 w-4" />
           <span className="hidden sm:inline">CSV</span>
         </a>
+        )}
 
         {displays.length > 1 && (
         <div className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200/80 bg-slate-100/80 p-0.5" role="group" aria-label="Vista">

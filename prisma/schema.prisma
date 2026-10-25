@@ -252,6 +252,11 @@ model Workspace {
   recordLinks             RecordLink[]
   opportunityItems        OpportunityItem[]
   leadIntegrations        LeadIntegration[]
+  userPreferences         UserPreference[]
+  reportDashboards        ReportDashboard[]
+  teams                   Team[]
+  accessRoles             AccessRole[]
+  memberAccess            MemberAccess[]
 
   @@schema("crm")
 }
@@ -762,6 +767,22 @@ model CustomFieldDefinition {
   // "opportunity" | "cm:<moduleId>") y si admite varios registros.
   targetEntity String?
   multiple     Boolean  @default(false)
+  // Solo "relation": cada registro destino puede estar vinculado por UN
+  // solo registro origen (uno a uno / uno a muchos). Lo garantiza la base
+  // con RecordLink.exclusiveTo (ver migración 20261025120000).
+  exclusive    Boolean  @default(false)
+  // Solo "relation": título de la vista inversa en el registro destino
+  // (ej. "Colaboraciones" en el contacto). Null = "<Módulo> · <Campo>".
+  inverseLabel String?
+  // Ayuda que se muestra debajo del campo en formularios.
+  description  String?
+  // Valor inicial al crear un registro (forma canónica, validado contra el
+  // tipo y las opciones). Null = sin valor predeterminado.
+  defaultValue String?
+  // Validaciones extra según el tipo (lib/custom-fields.ts,
+  // fieldValidationSchema): minLength/maxLength (texto), min/max (número,
+  // moneda), minDate/maxDate (fecha). Null = sin validaciones extra.
+  validation   Json?
 
   workspace Workspace          @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
   module    CustomModule?      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
@@ -852,12 +873,18 @@ model RecordLink {
   fromId       String
   toType       String
   toId         String
+  // = toId cuando el campo es exclusivo (CustomFieldDefinition.exclusive),
+  // null si no. El unique (definitionId, exclusiveTo) hace que la BASE
+  // impida que dos registros origen apunten al mismo destino por ese
+  // campo (los NULL no chocan entre sí).
+  exclusiveTo  String?
   createdAt    DateTime @default(now())
 
   workspace  Workspace             @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
   definition CustomFieldDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
 
   @@unique([definitionId, fromId, toId])
+  @@unique([definitionId, exclusiveTo])
   @@index([businessId, toType, toId])
   @@index([businessId, fromType, fromId])
   @@schema("crm")
@@ -1015,14 +1042,19 @@ model SavedView {
 //   assign_lead        asignación automática de leads nuevos
 //   lead_unattended    alerta de lead sin seguimiento tras N horas
 //   lead_status_change acciones al pasar un lead a un estado
+//   workflow           motor genérico: cualquier módulo (estándar o
+//                      personalizado), disparador + condiciones AND/OR +
+//                      acciones encadenadas (modules/automations/workflow*)
 // `config` es JSON validado con Zod en el servidor. `cursor` es el estado
-// de la asignación rotativa (incremento atómico).
+// de la asignación rotativa (incremento atómico). `module` solo lo usan
+// las reglas "workflow" (entityType: "lead", "contact", "cm:<id>", …).
 // ═══════════════════════════════════════════════════════════════════════
 model AutomationRule {
   id         String   @id @default(cuid())
   businessId String
   name       String
   type       String
+  module     String?
   enabled    Boolean  @default(true)
   config     Json
   cursor     Int      @default(0)
@@ -1034,6 +1066,7 @@ model AutomationRule {
   runs      AutomationRun[]
 
   @@index([businessId, type, enabled])
+  @@index([businessId, module, enabled])
   @@schema("crm")
 }
 
@@ -1049,12 +1082,20 @@ model AutomationRun {
   entityId   String
   status     String
   message    String?
+  // Evento que la disparó ("created", "updated", "before_save", …) y
+  // resultado por acción (workflow). Null en las reglas clásicas.
+  trigger    String?
+  details    Json?
+  // Profundidad en una cadena de automatizaciones (0 = la disparó una
+  // persona o una integración).
+  depth      Int      @default(0)
   createdAt  DateTime @default(now())
 
   rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@unique([ruleId, dedupeKey])
   @@index([businessId, createdAt])
+  @@index([ruleId, createdAt])
   @@schema("crm")
 }
 
@@ -1125,5 +1166,150 @@ model IngestionEvent {
   @@unique([integrationId, externalId])
   @@index([businessId, receivedAt])
   @@index([integrationId, status, receivedAt])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Preferencias por usuario y negocio (ver modules/preferences). Hoy:
+//   "list:<entityType>"  última vista de una lista (Lista/Kanban, vista
+//                        guardada, filtros, columnas y orden) como query
+//                        string normalizado.
+//   "reports:default"    panel de Informes que se abre por defecto.
+// ═══════════════════════════════════════════════════════════════════════
+model UserPreference {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String
+  key        String
+  value      Json
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@unique([businessId, userId, key])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Paneles de Informes (ver modules/reports/dashboards.ts). `widgets` es
+// JSON validado con Zod (indicadores, gráficos y tablas sobre cualquier
+// módulo). Personal (shared = false, solo lo ve createdBy) o compartido
+// con el negocio (requiere el permiso administrativo "reports").
+// ═══════════════════════════════════════════════════════════════════════
+model ReportDashboard {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  order      Int      @default(0)
+  shared     Boolean  @default(false)
+  createdBy  String
+  widgets    Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+
+  @@index([businessId, createdBy])
+  @@schema("crm")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Equipos, jerarquías, roles y permisos del CRM (ver modules/access).
+//
+// public.Membership.role (owner/admin/member) sigue siendo el rol de
+// EQUIPO compartido con Nexo y decide quién gestiona miembros. Lo que cada
+// persona puede hacer DENTRO de Nodo lo decide su AccessRole (por defecto
+// el que corresponde a su Membership.role) + sus excepciones personales
+// (MemberAccess.overrides). Todo vive en el schema "crm": no se toca la
+// tabla de Nexo.
+// ═══════════════════════════════════════════════════════════════════════
+model Team {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  // Equipo padre (jerarquía). Los ciclos se impiden en el servicio.
+  parentId    String?
+  // Responsable / supervisor: ve los registros de este equipo y de sus
+  // sub-equipos cuando su alcance es "equipo".
+  leadUserId  String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  parent    Team?        @relation("TeamHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Team[]       @relation("TeamHierarchy")
+  members   TeamMember[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@schema("crm")
+}
+
+model TeamMember {
+  id         String   @id @default(cuid())
+  businessId String
+  teamId     String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([businessId, userId])
+  @@schema("crm")
+}
+
+// Rol de acceso a Nodo. Los roles del sistema ("admin", "member",
+// "viewer") existen siempre en código (lib/access.ts); una fila con esa
+// key guarda la versión EDITADA por el negocio. Los demás son roles
+// personalizados. `permissions`: ver AccessPolicy en lib/access.ts.
+model AccessRole {
+  id          String   @id @default(cuid())
+  businessId  String
+  key         String
+  name        String
+  description String?
+  system      Boolean  @default(false)
+  permissions Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  members   MemberAccess[]
+
+  @@unique([businessId, key])
+  @@schema("crm")
+}
+
+// Acceso de UNA persona: rol asignado (null = el que corresponde a su
+// Membership.role) + excepciones puntuales sobre ese rol.
+model MemberAccess {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String
+  roleId     String?
+  overrides  Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [businessId], references: [businessId], onDelete: Cascade)
+  role      AccessRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, userId])
+  @@schema("crm")
+}
+
+// Rol de Nodo elegido al invitar (ej. "Solo lectura" para un externo). Se
+// aplica al aceptar la invitación, así la persona nunca tiene más acceso
+// del previsto. public.Invitation es de Nexo: por eso esta tabla aparte.
+model InvitationAccess {
+  invitationId String   @id
+  businessId   String
+  roleKey      String
+  createdAt    DateTime @default(now())
+
+  @@index([businessId])
   @@schema("crm")
 }

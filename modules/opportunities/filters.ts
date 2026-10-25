@@ -25,6 +25,8 @@ export interface OpportunityFilters {
   tagId?: string;
   customFields?: { definitionId: string; value: string }[];
   sort?: string;
+  /** Alcance de permisos (registros visibles para el usuario). Ver scopeWhere. */
+  scope?: Prisma.OpportunityWhereInput;
 }
 
 export function parseOpportunityFilters(sp: SearchParamsLike, currentUserId?: string, now: Date = new Date()): OpportunityFilters {
@@ -54,6 +56,7 @@ export async function buildOpportunityWhere(businessId: string, f: OpportunityFi
   const and: Prisma.OpportunityWhereInput[] = [];
   const statuses = typeof f.status === "string" ? [f.status] : f.status;
 
+  if (f.scope && Object.keys(f.scope).length) and.push(f.scope);
   if (f.pipelineId) and.push({ pipelineId: f.pipelineId });
   if (f.stageId) and.push({ stageId: f.stageId });
   if (statuses?.length) and.push({ status: { in: statuses } });

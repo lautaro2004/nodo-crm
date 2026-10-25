@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/ui/primitives";
 import { EventForm } from "@/components/calendar/event-form";
 import { dayKey, isDayKey } from "@/lib/calendar-dates";
 import { getConnectionStatus } from "@/lib/google/connection";
+import { can, resolveAccess } from "@/modules/access/service";
+import { NoAccess } from "@/components/team/admin-only";
 
 export default async function NewEventPage({
   searchParams,
@@ -16,6 +18,7 @@ export default async function NewEventPage({
 }) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
+  if (!can(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "calendar", "create")) return <NoAccess what="crear registros acá" />;
 
   const sp = await searchParams;
   const googleStatus = await getConnectionStatus({ businessId: ctx.businessId, userId: ctx.userId }).catch(() => null);

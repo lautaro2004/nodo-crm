@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+vi.mock("@/modules/access/service", () => ({ applyInvitationAccess: vi.fn(), removeMemberAccessData: vi.fn() }));
+
 const m = {
   workspaceFind: vi.fn(),
   nexoSub: vi.fn(),

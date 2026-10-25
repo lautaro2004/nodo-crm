@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
+import { can, canAdminister, canSeeRecord, resolveAccess } from "@/modules/access/service";
 import { hasRole } from "@/lib/permissions";
 import { getModuleLabel } from "@/modules/workspace/module-config";
 import { DeleteRecordButton } from "@/components/records/delete-record-button";
@@ -37,6 +38,10 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   const { id } = await params;
   const opportunity = await getOpportunity(ctx.businessId, id);
   if (!opportunity) notFound();
+  // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
+  const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
+  if (!canSeeRecord(access, "opportunity", opportunity)) notFound();
+  const canEdit = can(access, "opportunity", "edit");
 
   const [activities, assignedTags, allTags, members, upcomingEvents, emailTemplates, customFields, itemsView, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "opportunity", id),
@@ -47,7 +52,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
     listTemplates(ctx.businessId),
     getCustomFieldsForEntity(ctx.businessId, "opportunity", id),
     loadOpportunityItemsView(ctx.businessId, id),
-    incomingLinks(ctx.businessId, "opportunity", id),
+    incomingLinks(ctx.businessId, "opportunity", id, (t) => can(access, t, "view")),
   ]);
   const memberNameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
 
@@ -62,10 +67,12 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         actions={
           <div className="flex items-center gap-2">
             <SendEmailAction entityType="opportunity" entityId={id} templates={emailTemplates.map((t) => ({ id: t.id, name: t.name }))} />
-            <Link href={`/dashboard/oportunidades/${id}/editar`}>
-              <Button variant="secondary">Editar</Button>
-            </Link>
-            {hasRole(ctx.role, "admin") && (
+            {canEdit && (
+              <Link href={`/dashboard/oportunidades/${id}/editar`}>
+                <Button variant="secondary">Editar</Button>
+              </Link>
+            )}
+            {can(access, "opportunity", "delete") && (
               <DeleteRecordButton
                 entityType="opportunity"
                 id={id}
@@ -77,8 +84,8 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <Card className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-900">Información</h2>
             <dl className="grid grid-cols-2 gap-4 text-sm">
@@ -147,7 +154,7 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
             modules={itemsView.modules}
           />
 
-          <CustomFieldsCard entityId={id} fields={customFields} canManage={hasRole(ctx.role, "admin")} />
+          <CustomFieldsCard entityId={id} fields={customFields} canManage={canAdminister(access, "fields")} readOnly={!canEdit} />
 
           <RelatedGroups groups={relatedGroups} emptyText={null} />
 

@@ -10,3 +10,13 @@ export function AdminOnly() {
     />
   );
 }
+
+// Módulo que la persona no tiene permiso para ver (lib/access.ts).
+export function NoAccess({ what = "este módulo" }: { what?: string }) {
+  return (
+    <EmptyState
+      title="No tenés acceso"
+      description={`Tu rol no incluye ver ${what}. Si lo necesitás, pedíselo al dueño o a un administrador del negocio.`}
+    />
+  );
+}

@@ -6,7 +6,7 @@ import { deleteTaskAttachment, getAttachmentDownloadUrl } from "@/modules/tasks/
 // GET = link de descarga (signed URL de corta duración), no el archivo en
 // sí — el cliente hace un segundo request directo a Supabase con ese link.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "task", action: "view" } });
   if (!ctx) return response;
 
   const { id } = await params;
@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { ctx, response } = await requireWorkspace();
+  const { ctx, response } = await requireWorkspace({ permission: { entity: "task", action: "edit" } });
   if (!ctx) return response;
 
   const { id } = await params;

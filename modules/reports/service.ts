@@ -25,6 +25,8 @@ export interface ReportFilters {
   source?: string[];
   status?: string[];
   pipelineId?: string;
+  /** Alcance de permisos por módulo (registros visibles para el usuario). */
+  scopes?: { lead?: Record<string, unknown>; opportunity?: Record<string, unknown> };
 }
 
 const DAY = 86_400_000;
@@ -73,6 +75,7 @@ export async function getLeadReport(businessId: string, f: ReportFilters) {
     ownerId: f.ownerId,
     source: f.source,
     status: f.status,
+    scope: f.scopes?.lead,
   });
   const [leads, rejectionKeys, closedKeys] = await Promise.all([
     prisma.lead.findMany({
@@ -119,8 +122,8 @@ export async function getOpportunityReport(businessId: string, f: ReportFilters)
     : await defaultPipeline(businessId);
 
   const [openWhere, closedWhere] = await Promise.all([
-    buildOpportunityWhere(businessId, { pipelineId: pipeline?.id, status: "open", ownerId: f.ownerId }),
-    buildOpportunityWhere(businessId, { pipelineId: pipeline?.id, status: ["won", "lost"], ownerId: f.ownerId, from: f.from, to: f.to, dateField: "closed" }),
+    buildOpportunityWhere(businessId, { pipelineId: pipeline?.id, status: "open", ownerId: f.ownerId, scope: f.scopes?.opportunity }),
+    buildOpportunityWhere(businessId, { pipelineId: pipeline?.id, status: ["won", "lost"], ownerId: f.ownerId, from: f.from, to: f.to, dateField: "closed", scope: f.scopes?.opportunity }),
   ]);
   const [open, closed] = await Promise.all([
     prisma.opportunity.findMany({ where: openWhere, select: { stageId: true, amount: true } }),

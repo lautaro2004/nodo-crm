@@ -1,14 +1,14 @@
 import { resolveWorkspaceContext } from "@/lib/workspace";
-import { hasRole } from "@/lib/permissions";
 import { AdminOnly } from "@/components/team/admin-only";
 import { getEmailSettings } from "@/modules/email/settings";
 import { Card, PageHeader } from "@/components/ui/primitives";
 import { EmailSettingsForm } from "@/components/email/email-settings-form";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export default async function EmailSettingsPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings")) return <AdminOnly />;
 
   const { settings, status } = await getEmailSettings(ctx.businessId);
 

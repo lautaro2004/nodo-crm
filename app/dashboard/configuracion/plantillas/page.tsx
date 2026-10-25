@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { hasRole } from "@/lib/permissions";
 import { AdminOnly } from "@/components/team/admin-only";
 
 import { resolveWorkspaceContext } from "@/lib/workspace";
 import { listTemplates } from "@/modules/email/templates";
 import { Button, Card, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { canAdminister, resolveAccess } from "@/modules/access/service";
 
 export default async function TemplatesPage() {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
-  if (!hasRole(ctx.role, "admin")) return <AdminOnly />;
+  if (!canAdminister(await resolveAccess(ctx.businessId, ctx.userId, ctx.role), "settings")) return <AdminOnly />;
 
   const templates = await listTemplates(ctx.businessId);
 

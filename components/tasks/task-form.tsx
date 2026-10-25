@@ -9,6 +9,7 @@ import { Button, Input, Label, Select, Textarea } from "@/components/ui/primitiv
 import { TASK_PRIORITY_LABELS } from "@/lib/labels";
 import { TaskReminderField, type ReminderState } from "@/components/tasks/task-reminder-field";
 import { computeRemindAt, guessOffsetKey } from "@/components/tasks/reminder-offsets";
+import { CustomFieldsFormSection, customValuesPayload, initialCustomValues, type FormCustomField } from "@/components/custom-fields/custom-fields-form-section";
 
 interface Option {
   id: string;
@@ -37,7 +38,10 @@ export function TaskForm({
   leads,
   opportunities,
   initialReminder,
+  customFields,
 }: {
+  /** Solo en el alta: campos personalizados del módulo (ver CustomFieldsFormSection). */
+  customFields?: FormCustomField[];
   initial?: Partial<TaskFormValues>;
   taskId?: string;
   members: { userId: string; name: string; email: string }[];
@@ -67,6 +71,7 @@ export function TaskForm({
     const offset = guessOffsetKey(initial.dueAt, initialReminder);
     return { offset, custom: offset === "custom" ? initialReminder : "" };
   });
+  const [customValues, setCustomValues] = useState<Record<string, string>>(() => initialCustomValues(customFields));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,7 +88,7 @@ export function TaskForm({
       res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify({ ...{
           title: values.title,
           description: values.description || null,
           priority: values.priority,
@@ -94,7 +99,7 @@ export function TaskForm({
           contactId: values.contactId || null,
           leadId: values.leadId || null,
           opportunityId: values.opportunityId || null,
-        }),
+        }, ...(customFields?.length ? { customValues: customValuesPayload(customValues) } : {}) }),
       });
     } catch {
       setLoading(false);
@@ -239,6 +244,8 @@ export function TaskForm({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {customFields && customFields.length > 0 && <CustomFieldsFormSection fields={customFields} values={customValues} onChange={setCustomValues} />}
+
       <Button type="submit" loading={loading || navigating}>
         {loading || navigating ? "Guardando…" : taskId ? "Guardar cambios" : "Crear tarea"}
       </Button>
