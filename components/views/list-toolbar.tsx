@@ -13,6 +13,7 @@ import { PendingBar } from "@/components/ui/pending-bar";
 import { useToast } from "@/components/ui/toast";
 import { readApiError } from "@/lib/error-messages";
 import { normalizeViewParams, type ViewPreset } from "@/lib/views/presets";
+import { withCarriedParams } from "@/lib/views/carry";
 import type { ColumnDef } from "@/lib/views/columns";
 import { formatCustomValue } from "@/lib/custom-fields";
 
@@ -599,21 +600,6 @@ function ColumnPicker({ columns, visible: initial, onChange: commit }: { columns
 }
 
 // ── Vistas ──────────────────────────────────────────────────────────────
-
-// Lo que una vista NO define se conserva de lo que la persona ya eligió
-// (Lista/Kanban, columnas, pipeline). Se usa al aplicar una vista y al
-// decidir si está "modificada": lo conservado no cuenta como cambio.
-const CARRIED_VIEW_KEYS = ["display", "cols", "pipelineId"] as const;
-
-export function withCarriedParams(viewParams: string, current: string | URLSearchParams): URLSearchParams {
-  const next = new URLSearchParams(viewParams);
-  const cur = new URLSearchParams(current);
-  for (const key of CARRIED_VIEW_KEYS) {
-    const value = cur.get(key);
-    if (value && !next.has(key)) next.set(key, value);
-  }
-  return next;
-}
 
 function ViewsMenu({
   entity,

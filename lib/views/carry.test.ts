@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { withCarriedParams } from "./list-toolbar";
+import { withCarriedParams } from "./carry";
 
 describe("withCarriedParams (aplicar una vista)", () => {
   it("conserva Lista/Kanban, columnas y pipeline si la vista no los define", () => {
