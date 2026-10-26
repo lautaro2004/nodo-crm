@@ -111,7 +111,8 @@ export function ListToolbar({
   const currentNormalized = normalizeViewParams(sp);
   const activeViewId = sp.get("view");
   const activeView = savedViews.find((v) => v.id === activeViewId) ?? presets.find((p) => p.id === activeViewId);
-  const viewDirty = !!activeView && normalizeViewParams(activeView.params) !== currentNormalized;
+  const viewDirty =
+    !!activeView && normalizeViewParams(withCarriedParams(activeView.params, currentNormalized)) !== currentNormalized;
 
   const chips = buildChips(sp, filters);
   const visibleCols = (sp.get("cols") ?? defaultColumns.join(",")).split(",");
@@ -599,6 +600,21 @@ function ColumnPicker({ columns, visible: initial, onChange: commit }: { columns
 
 // ── Vistas ──────────────────────────────────────────────────────────────
 
+// Lo que una vista NO define se conserva de lo que la persona ya eligió
+// (Lista/Kanban, columnas, pipeline). Se usa al aplicar una vista y al
+// decidir si está "modificada": lo conservado no cuenta como cambio.
+const CARRIED_VIEW_KEYS = ["display", "cols", "pipelineId"] as const;
+
+export function withCarriedParams(viewParams: string, current: string | URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(viewParams);
+  const cur = new URLSearchParams(current);
+  for (const key of CARRIED_VIEW_KEYS) {
+    const value = cur.get(key);
+    if (value && !next.has(key)) next.set(key, value);
+  }
+  return next;
+}
+
 function ViewsMenu({
   entity,
   presets,
@@ -649,10 +665,14 @@ function ViewsMenu({
     }
   }
 
+  // Aplicar una vista reemplaza filtros y orden, pero lo que la vista NO
+  // define se conserva de lo que la persona ya eligió: Lista/Kanban, las
+  // columnas y el pipeline. Antes se perdían (en Ventas, cualquier vista
+  // predefinida volvía a Kanban aunque se hubiera elegido Lista).
   function href(params: string, id: string) {
-    const sp = new URLSearchParams(params);
-    sp.set("view", id);
-    return `${pathname}?${sp.toString()}`;
+    const next = withCarriedParams(params, currentParams);
+    next.set("view", id);
+    return `${pathname}?${next.toString()}`;
   }
 
   return (
