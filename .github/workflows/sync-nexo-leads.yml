@@ -1,0 +1,41 @@
+# Sincroniza automáticamente los turnos y consultas de Nexo (formulario web y
+# contactos nuevos de WhatsApp) como Leads en Nodo: llama a
+# POST /api/cron/sync-nexo-leads, que es idempotente.
+#
+# Requiere dos secrets del repo (Settings → Secrets and variables → Actions):
+#   NODO_APP_URL → URL pública de Nodo, sin barra final (ej: https://nodo.kodexa.ar)
+#   CRON_SECRET  → el mismo valor que CRON_SECRET en el servidor de Nodo
+#
+# Sin esos secrets el workflow no falla: avisa y termina. GitHub puede demorar
+# unos minutos las corridas programadas; la sincronización mira los últimos 7
+# días, así que una demora nunca pierde leads.
+
+name: Sync Nexo leads
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call cron endpoint
+        env:
+          APP_URL: ${{ secrets.NODO_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "NODO_APP_URL / CRON_SECRET no configurados: se omite."
+            exit 0
+          fi
+          status=$(curl -sS -o response.txt -w "%{http_code}" --max-time 120 -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/sync-nexo-leads")
+          echo "HTTP $status"
+          cat response.txt
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            exit 1
+          fi
