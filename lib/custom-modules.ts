@@ -115,7 +115,8 @@ export const MODULE_TEMPLATES: ModuleTemplate[] = [
       { key: "estado", label: "Estado", type: "select", options: ["Pendiente", "En evaluación", "Aceptada", "Rechazada"], defaultValue: "Pendiente" },
       { key: "motivo_rechazo", label: "Motivo de rechazo", type: "select", options: ["No cumple requisitos", "Sin interés comercial", "Condiciones no aceptadas", "Otro"] },
       { key: "observaciones", label: "Observaciones", type: "text" },
-      { key: "documentacion", label: "Documentación (link)", type: "url", description: "Link a la carpeta o documento (Drive, Dropbox…)." },
+      { key: "documentacion", label: "Documentación", type: "file", description: "Contrato, remito o acta: PDF, Word, Excel, ZIP o imagen (hasta 20 MB)." },
+      { key: "documentacion_link", label: "Link a documentación", type: "url", description: "Carpeta compartida (Drive, Dropbox…), si hay más de un archivo." },
     ],
   },
   {

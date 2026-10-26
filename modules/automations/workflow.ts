@@ -299,8 +299,95 @@ async function executeAction(
       if (errors.length && ok === 0) return { type: action.type, status: "error", message: `No se pudo actualizar ningún relacionado (${errors[0]}).` };
       return { type: action.type, status: "success", message: `${ok} ${ok === 1 ? "relacionado actualizado" : "relacionados actualizados"}${errors.length ? `, ${errors.length} con error` : ""}.` };
     }
+    case "send_email":
+      return sendEmailAction(businessId, entityType, rule, action, snapshot, ctx, members);
     default:
       return { type: action.type, status: "skipped", message: "Acción no aplicable a este disparador." };
+  }
+}
+
+// ── Acción "Enviar un email" ───────────────────────────────────────────────
+// Reutiliza el envío del módulo de email (proveedor y remitente del negocio,
+// plantillas y variables). Nunca manda un correo con variables sin resolver
+// ni a una dirección que no sale de la configuración de la regla o del propio
+// registro.
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_ENTITY_TYPES = new Set(["contact", "lead", "opportunity"]);
+
+async function sendEmailAction(
+  businessId: string,
+  entityType: string,
+  rule: Rule,
+  action: Extract<WorkflowAction, { type: "send_email" }>,
+  snapshot: RecordSnapshot,
+  ctx: { actorUserId: string | null; kind: "create" | "update" | "delete"; moduleLabel: string; moduleKey: string | null },
+  members: { userId: string; email: string }[]
+): Promise<ActionResult> {
+  const { getTemplate } = await import("@/modules/email/templates");
+  const { renderTemplate: renderEmail, escapeHtml, resolveEntityContext } = await import("@/modules/email/variables");
+  const { sendAutomationEmail } = await import("@/modules/email/send");
+  const type = action.type;
+
+  const template = await getTemplate(businessId, action.templateId);
+  if (!template) return { type, status: "error", message: "La plantilla de email ya no existe." };
+
+  // Valores de las variables de plantilla ({{contact.name}}, …) y, para
+  // contactos/leads/oportunidades, el destinatario "del registro". En un
+  // borrado el registro ya no está: se usa lo que quedó en el snapshot.
+  const entityCtx =
+    EMAIL_ENTITY_TYPES.has(entityType) && ctx.kind !== "delete"
+      ? await resolveEntityContext(businessId, entityType as "contact" | "lead" | "opportunity", snapshot.id)
+      : null;
+
+  let to: string | null = null;
+  if (action.to === "record") {
+    const fromSnapshot = snapshot.values.email;
+    to = entityCtx?.recipient?.email ?? (typeof fromSnapshot === "string" ? fromSnapshot : null);
+  } else if (action.to === "field") {
+    const v = action.field ? snapshot.values[action.field] : null;
+    to = typeof v === "string" ? v : Array.isArray(v) ? (v[0] ?? null) : null;
+  } else if (action.to === "owner") {
+    to = members.find((m) => m.userId === snapshot.ownerId)?.email ?? null;
+  } else {
+    to = action.address ?? null;
+  }
+  to = to?.trim() || null;
+  if (!to) return { type, status: "skipped", message: "El registro no tiene a quién enviarle el email." };
+  if (!EMAIL_RE.test(to)) return { type, status: "skipped", message: `“${to}” no es un email válido.` };
+
+  // {{nombre}} y {{modulo}} (variables de automatización) + las de plantilla.
+  const local = (text: string, html: boolean) =>
+    text.replace(/\{\{\s*(nombre|modulo)\s*\}\}/gi, (_, k: string) => {
+      const value = k.toLowerCase() === "nombre" ? snapshot.title : ctx.moduleLabel;
+      return html ? escapeHtml(value) : value;
+    });
+  const values = entityCtx?.values ?? {};
+  const subject = renderEmail(local(template.subject, false), values);
+  const body = renderEmail(local(template.bodyHtml, true), values, { html: true });
+  const unresolved = [...new Set([...subject.unresolved, ...body.unresolved])];
+  if (unresolved.length) {
+    return { type, status: "error", message: `La plantilla usa variables que este registro no tiene: ${unresolved.join(", ")}. No se envió.` };
+  }
+
+  try {
+    const result = await sendAutomationEmail(businessId, {
+      to,
+      subject: subject.output,
+      html: body.output,
+      ruleName: rule.name,
+      related: ctx.kind === "delete" ? null : { type: entityType, id: snapshot.id },
+    });
+    if (result.status === "limit_reached") {
+      return { type, status: "skipped", message: "Se alcanzó el tope diario de emails automáticos del negocio." };
+    }
+    if (result.status === "failed") return { type, status: "error", message: `No se pudo enviar a ${result.to}: ${result.error}.` };
+    return { type, status: "success", message: result.status === "simulated" ? `Simulado (modo prueba) a ${result.to}.` : `Enviado a ${result.to}.` };
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "";
+    if (code === "email_not_configured") return { type, status: "error", message: "El email del negocio no está configurado (Configuración → Email)." };
+    if (code === "provider_unavailable") return { type, status: "error", message: "El proveedor de email no está disponible." };
+    throw err;
   }
 }
 

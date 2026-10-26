@@ -79,7 +79,7 @@ export default async function CustomFieldsSettingsPage({ searchParams }: { searc
           );
         })}
         {modules.length > 0 && (
-          <Link href="/dashboard/configuracion/modulos" className="inline-flex h-8 items-center px-2 text-sm text-slate-500 hover:text-brand-700">
+          <Link href="/dashboard/modulos" className="inline-flex h-8 items-center px-2 text-sm text-slate-500 hover:text-brand-700">
             Módulos personalizados →
           </Link>
         )}

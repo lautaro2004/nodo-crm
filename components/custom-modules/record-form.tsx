@@ -7,6 +7,7 @@ import { Button, Input, Label, Select } from "@/components/ui/primitives";
 import { FieldInput, toInputValue } from "@/components/custom-fields/field-input";
 import { RecordPicker, type PickedRecord } from "@/components/custom-modules/record-picker";
 import { ImageField } from "@/components/custom-modules/image-field";
+import { FileField } from "@/components/custom-modules/file-field";
 import { errorMessage } from "@/lib/error-messages";
 
 export interface RecordFormField {
@@ -52,12 +53,13 @@ export function RecordForm({
   const [title, setTitle] = useState(record?.title ?? "");
   const [ownerId, setOwnerId] = useState(record?.ownerId ?? "");
   const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(fields.filter((f) => f.type !== "relation" && f.type !== "image").map((f) => [f.id, toInputValue(f.type, record ? record.values[f.id] : f.defaultValue)]))
+    Object.fromEntries(fields.filter((f) => f.type !== "relation" && f.type !== "image" && f.type !== "file").map((f) => [f.id, toInputValue(f.type, record ? record.values[f.id] : f.defaultValue)]))
   );
   const [relations, setRelations] = useState<Record<string, PickedRecord[]>>(
     Object.fromEntries(fields.filter((f) => f.type === "relation").map((f) => [f.id, record?.relations[f.id] ?? []]))
   );
   const [pendingImages, setPendingImages] = useState<Record<string, File | null>>({});
+  const [pendingFiles, setPendingFiles] = useState<Record<string, File | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,6 +108,14 @@ export function RecordForm({
         const up = await fetch(`/api/modules/${moduleId}/records/${body.id}/images/${defId}`, { method: "POST", body: form }).catch(() => null);
         if (!up?.ok) failed.push(fields.find((f) => f.id === defId)?.label ?? "Imagen");
       }
+      // Ídem archivos (campos "file").
+      for (const [defId, file] of Object.entries(pendingFiles)) {
+        if (!file) continue;
+        const form = new FormData();
+        form.append("file", file);
+        const up = await fetch(`/api/modules/${moduleId}/records/${body.id}/files/${defId}`, { method: "POST", body: form }).catch(() => null);
+        if (!up?.ok) failed.push(fields.find((f) => f.id === defId)?.label ?? "Archivo");
+      }
       router.push(`${basePath}/${body.id}${failed.length ? "?imageError=1" : ""}`);
       router.refresh();
       return;
@@ -132,7 +142,7 @@ export function RecordForm({
 
         {fields.map((f) => {
           const id = `rec-${f.id}`;
-          const wide = f.type === "relation" || f.type === "image" || f.type === "multiselect";
+          const wide = f.type === "relation" || f.type === "image" || f.type === "file" || f.type === "multiselect";
           return (
             <div key={f.id} className={wide ? "sm:col-span-2" : undefined}>
               <Label htmlFor={id}>
@@ -146,6 +156,14 @@ export function RecordForm({
                   multiple={f.multiple}
                   value={relations[f.id] ?? []}
                   onChange={(v) => setRelations((r) => ({ ...r, [f.id]: v }))}
+                />
+              ) : f.type === "file" ? (
+                <FileField
+                  id={id}
+                  // Se guarda la ruta en Storage; el último segmento es el nombre original.
+                  fileName={record?.values[f.id]?.split("/").pop() ?? null}
+                  uploadUrl={editing ? `/api/modules/${moduleId}/records/${record!.id}/files/${f.id}` : undefined}
+                  onPending={(file) => setPendingFiles((p) => ({ ...p, [f.id]: file }))}
                 />
               ) : f.type === "image" ? (
                 <ImageField

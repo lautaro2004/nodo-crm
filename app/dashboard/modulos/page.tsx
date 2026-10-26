@@ -25,8 +25,6 @@ export default async function ModulesSettingsPage() {
       <PageHeader
         title="Módulos"
         description="Creá módulos propios para lo que gestiona tu negocio (productos, citas, propiedades…). Conviven con Leads, Contactos, Empresas y Oportunidades."
-        backHref="/dashboard/configuracion"
-        backLabel="Configuración"
       />
       <ModulesAdmin
         max={MAX_CUSTOM_MODULES}

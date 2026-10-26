@@ -183,8 +183,23 @@ Playwright contra `next start`:
 - **Calendario:** respeta los permisos ver/crear/editar/eliminar, pero no el alcance por equipo (los eventos se listan para todo el negocio).
 - **Inicio:** las métricas del inicio (`modules/dashboard`) todavía no aplican el alcance.
 - **Automatizaciones por tiempo:** solo existe la clásica "lead sin atención", que corre por cron. Las genéricas por fecha (ej. "3 días antes del vencimiento") requieren un cron que evalúe reglas.
-- **Envío de email o webhook:** no son acciones de automatización todavía. El envío ya existe en `modules/email`, pero falta definir plantillas por regla y límites de envío.
-- **Documentación de Colaboraciones:** se guarda como link. Adjuntar archivos requiere un tipo de campo "archivo" con bucket propio (hoy solo hay imágenes).
+- **Webhook** como acción de automatización: todavía no existe.
 - **Importaciones:** se aplican las validaciones "antes de guardar" (una fila bloqueada queda como error). En los módulos personalizados, el evento "se crea" corre después de escribir los campos.
 - **Alcance "equipo" o "propios":** los registros sin responsable no se ven (las altas sin responsable quedan a nombre de quien las crea).
 - **`components/custom-fields/custom-fields-manager.tsx`:** quedó sin uso. Se puede borrar.
+
+## Actualización (2026-10-25)
+
+- **Acción "Enviar un email"** en automatizaciones:
+  - Usa las plantillas de Configuración → Plantillas de email y el proveedor del negocio (Resend, o sandbox).
+  - Destinatario: el registro (en oportunidades, su contacto), un campo email, el responsable o una dirección fija.
+  - Variables de plantilla + `{{nombre}}` / `{{modulo}}`. Con una variable sin resolver no se envía.
+  - Tope de 200 emails automáticos por negocio cada 24 h (`AUTOMATION_EMAIL_DAILY_LIMIT`).
+  - Queda en el historial del registro y en la ejecución de la regla.
+- **Campo "Archivo"** en módulos personalizados (`modules/records/files.ts`):
+  - Bucket privado `record-files`, hasta 20 MB.
+  - Tipos: PDF, Word, Excel, ZIP o imagen, verificados por firma.
+  - Descarga con URL firmada de 2 minutos, como adjunto.
+  - La plantilla Colaboraciones ahora trae "Documentación" como archivo y un link opcional. Los módulos ya creados pueden sumar el campo desde Módulos.
+- **Menú:** Módulos, Automatizaciones e Integraciones salieron de Configuración a la sección **Construir** (`/dashboard/modulos`, `/dashboard/automatizaciones`, `/dashboard/integraciones`). Las rutas viejas redirigen (`next.config.ts`).
+- **Vistas recordadas:** aplicar una vista conserva Lista/Kanban, columnas y pipeline si la vista no los define. El guardado ya no se pierde al salir rápido del módulo, y el doble montaje de desarrollo ya no borra la preferencia.

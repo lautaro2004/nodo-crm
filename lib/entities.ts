@@ -28,7 +28,8 @@ export type FieldKind =
   | "multiselect"
   | "user"
   | "relation"
-  | "image";
+  | "image"
+  | "file";
 
 export interface FieldOption {
   value: string;
@@ -172,7 +173,7 @@ export function definitionIdFromFieldKey(key: string): string | null {
 
 /** Tipo de campo personalizado → FieldKind. */
 export function kindForCustomType(type: string): FieldKind {
-  const known: FieldKind[] = ["text", "email", "phone", "url", "number", "currency", "date", "datetime", "boolean", "select", "multiselect", "relation", "image"];
+  const known: FieldKind[] = ["text", "email", "phone", "url", "number", "currency", "date", "datetime", "boolean", "select", "multiselect", "relation", "image", "file"];
   return (known as string[]).includes(type) ? (type as FieldKind) : "text";
 }
 
@@ -224,6 +225,7 @@ export const OPERATORS_BY_KIND: Record<FieldKind, string[]> = {
   user: ["equals", "not_equals", "in", ...EMPTY_OPS, ...CHANGE_OPS],
   relation: ["contains", "not_contains", ...EMPTY_OPS, ...CHANGE_OPS],
   image: [...EMPTY_OPS, "changed"],
+  file: [...EMPTY_OPS, "changed"],
 };
 
 /** Operadores que no llevan valor. */

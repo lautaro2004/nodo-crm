@@ -264,6 +264,10 @@ export function formatCustomValue(type: string, value: string | null | undefined
       const n = toNumber(value);
       return n === null ? value : `$${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`;
     }
+    case "file":
+      // Se guarda la ruta en Storage; se muestra solo el nombre original
+      // (último segmento, ver modules/records/files.ts).
+      return value.split("/").pop() || value;
     default:
       return value;
   }

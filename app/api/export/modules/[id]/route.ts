@@ -32,7 +32,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     listWorkspaceMembers(ctx.businessId),
   ]);
   const names = new Map(members.map((m) => [m.userId, m.name || m.email]));
-  const exportable = fields.filter((f) => f.type !== "image");
+  const exportable = fields.filter((f) => f.type !== "image" && f.type !== "file");
   const allColumns = [...RECORD_COLUMNS, ...customColumns(exportable)];
   const cols = resolveColumns(allColumns, allColumns.map((c) => c.key), sp.get("cols"));
   const ids = records.map((r) => r.id);

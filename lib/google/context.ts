@@ -6,7 +6,7 @@ import type { GoogleScope } from "./connection";
 // punto de verdad multi-tenant del CRM. Nunca desde datos del cliente.
 
 // Pantalla a la que se vuelve tras autorizar (si no se pide otra).
-export const GOOGLE_RETURN_TO = "/dashboard/configuracion/integraciones";
+export const GOOGLE_RETURN_TO = "/dashboard/integraciones";
 
 export async function resolveGoogleContext(): Promise<GoogleScope | null> {
   const ctx = await resolveWorkspaceContext();

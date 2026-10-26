@@ -77,6 +77,20 @@ export const actionSchema = z.discriminatedUnion("type", [
   // Actualiza un campo de los registros vinculados por `via` (ver
   // relatedPathsFor en modules/automations/related.ts).
   z.object({ type: z.literal("update_related"), via: z.string().trim().min(1).max(120), field: fieldKey, value: text(2000).nullable().optional(), valueFrom: fieldKey.nullable().optional() }),
+  // Email con una plantilla de Configuración → Plantillas de email, por el
+  // proveedor del negocio (Resend). Destinatario: el registro (su email, o
+  // el de su contacto en oportunidades), un campo email del registro, el
+  // responsable o una dirección fija. Ver executeAction en workflow.ts.
+  z
+    .object({
+      type: z.literal("send_email"),
+      templateId: z.string().trim().min(1, "Elegí una plantilla").max(60),
+      to: z.enum(["record", "field", "owner", "fixed"]),
+      field: fieldKey.nullable().optional(),
+      address: z.string().trim().email("Email inválido").max(200).nullable().optional(),
+    })
+    .refine((a) => a.to !== "field" || !!a.field, { message: "Elegí el campo con el email", path: ["field"] })
+    .refine((a) => a.to !== "fixed" || !!a.address, { message: "Escribí la dirección", path: ["address"] }),
 ]);
 export type WorkflowAction = z.infer<typeof actionSchema>;
 
@@ -89,6 +103,7 @@ export const ACTION_LABELS: Record<WorkflowAction["type"], string> = {
   notify: "Enviar una notificación",
   add_note: "Agregar una nota al historial",
   update_related: "Actualizar registros relacionados",
+  send_email: "Enviar un email",
 };
 
 /** Acciones válidas según el disparador. */

@@ -26,14 +26,11 @@ export default async function SettingsPage() {
   const ALL_LINKS = [
     { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", allowed: isAdmin },
     { href: "/dashboard/configuracion/permisos", label: "Equipos y permisos (roles, excepciones, jerarquías)", allowed: isAdmin },
-    { href: "/dashboard/configuracion/modulos", label: "Módulos (productos, citas, colaboraciones… propios del negocio)", allowed: canAdminister(access, "fields") },
     { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", allowed: canAdminister(access, "settings") },
     { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", allowed: canAdminister(access, "fields") },
     { href: "/dashboard/configuracion/estados", label: "Estados (Leads / Empresas)", allowed: canAdminister(access, "settings") },
-    { href: "/dashboard/configuracion/automatizaciones", label: "Automatizaciones (cualquier módulo: validaciones, asignación, alertas, acciones)", allowed: canAdminister(access, "automations") },
     { href: "/dashboard/oportunidades/pipelines", label: "Pipelines", allowed: canAdminister(access, "settings") },
     { href: "/dashboard/configuracion/modulo-oportunidades", label: `Nombre del módulo (hoy: "${moduleLabel.labelPlural}")`, allowed: canAdminister(access, "settings") },
-    { href: "/dashboard/configuracion/integraciones", label: "Integraciones (Google: Gmail y Calendar)", allowed: true },
     { href: "/dashboard/configuracion/email", label: "Email (remitente y proveedor)", allowed: canAdminister(access, "settings") },
     { href: "/dashboard/configuracion/plantillas", label: "Plantillas de email", allowed: canAdminister(access, "settings") },
   ];
@@ -63,7 +60,12 @@ export default async function SettingsPage() {
         </Card>
 
         <Card className="p-4 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Personalización</h2>
+          <h2 className="mb-1 text-sm font-semibold text-slate-900">Personalización</h2>
+          {/* Módulos, Automatizaciones e Integraciones tienen sección propia
+              en el menú ("Construir"); acá quedan los ajustes de base. */}
+          <p className="mb-3 text-xs text-slate-500">
+            Módulos, Automatizaciones e Integraciones ahora están en el menú, en la sección Construir.
+          </p>
           <ul className="space-y-1">
             {SETTINGS_LINKS.map((link) => (
               <li key={link.href}>

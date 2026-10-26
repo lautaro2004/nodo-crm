@@ -13,12 +13,15 @@ import {
 } from "@/lib/custom-fields";
 import { MAX_FIELDS_PER_MODULE, moduleIdFromEntityType } from "@/lib/custom-modules";
 import { removeImagesForValues } from "@/modules/records/images";
+import { removeFilesForValues } from "@/modules/records/files";
 import { existingIds, parseIdList, setRelationLinks } from "@/modules/records/links";
 
 export type CustomFieldEntityType = "lead" | "contact" | "company" | "opportunity" | "task" | `cm:${string}`;
 
 /** Tipos cuyos valores NO viven en CustomFieldValue como texto libre. */
-const STRUCTURED_TYPES = new Set(["relation", "image"]);
+const STRUCTURED_TYPES = new Set(["relation", "image", "file"]);
+// Se cargan por su propio endpoint (subida a Storage), nunca como texto.
+const UPLOAD_TYPES = new Set(["image", "file"]);
 
 export interface CreateCustomFieldDefinitionInput {
   entityType: CustomFieldEntityType;
@@ -116,7 +119,7 @@ export async function createCustomFieldDefinition(businessId: string, data: Crea
       label: data.label,
       type: data.type,
       options,
-      required: data.type === "image" ? false : (data.required ?? false),
+      required: UPLOAD_TYPES.has(data.type) ? false : (data.required ?? false),
       order: data.order ?? (last ? last.order + 1 : 0),
       moduleId,
       targetEntity,
@@ -220,7 +223,7 @@ export async function updateCustomFieldDefinition(businessId: string, id: string
   const update: Prisma.CustomFieldDefinitionUpdateInput = {};
   if (data.label !== undefined) update.label = data.label.trim();
   if (data.description !== undefined) update.description = data.description?.trim() || null;
-  if (data.required !== undefined && def.type !== "image") update.required = data.required;
+  if (data.required !== undefined && !UPLOAD_TYPES.has(def.type)) update.required = data.required;
   if (data.order !== undefined) update.order = data.order;
 
   let options = def.options;
@@ -330,6 +333,7 @@ export async function reorderCustomFieldDefinitions(businessId: string, entityTy
 // cumplir con CASCADE a nivel de base; esto solo lo hace explícito acá).
 export async function deleteCustomFieldDefinition(businessId: string, id: string) {
   await removeImagesForValues(businessId, { definitionId: id });
+  await removeFilesForValues(businessId, { definitionId: id });
   const result = await prisma.customFieldDefinition.deleteMany({ where: { id, businessId } });
   return result.count > 0;
 }
@@ -441,7 +445,7 @@ export async function prepareCustomValues(
       errors[id] = "Ese campo no es de este módulo.";
       continue;
     }
-    if (def.type === "image") continue;
+    if (UPLOAD_TYPES.has(def.type)) continue;
     if (def.type === "relation") {
       const ids = parseIdList(raw);
       if (!def.multiple && ids.length > 1) errors[id] = `"${def.label}" admite un solo registro.`;
@@ -459,12 +463,12 @@ export async function prepareCustomValues(
   }
   if (options.creating) {
     for (const def of defs) {
-      if (def.id in values || !def.defaultValue || def.type === "relation" || def.type === "image") continue;
+      if (def.id in values || !def.defaultValue || def.type === "relation" || UPLOAD_TYPES.has(def.type)) continue;
       toWrite.push([def, def.defaultValue]);
     }
   }
   for (const def of defs) {
-    if (!def.required || def.type === "image") continue;
+    if (!def.required || UPLOAD_TYPES.has(def.type)) continue;
     const provided = def.id in values;
     const empty = !(values[def.id] ?? "").trim();
     // Alta desde un formulario: todo obligatorio tiene que venir (o tener
@@ -593,7 +597,7 @@ export async function entityIdsMatchingCustomFilter(
 
 /** Definiciones listas para el formulario de alta de un módulo (serializables). */
 export async function customFieldsForForm(businessId: string, entityType: CustomFieldEntityType) {
-  const defs = await prisma.customFieldDefinition.findMany({ where: { businessId, entityType, type: { not: "image" } }, orderBy: { order: "asc" } });
+  const defs = await prisma.customFieldDefinition.findMany({ where: { businessId, entityType, type: { notIn: ["image", "file"] } }, orderBy: { order: "asc" } });
   return defs.map((d) => ({
     definitionId: d.id,
     label: d.label,

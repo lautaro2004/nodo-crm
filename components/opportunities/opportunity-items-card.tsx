@@ -81,7 +81,7 @@ export function OpportunityItemsCard({
           <h2 className="mb-1 text-sm font-semibold text-slate-900">Productos</h2>
           <p className="text-sm text-slate-500">
             Para sumar productos, creá un módulo con un campo de precio (por ejemplo con la plantilla “Productos”) en{" "}
-            <Link href="/dashboard/configuracion/modulos" className="text-brand-700 hover:underline">
+            <Link href="/dashboard/modulos" className="text-brand-700 hover:underline">
               Configuración → Módulos
             </Link>
             .

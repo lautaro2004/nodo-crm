@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 
 import { Button, Card, Input, Label, Select } from "@/components/ui/primitives";
 import { RecordPicker, type PickedRecord } from "@/components/custom-modules/record-picker";
@@ -29,6 +30,10 @@ export interface BuilderMeta {
   modules: BuilderModule[];
   related: Record<string, { via: string; label: string; target: string }[]>;
   members: { userId: string; name: string; role: string }[];
+  /** Plantillas de Configuración → Plantillas de email (acción "Enviar un email"). */
+  emailTemplates?: { id: string; name: string }[];
+  /** Estado del email del negocio: sin "ready"/"sandbox" la acción no puede enviar. */
+  emailStatus?: "not_configured" | "provider_unavailable" | "sandbox" | "ready";
 }
 
 export interface WorkflowDraft {
@@ -67,8 +72,14 @@ function defaultAction(type: WorkflowAction["type"], fields: FieldMeta[]): Workf
       return { type, body: "" };
     case "update_related":
       return { type, via: "", field: "", value: null, valueFrom: null };
+    case "send_email": {
+      const hasEmailField = fields.some((f) => f.key === "email" && f.type === "email");
+      return { type, templateId: "", to: hasEmailField ? "record" : "owner", field: null, address: null };
+    }
   }
 }
+
+const EMAIL_RECORD_TYPES = new Set(["contact", "lead", "opportunity"]);
 
 /**
  * Constructor de automatizaciones genéricas: módulo → disparador →
@@ -717,6 +728,91 @@ function ActionEditor({
               onChange={(n) => onChange({ ...action, ...n })}
             />
           )}
+        </div>
+      );
+    }
+    case "send_email": {
+      const emailFields = fields.filter((f) => f.type === "email");
+      const templates = meta.emailTemplates ?? [];
+      const recordOption = EMAIL_RECORD_TYPES.has(module) || emailFields.some((f) => f.key === "email");
+      return (
+        <div className="space-y-2">
+          {meta.emailStatus === "not_configured" || meta.emailStatus === "provider_unavailable" ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              El email del negocio todavía no está configurado: la regla se guarda, pero no va a enviar nada hasta que lo
+              configures en{" "}
+              <Link href="/dashboard/configuracion/email" className="font-medium underline">
+                Configuración → Email
+              </Link>
+              .
+            </p>
+          ) : meta.emailStatus === "sandbox" ? (
+            <p className="text-xs text-slate-500">Modo prueba: los envíos se simulan y quedan registrados, sin entrega real.</p>
+          ) : null}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div>
+              <Label>Plantilla</Label>
+              <Select value={action.templateId} onChange={(e) => onChange({ ...action, templateId: e.target.value })}>
+                <option value="">Elegí una plantilla…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </Select>
+              {templates.length === 0 && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Todavía no hay plantillas.{" "}
+                  <Link href="/dashboard/configuracion/plantillas" className="underline">
+                    Crear una
+                  </Link>
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Para</Label>
+              <Select
+                value={action.to}
+                onChange={(e) => onChange({ ...action, to: e.target.value as typeof action.to, field: null, address: null })}
+              >
+                {recordOption && (
+                  <option value="record">{module === "opportunity" ? "El contacto de la oportunidad" : "El email del registro"}</option>
+                )}
+                {emailFields.length > 0 && <option value="field">Un campo email…</option>}
+                <option value="owner">Responsable del registro</option>
+                <option value="fixed">Una dirección fija</option>
+              </Select>
+            </div>
+            {action.to === "field" && (
+              <div>
+                <Label>Campo</Label>
+                <Select value={action.field ?? ""} onChange={(e) => onChange({ ...action, field: e.target.value || null })}>
+                  <option value="">Elegí el campo…</option>
+                  {emailFields.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            {action.to === "fixed" && (
+              <div>
+                <Label>Dirección</Label>
+                <Input
+                  type="email"
+                  value={action.address ?? ""}
+                  maxLength={200}
+                  placeholder="ventas@tuempresa.com"
+                  onChange={(e) => onChange({ ...action, address: e.target.value || null })}
+                />
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Además de las variables de la plantilla podés usar {"{{nombre}}"} y {"{{modulo}}"}. Tope: 200 emails automáticos
+            por día.
+          </p>
         </div>
       );
     }

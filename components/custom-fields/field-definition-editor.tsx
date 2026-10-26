@@ -123,7 +123,7 @@ export function FieldDefinitionEditor({ field, onDone }: { field: EditableField;
       body: JSON.stringify({
         label: label.trim(),
         description: description.trim() || null,
-        ...(field.type !== "image" ? { required } : {}),
+        ...(field.type !== "image" && field.type !== "file" ? { required } : {}),
         ...(DEFAULTABLE_TYPES.has(field.type) ? { defaultValue: defaultValue.trim() || null } : {}),
         ...(validationKeys.length ? { validation: Object.fromEntries(validationKeys.map((k) => [k, validation[k] ?? null])) } : {}),
         ...(hasOptions ? { options, optionRenames: renames, ...(withStrategies ? { removedOptions: withStrategies } : {}) } : {}),
@@ -307,7 +307,7 @@ export function FieldDefinitionEditor({ field, onDone }: { field: EditableField;
         </div>
       )}
 
-      {field.type !== "image" && (
+      {field.type !== "image" && field.type !== "file" && (
         <label className="inline-flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={required} onChange={(e) => setRequired(e.target.checked)} />
           Obligatorio

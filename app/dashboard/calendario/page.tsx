@@ -163,12 +163,12 @@ export default async function CalendarPage({
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Google Calendar conectado</span>
         )}
         {!googleConnected && googleProblem !== "revoked" && (
-          <Link href="/dashboard/configuracion/integraciones" className="text-xs text-slate-500 hover:underline">
+          <Link href="/dashboard/integraciones" className="text-xs text-slate-500 hover:underline">
             Conectar Google Calendar →
           </Link>
         )}
         {googleProblem === "revoked" && (
-          <Link href="/dashboard/configuracion/integraciones" className="text-xs font-medium text-amber-700 hover:underline">
+          <Link href="/dashboard/integraciones" className="text-xs font-medium text-amber-700 hover:underline">
             Google revocó el acceso: reconectar →
           </Link>
         )}

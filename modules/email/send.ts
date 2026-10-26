@@ -94,3 +94,55 @@ export async function sendTestEmail(businessId: string, actorUserId: string, tem
   const result = await deliver(businessId, user.email, subject, html);
   return result.ok ? { status: result.simulated ? "simulated" : "sent", to: user.email } : { status: "failed" as const, to: user.email, error: result.error };
 }
+
+// ── Envío desde automatizaciones ──────────────────────────────────────────
+
+// Tope de emails automáticos por negocio en 24 h: una regla mal armada (por
+// ejemplo "al modificar" sin condiciones, sobre una importación de miles de
+// filas) no debe poder mandar cientos de correos. Los envíos manuales no
+// cuentan.
+export const AUTOMATION_EMAIL_DAILY_LIMIT = 200;
+const AUTOMATION_MARK = "Automatización:";
+
+export type AutomationEmailResult =
+  | { status: "sent" | "simulated"; to: string }
+  | { status: "failed"; to: string; error: string }
+  | { status: "limit_reached" };
+
+/**
+ * Envía un email ya renderizado a pedido de una automatización y deja la
+ * Activity en el registro (si el módulo tiene historial). Mismo proveedor y
+ * remitente que el envío manual (Resend o sandbox, ver providers.ts). Lanza
+ * email_not_configured / provider_unavailable igual que el envío manual.
+ */
+export async function sendAutomationEmail(
+  businessId: string,
+  input: { to: string; subject: string; html: string; ruleName: string; related: { type: string; id: string } | null }
+): Promise<AutomationEmailResult> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const sentToday = await prisma.activity.count({
+    where: { businessId, type: "email", body: { startsWith: AUTOMATION_MARK }, createdAt: { gte: since } },
+  });
+  if (sentToday >= AUTOMATION_EMAIL_DAILY_LIMIT) return { status: "limit_reached" };
+
+  const result = await deliver(businessId, input.to, input.subject, input.html);
+  const status = result.ok ? (result.simulated ? "simulated" : "sent") : "failed";
+
+  if (input.related) {
+    await createActivity(businessId, {
+      relatedType: input.related.type as Parameters<typeof createActivity>[1]["relatedType"],
+      relatedId: input.related.id,
+      type: "email",
+      ownerId: null,
+      body: [
+        `${AUTOMATION_MARK} ${input.ruleName}`,
+        `Para: ${input.to}`,
+        `Asunto: ${input.subject}`,
+        `Estado: ${STATUS_LABEL[status]}${result.ok ? "" : ` (${result.error})`}`,
+      ].join("\n"),
+    });
+  }
+
+  if (!result.ok) return { status: "failed", to: input.to, error: result.error };
+  return { status: result.simulated ? "simulated" : "sent", to: input.to };
+}

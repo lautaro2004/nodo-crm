@@ -46,7 +46,7 @@ export function TaskGoogleCalendarAction({
 
   if (!calendarConnected) {
     return (
-      <Link href="/dashboard/configuracion/integraciones" className="text-sm text-slate-500 hover:underline">
+      <Link href="/dashboard/integraciones" className="text-sm text-slate-500 hover:underline">
         Conectar Google Calendar →
       </Link>
     );

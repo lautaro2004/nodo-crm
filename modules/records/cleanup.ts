@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isModuleEntityType } from "@/lib/custom-modules";
 import { removeImagesForValues } from "@/modules/records/images";
+import { removeFilesForValues } from "@/modules/records/files";
 
 // CustomFieldValue, EntityTag, RecordLink y Activity son polimórficos (entityType + entityId,
 // sin FK al registro): al borrar un lead/contacto/empresa/oportunidad/
@@ -9,7 +10,10 @@ import { removeImagesForValues } from "@/modules/records/images";
 // filtros o exportaciones.
 export async function cleanupDeletedRecord(businessId: string, entityType: string, entityId: string) {
   // Imágenes en Storage (solo existen en módulos personalizados).
-  if (isModuleEntityType(entityType)) await removeImagesForValues(businessId, { entityId });
+  if (isModuleEntityType(entityType)) {
+    await removeImagesForValues(businessId, { entityId });
+    await removeFilesForValues(businessId, { entityId });
+  }
   await prisma.$transaction([
     prisma.customFieldValue.deleteMany({ where: { entityId, definition: { businessId, entityType } } }),
     prisma.entityTag.deleteMany({ where: { businessId, entityType, entityId } }),

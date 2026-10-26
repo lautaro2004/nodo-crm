@@ -111,13 +111,13 @@ function validateValues(fields: FieldDef[], values: Record<string, string | null
       errors[id] = "Ese campo no es de este módulo.";
       continue;
     }
-    if (def.type === "image") continue; // se sube por su propio endpoint
+    if (def.type === "image" || def.type === "file") continue; // se sube por su propio endpoint
     if (def.type === "relation") continue; // se valida contra la base al guardar
     const message = validateCustomValue({ type: def.type, options: def.options, label: def.label, validation: (def.validation as FieldValidation | null) ?? null }, raw ?? "");
     if (message) errors[id] = message;
   }
   for (const def of fields) {
-    if (!def.required || def.type === "image") continue;
+    if (!def.required || def.type === "image" || def.type === "file") continue;
     const provided = def.id in values;
     const empty = !(values[def.id] ?? "").trim();
     if ((creating && empty && !(!provided && def.defaultValue)) || (!creating && provided && empty)) errors[def.id] = `"${def.label}" es obligatorio.`;
@@ -130,7 +130,7 @@ async function writeValues(businessId: string, moduleId: string, recordId: strin
   const entityType = moduleEntityType(moduleId);
   for (const [id, raw] of Object.entries(values)) {
     const def = byId.get(id);
-    if (!def || def.type === "image") continue;
+    if (!def || def.type === "image" || def.type === "file") continue;
     if (def.type === "relation") {
       try {
         await setRelationLinks(businessId, def, entityType, recordId, parseIdList(raw));
@@ -147,7 +147,7 @@ async function writeValues(businessId: string, moduleId: string, recordId: strin
 }
 
 function defaultValues(fields: FieldDef[]): Record<string, string> {
-  return Object.fromEntries(fields.filter((f) => f.defaultValue && f.type !== "relation" && f.type !== "image").map((f) => [f.id, f.defaultValue!]));
+  return Object.fromEntries(fields.filter((f) => f.defaultValue && f.type !== "relation" && f.type !== "image" && f.type !== "file").map((f) => [f.id, f.defaultValue!]));
 }
 
 async function loadWritableModule(businessId: string, moduleId: string) {

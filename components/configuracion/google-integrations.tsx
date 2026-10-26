@@ -71,7 +71,7 @@ export function GoogleIntegrations() {
     const res = await apiFetch("/api/integrations/google/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feature, returnTo: "/dashboard/configuracion/integraciones" }),
+      body: JSON.stringify({ feature, returnTo: "/dashboard/integraciones" }),
     });
     const data = (await res.json().catch(() => ({}))) as { url?: string; alreadyGranted?: boolean };
     if (res.ok && data.url) {

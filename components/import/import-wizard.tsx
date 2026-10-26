@@ -84,7 +84,7 @@ export function ImportWizard({ customModules = [] }: { customModules?: CustomMod
     const res = await apiFetch(`/api/custom-field-definitions?entityType=${encodeURIComponent(entityType)}`);
     // Imagen y relación no se cargan desde un archivo.
     const defs: CustomFieldDef[] = res.ok ? await res.json() : [];
-    setDefinitions(defs.filter((d) => d.type !== "image" && d.type !== "relation"));
+    setDefinitions(defs.filter((d) => d.type !== "image" && d.type !== "file" && d.type !== "relation"));
     setStep("upload");
   }
 
@@ -508,7 +508,7 @@ function NewFieldForm({
         <div>
           <Label htmlFor={`type-${column}`}>Tipo</Label>
           <Select id={`type-${column}`} value={type} onChange={(e) => setType(e.target.value)}>
-            {customFieldTypes.filter((t) => t !== "image" && t !== "relation").map((t) => (
+            {customFieldTypes.filter((t) => t !== "image" && t !== "file" && t !== "relation").map((t) => (
               <option key={t} value={t}>
                 {CUSTOM_FIELD_TYPE_LABELS[t]}
               </option>

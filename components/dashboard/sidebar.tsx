@@ -18,6 +18,9 @@ import {
   UploadIcon,
   XIcon,
   BarChartIcon,
+  BoxIcon,
+  ZapIcon,
+  WrenchIcon,
 } from "@/components/ui/icons";
 import { ModuleIcon } from "@/components/ui/module-icon";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
@@ -74,6 +77,17 @@ function buildNavGroups(opportunityLabel: ModuleLabel): { label: string | null; 
         { href: "/dashboard/calendario", label: "Calendario", icon: <CalendarIcon /> },
         { href: "/dashboard/actividades", label: "Actividad", icon: <ActivityIcon /> },
         { href: "/dashboard/informes", label: "Informes", icon: <BarChartIcon /> },
+      ],
+    },
+    // Lo que hace a Nodo configurable — antes enterrado en Configuración.
+    // Cada item solo lo ve quien tiene el permiso administrativo que lo
+    // gestiona (un vendedor no ve opciones que no puede usar).
+    {
+      label: "Construir",
+      items: [
+        { href: "/dashboard/modulos", label: "Módulos", icon: <BoxIcon />, adminPermission: "fields" },
+        { href: "/dashboard/automatizaciones", label: "Automatizaciones", icon: <ZapIcon />, adminPermission: "automations" },
+        { href: "/dashboard/integraciones", label: "Integraciones", icon: <WrenchIcon /> },
       ],
     },
     {

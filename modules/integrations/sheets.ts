@@ -89,7 +89,7 @@ export async function leadCustomFields(businessId: string): Promise<CustomFieldI
     select: { id: true, label: true, type: true, options: true },
   });
   // Relaciones e imágenes tienen su propio flujo: no se mapean desde texto.
-  return defs.filter((d) => d.type !== "relation" && d.type !== "image");
+  return defs.filter((d) => d.type !== "relation" && d.type !== "image" && d.type !== "file");
 }
 
 /** Solo las columnas mapeadas se guardan en el evento (minimización). */

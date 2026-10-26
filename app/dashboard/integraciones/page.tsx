@@ -19,7 +19,6 @@ export default async function IntegrationsPage() {
       <PageHeader
         title="Integraciones"
         description="Conectá las fuentes de donde llegan tus leads y tu cuenta de Google."
-        backHref="/dashboard/configuracion"
       />
       <div className="space-y-8">
         <section>

@@ -79,7 +79,7 @@ export function ModuleSettings({ module: m, fields }: { module: ModuleData; fiel
       return setMessage({ tone: "error", text: res ? await readApiError(res) : "Sin conexión. El módulo no se borró." });
     }
     toast.success(`Módulo “${m.labelPlural}” borrado`);
-    router.push("/dashboard/configuracion/modulos");
+    router.push("/dashboard/modulos");
     router.refresh();
   }
 

@@ -245,6 +245,7 @@ export const customFieldTypes = [
   "phone",
   "url",
   "image",
+  "file",
   "relation",
 ] as const;
 

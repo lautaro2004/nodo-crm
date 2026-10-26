@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   const definition = await prisma.customFieldDefinition.findFirst({ where: { id: data.definitionId, businessId: ctx.businessId } });
   if (!definition) return notFound();
-  if (definition.type === "image") return NextResponse.json({ error: "invalid_value", message: `"${definition.label}" se edita con su propio control.` }, { status: 400 });
+  if (definition.type === "image" || definition.type === "file") return NextResponse.json({ error: "invalid_value", message: `"${definition.label}" se edita con su propio control.` }, { status: 400 });
   if (!can(ctx.access, definition.entityType, "edit")) return forbidden();
   const denied = await requireRecordAccess(ctx, definition.entityType, data.entityId, "edit");
   if (denied) return denied;

@@ -143,7 +143,7 @@ export async function executeCustomModuleImport(
   const fields = await listModuleFields(businessId, moduleId);
   return runImport(businessId, rows, {
     moduleDef: customModuleImportDef(mod),
-    requiredCustom: fields.filter((f) => f.required && f.type !== "image" && f.type !== "relation").map((f) => ({ id: f.id, label: f.label })),
+    requiredCustom: fields.filter((f) => f.required && f.type !== "image" && f.type !== "file" && f.type !== "relation").map((f) => ({ id: f.id, label: f.label })),
     findExisting: async (_standard, custom) => {
       const code = mod.codeFieldId ? custom[mod.codeFieldId] : undefined;
       if (!code) return null;
@@ -172,7 +172,7 @@ async function runImport(businessId: string, rows: ImportRowInput[], adapter: Im
   // pudo haber mandado el cliente para un definitionId (Fase 8).
   // Relación e imagen no se importan desde un archivo (tienen su propio flujo).
   const definitions = (await listCustomFieldDefinitions(businessId, moduleDef.entityType as CustomFieldEntityType)).filter(
-    (d) => d.type !== "image" && d.type !== "relation"
+    (d) => d.type !== "image" && d.type !== "file" && d.type !== "relation"
   );
   const definitionById = new Map(definitions.map((d) => [d.id, d]));
 

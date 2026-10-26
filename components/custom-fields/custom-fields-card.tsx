@@ -23,7 +23,7 @@ export async function CustomFieldsCard({
   canManage: boolean;
   readOnly?: boolean;
 }) {
-  const visible = fields.filter((f) => f.type !== "image");
+  const visible = fields.filter((f) => f.type !== "image" && f.type !== "file");
   if (visible.length === 0) return null;
   const refs = visible.flatMap((f) => (f.type === "relation" && f.targetEntity && f.value ? f.value.split(",").map((id) => ({ type: f.targetEntity!, id })) : []));
   const businessId = refs.length

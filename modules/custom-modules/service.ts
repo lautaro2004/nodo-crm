@@ -7,6 +7,7 @@ import {
 } from "@/lib/custom-modules";
 import { createCustomFieldDefinition } from "@/modules/custom-fields/service";
 import { removeImagesForValues } from "@/modules/records/images";
+import { removeFilesForValues } from "@/modules/records/files";
 
 // Definición de módulos personalizados (Productos, Citas, …). Todo scopeado
 // por businessId; el moduleId/key que llega del cliente se revalida acá.
@@ -138,6 +139,7 @@ export async function deleteModule(businessId: string, id: string) {
   if (!mod) return false;
   const entityType = moduleEntityType(id);
   await removeImagesForValues(businessId, { moduleId: id });
+  await removeFilesForValues(businessId, { moduleId: id });
   const records = await prisma.customRecord.findMany({ where: { businessId, moduleId: id }, select: { id: true } });
   const recordIds = records.map((r) => r.id);
   await prisma.$transaction([

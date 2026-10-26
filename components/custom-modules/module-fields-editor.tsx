@@ -14,7 +14,12 @@ import { useToast } from "@/components/ui/toast";
 
 type FieldRow = EditableField;
 
-const TYPE_LABELS: Record<string, string> = { ...CUSTOM_FIELD_TYPE_LABELS, image: "Imagen", relation: "Relación con otro módulo" };
+const TYPE_LABELS: Record<string, string> = {
+  ...CUSTOM_FIELD_TYPE_LABELS,
+  image: "Imagen",
+  file: "Archivo (PDF, Word, Excel…)",
+  relation: "Relación con otro módulo",
+};
 
 // Campos de UN módulo (personalizado o estándar): alta, edición completa
 // (ver FieldDefinitionEditor), orden y baja. El tipo no se cambia después
@@ -184,7 +189,7 @@ function NewField({ entityType, targets, allowImage }: { entityType: string; tar
         key: slugifyKey(label),
         label: label.trim(),
         type,
-        required: type === "image" ? false : required,
+        required: type === "image" || type === "file" ? false : required,
         options: type === "select" || type === "multiselect" ? options.split(",").map((o) => o.trim()).filter(Boolean) : [],
         description: description.trim() || null,
         ...(type === "relation"
@@ -225,7 +230,7 @@ function NewField({ entityType, targets, allowImage }: { entityType: string; tar
         <div>
           <Label htmlFor="nf-type">Tipo</Label>
           <Select id="nf-type" value={type} onChange={(e) => setType(e.target.value)}>
-            {customFieldTypes.filter((t) => allowImage || t !== "image").map((t) => (
+            {customFieldTypes.filter((t) => allowImage || (t !== "image" && t !== "file")).map((t) => (
               <option key={t} value={t}>
                 {TYPE_LABELS[t] ?? t}
               </option>
@@ -268,13 +273,14 @@ function NewField({ entityType, targets, allowImage }: { entityType: string; tar
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-700">
-        {type !== "image" && (
+        {type !== "image" && type !== "file" && (
           <label className="inline-flex items-center gap-2">
             <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={required} onChange={(e) => setRequired(e.target.checked)} />
             Obligatorio
           </label>
         )}
         {type === "image" && <Badge>JPG, PNG, WebP o GIF · hasta 5 MB</Badge>}
+        {type === "file" && <Badge>PDF, Word, Excel, ZIP o imagen · hasta 20 MB</Badge>}
       </div>
       {notice && <p className={`mt-2 text-sm ${notice.tone === "error" ? "text-red-600" : "text-slate-600"}`}>{notice.text}</p>}
       <Button type="submit" size="sm" className="mt-3" disabled={!label.trim()} loading={saving}>

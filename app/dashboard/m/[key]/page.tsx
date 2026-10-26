@@ -46,7 +46,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
   const [result, toolbar] = await Promise.all([listRecords(ctx.businessId, mod.id, filters), getToolbarData(ctx, entity)]);
   const names = memberNames(toolbar.members);
 
-  const fieldColumns = customColumns(toolbar.customFieldDefs.filter((d) => d.type !== "image" && d.type !== "relation"));
+  const fieldColumns = customColumns(toolbar.customFieldDefs.filter((d) => d.type !== "image" && d.type !== "file" && d.type !== "relation"));
   const allColumns = [...RECORD_COLUMNS, ...fieldColumns];
   const defaults = recordDefaultColumns(fieldColumns);
   const columns = resolveColumns(allColumns, defaults, typeof sp.cols === "string" ? sp.cols : undefined);
@@ -68,7 +68,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
         actions={
           <>
             {canAdminister(access, "fields") && (
-              <Link href={`/dashboard/configuracion/modulos/${mod.id}`}>
+              <Link href={`/dashboard/modulos/${mod.id}`}>
                 <Button variant="ghost">Configurar</Button>
               </Link>
             )}

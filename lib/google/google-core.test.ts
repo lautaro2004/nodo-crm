@@ -204,7 +204,7 @@ describe("OAuth — inicio, scopes e incremental", () => {
 
   it("Calendar es incremental: pide solo el scope de Calendar y fija la cuenta ya conectada", async () => {
     await saveConnection(A, { googleEmail: "a@gmail.com", refreshToken: "t", scopes: ["openid", "email", GMAIL] });
-    const result = await startConnect(A, "calendar", "/dashboard/configuracion/integraciones");
+    const result = await startConnect(A, "calendar", "/dashboard/integraciones");
     if (!("url" in result)) throw new Error("se esperaba url");
     const url = new URL(result.url);
     expect(url.searchParams.get("scope")).toBe(`openid email ${CALENDAR}`);

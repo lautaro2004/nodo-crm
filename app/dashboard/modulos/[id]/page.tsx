@@ -45,7 +45,7 @@ export default async function ModuleSettingsPage({ params }: { params: Promise<{
 
   return (
     <div>
-      <PageHeader title={mod.labelPlural} description="Datos del módulo, sus campos y qué campo cumple cada rol." backHref="/dashboard/configuracion/modulos" backLabel="Módulos" />
+      <PageHeader title={mod.labelPlural} description="Datos del módulo, sus campos y qué campo cumple cada rol." backHref="/dashboard/modulos" backLabel="Módulos" />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <ModuleFieldsEditor moduleId={id} entityType={moduleEntityType(id)} fields={fieldRows} targets={targets} />

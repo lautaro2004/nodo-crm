@@ -20,7 +20,7 @@ export interface FormCustomField {
 
 /** Valores iniciales de un alta: los predeterminados de cada campo. */
 export function initialCustomValues(fields: FormCustomField[] | undefined): Record<string, string> {
-  return Object.fromEntries((fields ?? []).filter((f) => f.type !== "image").map((f) => [f.definitionId, toInputValue(f.type, f.defaultValue ?? null)]));
+  return Object.fromEntries((fields ?? []).filter((f) => f.type !== "image" && f.type !== "file").map((f) => [f.definitionId, toInputValue(f.type, f.defaultValue ?? null)]));
 }
 
 /** Para el body: vacío = null (el servidor valida y normaliza todo). */
@@ -42,7 +42,7 @@ export function CustomFieldsFormSection({
   onChange: (values: Record<string, string>) => void;
 }) {
   const [picked, setPicked] = useState<Record<string, PickedRecord[]>>({});
-  const visible = fields.filter((f) => f.type !== "image");
+  const visible = fields.filter((f) => f.type !== "image" && f.type !== "file");
   if (visible.length === 0) return null;
   return (
     <fieldset className="space-y-3 rounded-xl border border-slate-100 p-3">

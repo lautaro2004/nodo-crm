@@ -62,7 +62,7 @@ export function ModulesAdmin({ modules, templates, max }: { modules: ModuleRow[]
     setSaving(false);
     if (!res.ok) return setError(await readApiError(res));
     const mod = await res.json();
-    router.push(`/dashboard/configuracion/modulos/${mod.id}`);
+    router.push(`/dashboard/modulos/${mod.id}`);
     router.refresh();
   }
 
@@ -185,7 +185,7 @@ function ModuleCard({ m }: { m: ModuleRow }) {
           {m.records} {m.records === 1 ? "registro" : "registros"}
         </p>
         <div className="mt-2 flex gap-3 text-xs font-medium">
-          <Link href={`/dashboard/configuracion/modulos/${m.id}`} className="text-brand-700 hover:underline">
+          <Link href={`/dashboard/modulos/${m.id}`} className="text-brand-700 hover:underline">
             Configurar
           </Link>
           {!m.archived && (

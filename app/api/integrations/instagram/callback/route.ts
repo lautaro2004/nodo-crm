@@ -8,7 +8,7 @@ import { completeInstagramConnection } from "@/modules/integrations/instagram";
 
 export const dynamic = "force-dynamic";
 
-const RETURN_TO = "/dashboard/configuracion/integraciones";
+const RETURN_TO = "/dashboard/integraciones";
 
 // Callback del OAuth de Instagram. Valida, en este orden: sesión de Nodo,
 // rol, state firmado + nonce de la cookie (CSRF), que el state sea de ESTE

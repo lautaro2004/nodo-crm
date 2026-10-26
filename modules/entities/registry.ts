@@ -72,7 +72,7 @@ function customFieldMeta(d: { id: string; label: string; type: string; options: 
     options: d.options.map((o) => ({ value: o, label: o })),
     target: d.targetEntity ?? undefined,
     multiple: d.type === "relation" ? d.multiple : d.type === "multiselect",
-    writable: d.type !== "image",
+    writable: d.type !== "image" && d.type !== "file",
     custom: true,
     required: d.required,
   };

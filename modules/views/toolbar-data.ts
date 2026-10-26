@@ -22,7 +22,7 @@ export async function getToolbarData(ctx: OkWorkspaceContext, entity: ViewEntity
   ]);
   const canShare = canManageSharedViews({ ...ctx, access });
   // Imagen y relación no se filtran por texto (ni son columnas de texto).
-  const customFields = allCustomFields.filter((c) => c.type !== "image" && c.type !== "relation");
+  const customFields = allCustomFields.filter((c) => c.type !== "image" && c.type !== "file" && c.type !== "relation");
 
   const filters: FilterConfig = {
     owners: members.map((m) => ({ value: m.userId, label: m.name || m.email })),
