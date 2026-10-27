@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CardPayment, initMercadoPago } from "@mercadopago/sdk-react";
 
-import type { CrmPlanOption } from "@/modules/billing/plans";
+import type { CrmPlanOption, NexoPlanOption } from "@/modules/billing/plans";
 
 const PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
 
@@ -16,6 +16,7 @@ function ensureMp() {
 }
 
 interface Quote {
+  combo?: { discountPct: number; subtotalArs: number; discountArs: number };
   arsAmount: number;
   converted: boolean;
   listAmount: number;
@@ -39,12 +40,14 @@ const listMoney = (amount: number, currency: string) => {
 
 // Contratación de Nodo (solo el dueño). El cobro lo hace Nexo: acá se arma el
 // token de tarjeta con Mercado Pago y se manda a /api/billing/checkout.
-export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
+export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: CrmPlanOption[]; nexoPlans?: NexoPlanOption[]; comboPct?: number }) {
   const router = useRouter();
   const [planId, setPlanId] = React.useState(plans[0]?.id ?? "");
   const plan = plans.find((p) => p.id === planId) ?? plans[0];
   const [interval, setInterval] = React.useState<"month" | "year">(plan?.monthlyPrice !== null ? "month" : "year");
   const [extraUsers, setExtraUsers] = React.useState(0);
+  // Combo: plan de Nexo a sumar ("" = solo Nodo).
+  const [withNexo, setWithNexo] = React.useState("");
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -71,7 +74,7 @@ export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
     fetch("/api/billing/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planId: plan.id, interval, extraUsers }),
+      body: JSON.stringify({ planId: plan.id, interval, extraUsers, ...(withNexo ? { withNexoPlanId: withNexo } : {}) }),
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -83,7 +86,7 @@ export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
     return () => {
       cancelled = true;
     };
-  }, [plan, interval, extraUsers]);
+  }, [plan, interval, extraUsers, withNexo]);
 
   // El Brick se monta con el monto en pesos ya resuelto; su initialization
   // no debe cambiar mientras el formulario está visible (ver el checkout de Nexo).
@@ -99,7 +102,7 @@ export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
         const res = await fetch("/api/billing/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ planId: plan.id, cardTokenId: formData.token, interval, extraUsers }),
+          body: JSON.stringify({ planId: plan.id, cardTokenId: formData.token, interval, extraUsers, ...(withNexo ? { withNexoPlanId: withNexo } : {}) }),
         });
         const data = (await res.json().catch(() => ({}))) as CheckoutError;
         if (!res.ok) {
@@ -114,7 +117,7 @@ export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
         setSubmitting(false);
       }
     },
-    [plan, interval, extraUsers, router]
+    [plan, interval, extraUsers, withNexo, router]
   );
 
   if (!plan) return null;
@@ -166,11 +169,30 @@ export function CheckoutPanel({ plans }: { plans: CrmPlanOption[] }) {
         ) : null}
       </div>
 
+      {nexoPlans.length > 0 && (
+        <label className="block text-xs text-slate-600">
+          Sumar Nexo{comboPct > 0 ? ` (${comboPct}% de descuento sobre la suma de ambos planes)` : ""}
+          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm sm:max-w-sm" value={withNexo} onChange={(e) => setWithNexo(e.target.value)}>
+            <option value="">No, solo Nodo</option>
+            {nexoPlans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       {quote && (
         <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm">
           <p className="font-medium text-slate-900">
             Se cobrará {ars.format(quote.arsAmount)} {interval === "year" ? "por año" : "por mes"}
           </p>
+          {quote.combo ? (
+            <p className="mt-0.5 text-emerald-700">
+              Combo Nexo + Nodo: {quote.combo.discountPct}% de descuento sobre {ars.format(quote.combo.subtotalArs)}, ahorrás {ars.format(quote.combo.discountArs)}.
+            </p>
+          ) : null}
           {quote.converted && quote.rate ? (
             <p className="mt-0.5 text-slate-600">
               {listMoney(quote.listAmount, quote.listCurrency)} al dólar oficial (BNA venta) de hoy: {ars.format(quote.rate)}. El monto en pesos se reajusta en cada

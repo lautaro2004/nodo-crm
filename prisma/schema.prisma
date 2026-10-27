@@ -187,6 +187,12 @@ model NexoPlan {
   extraUserYearlyPrice  Float?
   trialDays             Int?
   displayOrder          Int      @default(0)
+  // Combo automático Nexo + Nodo (lo crea Nexo al contratar los dos juntos): planes
+  // de referencia y % de descuento. null en planes comunes. Columna creada por la
+  // migración de Nexo 20261027120000_plan_combo: aplicarla ANTES de desplegar.
+  packNexoPlanId        String?
+  packCrmPlanId         String?
+  comboDiscountPct      Float?
 
   subscriptions NexoSubscription[]
   prices        NexoPlanPrice[]

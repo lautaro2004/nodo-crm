@@ -7,7 +7,7 @@ export interface NexoCall {
   data: Record<string, unknown>;
 }
 
-export async function callNexoBilling(path: "quote" | "checkout", body: Record<string, unknown>): Promise<NexoCall> {
+export async function callNexoBilling(path: "quote" | "checkout" | "extra-users" | "change-plan", body: Record<string, unknown>): Promise<NexoCall> {
   const base = process.env.NEXO_URL?.trim().replace(/\/+$/, "");
   const secret = process.env.NODO_BILLING_SECRET;
   if (!base || !secret) {
@@ -19,7 +19,7 @@ export async function callNexoBilling(path: "quote" | "checkout", body: Record<s
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(path === "checkout" ? 45_000 : 10_000),
+      signal: AbortSignal.timeout(path === "checkout" ? 45_000 : path === "extra-users" || path === "change-plan" ? 30_000 : 10_000),
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     return { status: res.status, data };

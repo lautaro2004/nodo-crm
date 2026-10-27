@@ -40,3 +40,28 @@ export async function listCrmPlans(): Promise<CrmPlanOption[]> {
       includesNexo: p.products.includes("nexo"),
     }));
 }
+
+// ── Combo con Nexo ────────────────────────────────────────────────────────
+// Un dueño de Nodo puede sumar un plan de Nexo y pagar un descuento sobre la
+// suma de ambos. El combo NO es un plan visible: Nexo lo crea al contratar.
+// Acá solo se listan los planes de Nexo "sueltos" que se pueden sumar.
+export interface NexoPlanOption {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  currency: string;
+}
+
+export async function listNexoPlansForCombo(): Promise<NexoPlanOption[]> {
+  const plans = await prisma.nexoPlan.findMany({
+    where: { active: true, products: { equals: ["nexo"] }, monthlyPrice: { gt: 0 }, comboDiscountPct: null },
+    orderBy: [{ displayOrder: "asc" }, { monthlyPrice: "asc" }],
+  });
+  return plans.map((p) => ({ id: p.id, name: p.name, monthlyPrice: p.monthlyPrice, currency: p.currency }));
+}
+
+/** % de descuento del combo para mostrar (mismo valor que usa Nexo: COMBO_DISCOUNT_PCT). */
+export function comboDiscountPercent(): number {
+  const raw = Number(process.env.COMBO_DISCOUNT_PCT?.trim());
+  return Number.isFinite(raw) && raw > 0 ? Math.min(90, raw) : 20;
+}

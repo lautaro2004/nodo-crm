@@ -9,7 +9,7 @@ import { Topbar } from "@/components/dashboard/topbar";
 import { RoleProvider } from "@/components/dashboard/role-context";
 import { can, resolveAccess, toClientAccess } from "@/modules/access/service";
 import { loadCrmBillingState } from "@/modules/billing/access";
-import { listCrmPlans } from "@/modules/billing/plans";
+import { comboDiscountPercent, listCrmPlans, listNexoPlansForCombo } from "@/modules/billing/plans";
 import { BillingBanner } from "@/components/billing/billing-banner";
 import { BlockedScreen } from "@/components/billing/blocked-screen";
 import { CheckoutPanel } from "@/components/billing/checkout-panel";
@@ -41,14 +41,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // gracia) se muestra la pantalla de planes/regularización. Los datos no se
   // tocan. Ver lib/workspace.ts y modules/billing/access.ts.
   if (ctx.status === "billing_blocked") {
-    const plans = await listCrmPlans();
+    const [plans, nexoPlans] = await Promise.all([listCrmPlans(), listNexoPlansForCombo()]);
     return (
       <BlockedScreen
         businessName={ctx.businessName}
         reason={ctx.reason}
         isOwner={ctx.role === "owner"}
         plans={plans}
-        checkout={ctx.role === "owner" ? <CheckoutPanel plans={plans} /> : undefined}
+        checkout={ctx.role === "owner" ? <CheckoutPanel plans={plans} nexoPlans={nexoPlans} comboPct={comboDiscountPercent()} /> : undefined}
       />
     );
   }

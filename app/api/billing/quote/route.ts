@@ -8,6 +8,8 @@ const bodySchema = z.object({
   planId: z.string().min(1),
   interval: z.enum(["month", "year"]).optional(),
   extraUsers: z.coerce.number().int().min(0).max(500).optional(),
+  // Combo: plan de Nexo a sumar (descuento sobre la suma de ambos).
+  withNexoPlanId: z.string().min(1).optional(),
 });
 
 // Cotización (en pesos) para montar el formulario de tarjeta. El precio sale

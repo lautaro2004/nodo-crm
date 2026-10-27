@@ -25,6 +25,7 @@ export default async function SettingsPage() {
   // administrativo de Nodo (lib/access.ts). Las APIs lo exigen igual.
   const ALL_LINKS = [
     { href: "/dashboard/configuracion/equipo", label: "Equipo (invitar, roles y acceso a Nodo / Nexo)", allowed: isAdmin },
+    { href: "/dashboard/configuracion/suscripcion", label: "Suscripción (plan, usuarios y contratación)", allowed: isAdmin },
     { href: "/dashboard/configuracion/permisos", label: "Equipos y permisos (roles, excepciones, jerarquías)", allowed: isAdmin },
     { href: "/dashboard/configuracion/etiquetas", label: "Etiquetas", allowed: canAdminister(access, "settings") },
     { href: "/dashboard/configuracion/campos-personalizados", label: "Campos personalizados", allowed: canAdminister(access, "fields") },
