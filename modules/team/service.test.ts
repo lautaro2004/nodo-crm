@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/modules/access/service", () => ({ applyInvitationAccess: vi.fn(), removeMemberAccessData: vi.fn() }));
+// El límite de usuarios por plan se prueba aparte (modules/billing/seats.test.ts).
+vi.mock("@/modules/billing/seats", () => ({ assertCrmSeatAvailable: vi.fn() }));
 
 const m = {
   workspaceFind: vi.fn(),

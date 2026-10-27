@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeRole, type Role } from "@/lib/permissions";
+import { isCrmBlocked, loadCrmBillingState } from "@/modules/billing/access";
 
 // ÚNICO punto de verdad de todo el backend del CRM: sesión -> Membership ->
 // Business -> Workspace. Ninguna API route ni página server debe resolver
@@ -17,6 +18,11 @@ export type WorkspaceContext =
   // (Membership.products sin "crm"). Nunca se lo manda al onboarding: eso
   // crearía/alteraría el Workspace del negocio ajeno.
   | { status: "no_access"; userId: string; businessId: string; businessName: string }
+  // Tiene acceso a Nodo pero la suscripción del negocio no lo permite hoy
+  // (sin plan con Nodo, prueba vencida, pago atrasado más de 7 días,
+  // cancelada y vencida) y NODO_BILLING_ENFORCEMENT=on. Los datos siguen
+  // intactos; se muestra la pantalla de planes/regularización.
+  | { status: "billing_blocked"; userId: string; businessId: string; businessName: string; role: Role; reason: string }
   | { status: "ok"; userId: string; businessId: string; role: Role };
 
 export async function resolveWorkspaceContext(): Promise<WorkspaceContext> {
@@ -33,6 +39,19 @@ export async function resolveWorkspaceContext(): Promise<WorkspaceContext> {
   if (!membership) return { status: "no_business", userId: session.user.id };
   if (!membership.products.includes("crm")) {
     return { status: "no_access", userId: session.user.id, businessId: membership.businessId, businessName: membership.business.name };
+  }
+
+  // Acceso por suscripción: ÚNICO punto que lo aplica a páginas y API.
+  const billing = await loadCrmBillingState(membership.businessId);
+  if (isCrmBlocked(billing) && billing.access.access === "blocked") {
+    return {
+      status: "billing_blocked",
+      userId: session.user.id,
+      businessId: membership.businessId,
+      businessName: membership.business.name,
+      role: normalizeRole(membership.role),
+      reason: billing.access.reason,
+    };
   }
 
   const workspace = await prisma.workspace.findUnique({ where: { businessId: membership.businessId } });

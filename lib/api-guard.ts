@@ -16,6 +16,8 @@ const STATUS_BY_ERROR = {
   no_business: 409,
   no_workspace: 409,
   no_access: 403,
+  // 402 Payment Required: la suscripción no permite usar Nodo (ver lib/workspace.ts).
+  billing_blocked: 402,
 } as const;
 
 // Envoltorio delgado para Route Handlers: resuelve el Workspace UNA vez,
@@ -167,6 +169,7 @@ const DOMAIN_ERROR_STATUS: Record<string, number> = {
   too_many_widgets: 400,
   lead_not_found: 400,
   field_not_writable: 400,
+  seat_limit_reached: 409,
 };
 
 export function domainErrorResponse(err: unknown): NextResponse {

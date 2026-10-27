@@ -147,15 +147,65 @@ model Invitation {
   @@schema("public")
 }
 
-// Espejo MÍNIMO y de solo lectura de nexo.Subscription: el CRM solo
-// necesita saber si el negocio tiene Nexo (para ofrecer "acceso a Nexo" al
-// invitar). Única capa autorizada a usarlo: modules/nexo/.
+// Espejo de SOLO LECTURA de nexo.Subscription (Nexo es dueño del schema
+// nexo y de su facturación: checkout, webhooks, conciliación, superadmin).
+// Nodo lo usa para (1) saber si el negocio tiene Nexo y (2) calcular el
+// acceso a Nodo (modules/billing/access.ts). NUNCA se escribe desde acá.
 model NexoSubscription {
-  id         String @id
-  businessId String @unique
-  status     String
+  id                      String    @id
+  businessId              String    @unique
+  planId                  String
+  status                  String
+  provider                String?
+  currentPeriodEnd        DateTime?
+  pastDueSince            DateTime?
+  mercadoPagoLastSyncedAt DateTime?
+  billingInterval         String?
+  extraUsers              Int       @default(0)
+
+  plan NexoPlan @relation(fields: [planId], references: [id])
 
   @@map("Subscription")
+  @@schema("nexo")
+}
+
+// Espejo de SOLO LECTURA de nexo.Plan: qué productos habilita y cuántos
+// usuarios de Nodo incluye. Las columnas nuevas vienen de las migraciones
+// de Nexo 20261026120000, 20261026140000 y 20261026200000: aplicarlas ANTES
+// de desplegar este esquema.
+model NexoPlan {
+  id                    String   @id
+  name                  String
+  slug                  String
+  description           String?
+  monthlyPrice          Float
+  currency              String
+  active                Boolean
+  products              String[]
+  crmMaxUsers           Int?
+  extraUserMonthlyPrice Float?
+  extraUserYearlyPrice  Float?
+  trialDays             Int?
+  displayOrder          Int      @default(0)
+
+  subscriptions NexoSubscription[]
+  prices        NexoPlanPrice[]
+
+  @@map("Plan")
+  @@schema("nexo")
+}
+
+model NexoPlanPrice {
+  id       String  @id
+  planId   String
+  interval String
+  amount   Float
+  currency String
+  active   Boolean
+
+  plan NexoPlan @relation(fields: [planId], references: [id])
+
+  @@map("PlanPrice")
   @@schema("nexo")
 }
 

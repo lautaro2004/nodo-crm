@@ -37,6 +37,7 @@ const MESSAGES: Record<string, string> = {
   module_archived: "El módulo está archivado. Restauralo para cargar registros.",
   invalid_role_field: "Ese campo no es de este módulo o no es del tipo adecuado.",
   already_member: "Esa persona ya es parte del equipo.",
+  seat_limit_reached: "Tu plan no tiene más lugares para usuarios de Nodo. Sumá usuarios extra o cambiá de plan.",
   email_in_other_business: "Ese email ya pertenece a otro negocio. Por ahora cada usuario puede estar en un solo negocio: pedile que use otro email.",
   products_required: "Elegí al menos un producto (Nodo o Nexo).",
   product_not_available: "El negocio no tiene ese producto activo.",

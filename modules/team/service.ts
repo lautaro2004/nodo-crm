@@ -3,6 +3,7 @@ import { assignableRoles, canManage, hasRole, normalizeRole, type Product, type 
 import { businessHasNexo } from "@/modules/nexo/subscription";
 import { INVITATION_TTL_DAYS, hashInvitationToken, newInvitationToken } from "@/modules/team/tokens";
 import { applyInvitationAccess, removeMemberAccessData } from "@/modules/access/service";
+import { assertCrmSeatAvailable } from "@/modules/billing/seats";
 
 // Equipo de un negocio — compartido por Nodo y Nexo (public.Membership).
 // Lo que se cambia acá vale para los dos productos: quitar a alguien lo
@@ -68,6 +69,8 @@ export async function createInvitation(
   const email = input.email.trim().toLowerCase();
   assertCanAssign(actor, input.role);
   const products = await validateProducts(businessId, input.products);
+  // Una invitación a Nodo reserva un lugar del plan (ver modules/billing/seats.ts).
+  if (products.includes("crm")) await assertCrmSeatAvailable(businessId);
 
   const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (user) {
@@ -120,6 +123,8 @@ export async function updateMember(
   if (target.userId === actor.userId || !canManage(actor.role, target.role)) throw new Error("forbidden");
   if (data.role !== undefined) assertCanAssign(actor, data.role);
   const products = data.products !== undefined ? await validateProducts(businessId, data.products) : undefined;
+  // Sumarle Nodo a alguien que todavía no lo tenía ocupa un lugar nuevo.
+  if (products?.includes("crm") && !target.products.includes("crm")) await assertCrmSeatAvailable(businessId);
 
   return prisma.membership.update({
     where: { id: target.id },
@@ -195,6 +200,9 @@ export async function acceptInvitation(token: string, user: { id: string; email:
   const membership = await prisma.$transaction(async (tx) => {
     const existing = await tx.membership.findFirst({ where: { userId: user.id } });
     if (existing && existing.businessId !== state.businessId) throw new Error("email_in_other_business");
+    // Su propia invitación ya reservaba el lugar: se cuenta sin ella. Solo
+    // falla si el límite bajó desde que se invitó.
+    if (!existing && state.products.includes("crm")) await assertCrmSeatAvailable(state.businessId, state.id);
 
     // Marca la invitación como usada SOLO si sigue pendiente: dos clicks
     // simultáneos no crean dos membresías.

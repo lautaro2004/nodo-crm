@@ -7,7 +7,7 @@ export default async function OnboardingPage() {
   const ctx = await resolveWorkspaceContext();
 
   if (ctx.status === "unauthenticated") redirect("/login");
-  if (ctx.status === "ok" || ctx.status === "no_access") redirect("/dashboard");
+  if (ctx.status === "ok" || ctx.status === "no_access" || ctx.status === "billing_blocked") redirect("/dashboard");
   if (ctx.status === "no_workspace" && ctx.role !== "owner") {
     return (
       <main className="app-backdrop flex min-h-screen items-center justify-center px-4">

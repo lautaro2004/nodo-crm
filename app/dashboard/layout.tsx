@@ -8,6 +8,11 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { RoleProvider } from "@/components/dashboard/role-context";
 import { can, resolveAccess, toClientAccess } from "@/modules/access/service";
+import { loadCrmBillingState } from "@/modules/billing/access";
+import { listCrmPlans } from "@/modules/billing/plans";
+import { BillingBanner } from "@/components/billing/billing-banner";
+import { BlockedScreen } from "@/components/billing/blocked-screen";
+import { CheckoutPanel } from "@/components/billing/checkout-panel";
 
 // Único lugar que decide "explícitamente" qué pasa cuando falta Business o
 // Workspace (nunca se crean solos, ver docs/architecture/crm-fase3-core.md,
@@ -32,6 +37,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
     );
   }
 
+  // Suscripción: sin plan con Nodo (o con el pago vencido más allá de la
+  // gracia) se muestra la pantalla de planes/regularización. Los datos no se
+  // tocan. Ver lib/workspace.ts y modules/billing/access.ts.
+  if (ctx.status === "billing_blocked") {
+    const plans = await listCrmPlans();
+    return (
+      <BlockedScreen
+        businessName={ctx.businessName}
+        reason={ctx.reason}
+        isOwner={ctx.role === "owner"}
+        plans={plans}
+        checkout={ctx.role === "owner" ? <CheckoutPanel plans={plans} /> : undefined}
+      />
+    );
+  }
+
   const workspace = await getWorkspaceWithBusiness(ctx.businessId);
   if (!workspace) redirect("/onboarding");
 
@@ -53,6 +74,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <Sidebar businessName={workspace.business.name} activeModules={activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar businessName={workspace.business.name} activeModules={activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
+        <BillingBanner state={await loadCrmBillingState(ctx.businessId)} canManage={ctx.role === "owner" || ctx.role === "admin"} />
         {/* Ancho: en escritorio las listas usan casi todo el espacio (más
             columnas visibles) con un tope para pantallas muy anchas; los
             formularios conservan su propio ancho de lectura (max-w-lg/2xl). */}
