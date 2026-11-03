@@ -23,17 +23,29 @@ import { RelatedTasksList } from "@/components/tasks/related-tasks-list";
 import { listStatusOptions, findStatusOption } from "@/modules/status-definitions/service";
 import { StatusBadge } from "@/components/status/status-badge";
 
-export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CompanyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ creada?: string }>;
+}) {
   const ctx = await resolveWorkspaceContext();
   if (ctx.status !== "ok") return null;
 
   const { id } = await params;
+  const justCreated = (await searchParams).creada === "1";
   const company = await getCompany(ctx.businessId, id);
   if (!company) notFound();
   // Permisos: ver el módulo y el registro (alcance todos/equipo/propios).
   const access = await resolveAccess(ctx.businessId, ctx.userId, ctx.role);
   if (!canSeeRecord(access, "company", company)) notFound();
   const canEdit = can(access, "company", "edit");
+  // Recién creada: ofrecer crear un lead o contacto con los mismos datos
+  // (nombre, teléfono, empresa) para no cargar todo dos veces.
+  const canCreateLead = can(access, "lead", "create");
+  const canCreateContact = can(access, "contact", "create");
+  const prefill = new URLSearchParams({ companyId: id, name: company.name, ...(company.phone ? { phone: company.phone } : {}) }).toString();
 
   const [activities, assignedTags, allTags, customFields, members, upcomingEvents, statusOptions, relatedGroups] = await Promise.all([
     listActivitiesForEntity(ctx.businessId, "company", id),
@@ -65,6 +77,25 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
           </div>
         }
       />
+
+      {justCreated && (canCreateLead || canCreateContact) && (
+        <Card className="mb-6 p-4">
+          <h2 className="text-sm font-semibold text-slate-900">¿Querés crear un lead o contacto desde acá?</h2>
+          <p className="mt-1 text-sm text-slate-500">Te llevamos al formulario con los datos de la empresa ya cargados. Los podés editar antes de guardar.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canCreateLead && (
+              <Link href={`/dashboard/leads/nuevo?${prefill}`}>
+                <Button>Crear lead</Button>
+              </Link>
+            )}
+            {canCreateContact && (
+              <Link href={`/dashboard/contactos/nueva?${prefill}`}>
+                <Button variant="secondary">Crear contacto</Button>
+              </Link>
+            )}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 2xl:grid-cols-4">
         <div className="space-y-6 lg:col-span-2 2xl:col-span-3">

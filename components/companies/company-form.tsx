@@ -68,7 +68,7 @@ export function CompanyForm({
     const saved = await res.json();
     toast.success(companyId ? "Cambios guardados" : "Empresa creada");
     // El botón sigue en "Guardando…" hasta que llega el detalle (sin dobles envíos).
-    navigate(`/dashboard/empresas/${saved.id}`);
+    navigate(companyId ? `/dashboard/empresas/${saved.id}` : `/dashboard/empresas/${saved.id}?creada=1`);
     setLoading(false);
   }
 
