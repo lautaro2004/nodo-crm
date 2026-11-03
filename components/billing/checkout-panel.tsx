@@ -129,59 +129,141 @@ export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: 
   }
   ensureMp();
 
+  // Ahorro del plan anual frente a pagar 12 meses (solo si hay ambos precios y conviene).
+  const yearlySaving =
+    plan && plan.monthlyPrice !== null && plan.yearlyPrice !== null && plan.monthlyPrice * 12 > plan.yearlyPrice
+      ? plan.monthlyPrice * 12 - plan.yearlyPrice
+      : 0;
+
   return (
-    <div className="mt-6 space-y-4 border-t border-slate-200 pt-5">
-      <h2 className="text-sm font-semibold text-slate-900">Contratar</h2>
-      <div className="grid gap-4 sm:grid-cols-3 sm:gap-3">
-        <label className="text-sm text-slate-600 sm:text-xs">
-          Plan
-          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-            {plans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} · {p.users} usuario{p.users === 1 ? "" : "s"}
-              </option>
+    <div className="mt-6 space-y-5 border-t border-slate-200 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Elegí tu plan</h2>
+          <p className="text-sm text-slate-500">Tocá el plan que quieras contratar.</p>
+        </div>
+        {canMonth && canYear && (
+          <div className="inline-flex rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label="Período de facturación">
+            {(["month", "year"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={interval === value}
+                onClick={() => setInterval(value)}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  interval === value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {value === "month" ? "Mensual" : "Anual"}
+              </button>
             ))}
-          </select>
-        </label>
-        <label className="text-sm text-slate-600 sm:text-xs">
-          Período
-          <select
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm"
-            value={interval}
-            onChange={(e) => setInterval(e.target.value as "month" | "year")}
-          >
-            {canMonth && <option value="month">Mensual</option>}
-            {canYear && <option value="year">Anual</option>}
-          </select>
-        </label>
-        {extraUnit ? (
-          <label className="text-sm text-slate-600 sm:text-xs">
-            Usuarios extra (+{listMoney(extraUnit, plan.currency)} c/u)
-            <input
-              type="number"
-              min={0}
-              max={500}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm"
-              value={extraUsers}
-              onChange={(e) => setExtraUsers(Math.max(0, Math.min(500, Math.trunc(Number(e.target.value) || 0))))}
-            />
-          </label>
-        ) : null}
+          </div>
+        )}
       </div>
 
-      {nexoPlans.length > 0 && (
-        <label className="block text-sm text-slate-600 sm:text-xs">
-          Sumar Nexo{comboPct > 0 ? ` (${comboPct}% de descuento sobre la suma de ambos planes)` : ""}
-          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm sm:max-w-sm" value={withNexo} onChange={(e) => setWithNexo(e.target.value)}>
-            <option value="">No, solo Nodo</option>
-            {nexoPlans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Planes de Nodo">
+        {plans.map((p) => {
+          const selected = p.id === plan.id;
+          const price = interval === "year" ? (p.yearlyPrice ?? p.monthlyPrice) : (p.monthlyPrice ?? p.yearlyPrice);
+          const shownInterval = interval === "year" ? (p.yearlyPrice !== null ? "año" : "mes") : p.monthlyPrice !== null ? "mes" : "año";
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setPlanId(p.id)}
+              className={`relative flex flex-col rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                selected ? "border-brand-400 bg-brand-50/60 ring-2 ring-brand-300" : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full border text-[11px] ${
+                  selected ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300 bg-white text-transparent"
+                }`}
+              >
+                ✓
+              </span>
+              <span className="pr-7 text-base font-semibold text-slate-900">{p.name}</span>
+              <span className="mt-0.5 text-sm text-slate-500">
+                {p.users} usuario{p.users === 1 ? "" : "s"} incluido{p.users === 1 ? "" : "s"}
+              </span>
+              {price !== null && (
+                <span className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+                  {listMoney(price, p.currency)}
+                  <span className="text-sm font-normal text-slate-500"> / {shownInterval}</span>
+                </span>
+              )}
+              <span className="mt-2 flex flex-wrap gap-1.5">
+                {p.includesNexo && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">Incluye Nexo</span>}
+                {p.trialDays ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{p.trialDays} días de prueba</span> : null}
+                {(interval === "year" ? p.extraUserYearlyPrice : p.extraUserMonthlyPrice) !== null && (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                    Usuario extra {listMoney((interval === "year" ? p.extraUserYearlyPrice : p.extraUserMonthlyPrice) as number, p.currency)}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {interval === "year" && yearlySaving > 0 && (
+        <p className="text-sm text-emerald-700">Con el plan anual ahorrás {listMoney(yearlySaving, plan.currency)} respecto de pagar 12 meses.</p>
       )}
+      {plan.currency !== "ARS" && (
+        <p className="text-xs text-slate-500">Los precios en dólares se cobran en pesos al dólar oficial (BNA venta) del día de la contratación.</p>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {extraUnit ? (
+          <div className="text-sm text-slate-600 sm:text-xs">
+            <span id="extra-users-label">Usuarios extra (+{listMoney(extraUnit, plan.currency)} c/u)</span>
+            <div className="mt-1 flex items-center gap-2" role="group" aria-labelledby="extra-users-label">
+              <button
+                type="button"
+                aria-label="Quitar un usuario extra"
+                className="h-11 w-11 rounded-lg border border-slate-300 bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 sm:h-9 sm:w-9"
+                disabled={extraUsers <= 0}
+                onClick={() => setExtraUsers((n) => Math.max(0, n - 1))}
+              >
+                −
+              </button>
+              <span className="w-10 text-center text-base font-medium text-slate-900" aria-live="polite">
+                {extraUsers}
+              </span>
+              <button
+                type="button"
+                aria-label="Sumar un usuario extra"
+                className="h-11 w-11 rounded-lg border border-slate-300 bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 sm:h-9 sm:w-9"
+                disabled={extraUsers >= 500}
+                onClick={() => setExtraUsers((n) => Math.min(500, n + 1))}
+              >
+                +
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {nexoPlans.length > 0 && (
+          <label className="block text-sm text-slate-600 sm:text-xs">
+            Sumar Nexo{comboPct > 0 ? ` (${comboPct}% de descuento sobre la suma de ambos planes)` : ""}
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm"
+              value={withNexo}
+              onChange={(e) => setWithNexo(e.target.value)}
+            >
+              <option value="">No, solo Nodo</option>
+              {nexoPlans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
       {quote && (
         <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm">

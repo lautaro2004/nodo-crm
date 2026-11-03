@@ -101,7 +101,7 @@ export default async function SubscriptionPage() {
           )}
         </Card>
 
-        {plans.length > 0 && (
+        {plans.length > 0 && !(isOwner && !overview.hasPaidSubscription) && (
           <Card className="p-4">
             <h2 className="mb-2 text-sm font-semibold text-slate-900">Planes disponibles</h2>
             <ul className="divide-y divide-slate-100 text-sm">
