@@ -132,10 +132,10 @@ export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: 
   return (
     <div className="mt-6 space-y-4 border-t border-slate-200 pt-5">
       <h2 className="text-sm font-semibold text-slate-900">Contratar</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="text-xs text-slate-600">
+      <div className="grid gap-4 sm:grid-cols-3 sm:gap-3">
+        <label className="text-sm text-slate-600 sm:text-xs">
           Plan
-          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm" value={planId} onChange={(e) => setPlanId(e.target.value)}>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {p.users} usuario{p.users === 1 ? "" : "s"}
@@ -143,10 +143,10 @@ export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: 
             ))}
           </select>
         </label>
-        <label className="text-xs text-slate-600">
+        <label className="text-sm text-slate-600 sm:text-xs">
           Período
           <select
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm"
             value={interval}
             onChange={(e) => setInterval(e.target.value as "month" | "year")}
           >
@@ -155,13 +155,13 @@ export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: 
           </select>
         </label>
         {extraUnit ? (
-          <label className="text-xs text-slate-600">
+          <label className="text-sm text-slate-600 sm:text-xs">
             Usuarios extra (+{listMoney(extraUnit, plan.currency)} c/u)
             <input
               type="number"
               min={0}
               max={500}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm"
               value={extraUsers}
               onChange={(e) => setExtraUsers(Math.max(0, Math.min(500, Math.trunc(Number(e.target.value) || 0))))}
             />
@@ -170,9 +170,9 @@ export function CheckoutPanel({ plans, nexoPlans = [], comboPct = 0 }: { plans: 
       </div>
 
       {nexoPlans.length > 0 && (
-        <label className="block text-xs text-slate-600">
+        <label className="block text-sm text-slate-600 sm:text-xs">
           Sumar Nexo{comboPct > 0 ? ` (${comboPct}% de descuento sobre la suma de ambos planes)` : ""}
-          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm sm:max-w-sm" value={withNexo} onChange={(e) => setWithNexo(e.target.value)}>
+          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:px-2 sm:py-2 sm:text-sm sm:max-w-sm" value={withNexo} onChange={(e) => setWithNexo(e.target.value)}>
             <option value="">No, solo Nodo</option>
             {nexoPlans.map((p) => (
               <option key={p.id} value={p.id}>

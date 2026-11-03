@@ -27,8 +27,8 @@ export function BlockedScreen({
   checkout?: React.ReactNode;
 }) {
   return (
-    <main className="app-backdrop flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="glass w-full max-w-3xl rounded-[var(--radius-glass)] p-6 sm:p-8">
+    <main className="app-backdrop flex min-h-dvh items-start justify-center px-3 py-6 sm:items-center sm:px-4 sm:py-10">
+      <div className="glass w-full max-w-3xl rounded-[var(--radius-glass)] p-5 sm:p-8">
         <h1 className="text-lg font-semibold text-slate-900">Nodo está pausado para {businessName}</h1>
         <p className="mt-2 text-sm text-slate-600">{BLOCK_REASON_MESSAGES[reason] ?? "La suscripción no permite usar Nodo en este momento."}</p>
         <p className="mt-1 text-sm text-slate-600">
