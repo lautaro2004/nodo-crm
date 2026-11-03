@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { listCrmPlans } from "@/modules/billing/plans";
 import { LandingNavbar } from "@/components/landing/navbar";
 import { LandingHero } from "@/components/landing/hero";
 import {
@@ -19,7 +20,22 @@ export const metadata: Metadata = {
   description: "Leads, contactos, oportunidades y el seguimiento de tu equipo en un solo lugar. Conectado con Nexo.",
 };
 
-export default function Home() {
+// Los planes salen de la base: se refrescan cada 5 minutos.
+export const revalidate = 300;
+
+async function loadPlans() {
+  try {
+    // Los planes cuyo slug empieza con "test" son para probar el cobro: se
+    // pueden contratar desde la pantalla de planes, pero no se publican acá.
+    return (await listCrmPlans()).filter((p) => !p.slug.toLowerCase().startsWith("test"));
+  } catch (error) {
+    console.error("[landing] No se pudieron leer los planes:", error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+export default async function Home() {
+  const plans = await loadPlans();
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
       <LandingNavbar />
@@ -30,7 +46,7 @@ export default function Home() {
         <LandingModulesShowcase />
         <LandingHowItWorks />
         <LandingNexo />
-        <LandingPlans />
+        <LandingPlans plans={plans} />
         <LandingFaq />
         <LandingCta />
       </main>

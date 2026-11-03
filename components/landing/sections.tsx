@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo, LogoMark } from "@/components/ui/logo";
+import type { CrmPlanOption } from "@/modules/billing/plans";
 import {
   BarChartIcon,
   BoxIcon,
@@ -217,32 +218,45 @@ export function LandingNexo() {
 }
 
 // ── Planes ────────────────────────────────────────────────────────────
-// Sin precios publicados todavía: se definen aparte. Para mostrarlos,
-// completar `price` (texto ya formateado, ej. "$150.000 / mes").
-const PLANS: { name: string; price: string | null; highlight: boolean; lines: string[] }[] = [
-  {
-    name: "Nodo",
-    price: null,
-    highlight: true,
-    lines: ["5 usuarios incluidos", "10 GB para archivos e imágenes", "Contactos y registros sin límite", "Hasta 10 módulos propios", "Soporte por email y WhatsApp"],
-  },
-  {
-    name: "Nodo Plus",
-    price: null,
-    highlight: false,
-    lines: ["10 usuarios incluidos", "25 GB para archivos e imágenes", "Contactos y registros sin límite", "Hasta 20 módulos propios", "Soporte prioritario y ayuda para arrancar"],
-  },
-];
+// Los planes y precios salen de la base (los administra el superadmin de
+// Nexo): la landing nunca muestra un precio o plan que no se pueda contratar.
+// Sin planes cargados, muestra un aviso en vez de planes inventados.
+function planMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+  } catch {
+    return `${currency} ${amount}`;
+  }
+}
 
-export function LandingPlans() {
+export function LandingPlans({ plans }: { plans: CrmPlanOption[] }) {
+  const PLANS = plans.map((p, index) => ({
+    name: p.name,
+    highlight: plans.length > 1 ? index === 0 : true,
+    price: p.monthlyPrice !== null ? `${planMoney(p.monthlyPrice, p.currency)} / mes` : p.yearlyPrice !== null ? `${planMoney(p.yearlyPrice, p.currency)} / año` : null,
+    yearly: p.monthlyPrice !== null && p.yearlyPrice !== null ? `o ${planMoney(p.yearlyPrice, p.currency)} por año` : null,
+    lines: [
+      `${p.users} usuario${p.users === 1 ? "" : "s"} incluido${p.users === 1 ? "" : "s"}`,
+      ...(p.description ? [p.description] : []),
+      ...(p.includesNexo ? ["Incluye Nexo (reservas, WhatsApp e IA)"] : []),
+      ...(p.extraUserMonthlyPrice !== null ? [`Usuario extra: ${planMoney(p.extraUserMonthlyPrice, p.currency)} / mes`] : []),
+      ...(p.trialDays ? [`${p.trialDays} días de prueba`] : []),
+    ],
+  }));
+
   return (
     <section id="planes" className="scroll-mt-20 bg-white px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       <SectionHeader
         eyebrow="Planes"
         title="Una suscripción para todo tu equipo."
-        text="Sin cobrar por cada usuario. Todas las funciones de Nodo en los dos planes; cambia cuánta gente y cuánto espacio necesitás."
+        text="Elegí el plan que se ajusta a tu equipo. Creás tu cuenta, elegís el plan y pagás con Mercado Pago para empezar."
       />
-      <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
+      {PLANS.length === 0 && (
+        <p className="mx-auto mt-10 max-w-xl text-center text-sm text-slate-600">
+          Estamos terminando de publicar los planes. Escribinos a <a className="font-medium underline" href="mailto:contacto@kodexa.ar">contacto@kodexa.ar</a> y te pasamos las opciones.
+        </p>
+      )}
+      <div className={`mx-auto mt-12 grid max-w-4xl gap-5 ${PLANS.length > 1 ? "md:grid-cols-2" : "max-w-md"}`}>
         {PLANS.map((p) => (
           <div
             key={p.name}
@@ -254,6 +268,7 @@ export function LandingPlans() {
               {p.highlight && <span className="ml-auto rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200">Recomendado</span>}
             </div>
             {p.price && <p className="mt-4 text-3xl font-semibold tracking-tight text-slate-900">{p.price}</p>}
+            {p.yearly && <p className="mt-1 text-sm text-slate-500">{p.yearly}</p>}
             <ul className="mt-5 flex-1 space-y-2.5 text-sm text-slate-700">
               {p.lines.map((l) => (
                 <li key={l} className="flex gap-2.5">
@@ -268,12 +283,11 @@ export function LandingPlans() {
               href="/registro"
               className={`mt-6 inline-flex h-10 items-center justify-center rounded-xl text-sm font-medium ${p.highlight ? "bg-brand-500 text-slate-900 hover:bg-brand-400" : "border border-slate-200 bg-white text-slate-800 hover:border-slate-300"}`}
             >
-              Empezar gratis
+              Elegir este plan
             </Link>
           </div>
         ))}
       </div>
-      <p className="mx-auto mt-6 max-w-xl text-center text-sm text-slate-500">¿Necesitás más usuarios o espacio? Se suman a cualquiera de los dos planes.</p>
     </section>
   );
 }
@@ -317,7 +331,7 @@ export function LandingCta() {
         <p className="mx-auto mt-3 max-w-lg text-base text-slate-600">Creá tu cuenta, importá tus clientes y sumá a tu equipo. Si ya tenés cuenta de Nexo, entrás con la misma.</p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link href="/registro" className="inline-flex h-11 items-center rounded-xl bg-brand-500 px-6 text-base font-medium text-slate-900 hover:bg-brand-400">
-            Empezar gratis
+            Crear mi cuenta
           </Link>
           <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
             Ya tengo cuenta

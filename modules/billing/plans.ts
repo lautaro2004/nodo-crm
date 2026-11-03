@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 // nunca se muestra un plan a medio configurar.
 export interface CrmPlanOption {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   users: number;
@@ -28,6 +29,7 @@ export async function listCrmPlans(): Promise<CrmPlanOption[]> {
     .filter((p) => p.crmMaxUsers && (p.monthlyPrice > 0 || p.prices.some((x) => x.interval === "year")))
     .map((p) => ({
       id: p.id,
+      slug: p.slug,
       name: p.name,
       description: p.description,
       users: p.crmMaxUsers!,

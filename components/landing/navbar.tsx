@@ -36,7 +36,7 @@ export function LandingNavbar() {
             href="/registro"
             className="inline-flex h-9 items-center rounded-xl bg-brand-500 px-4 text-sm font-medium text-slate-900 shadow-[0_1px_0_rgb(255_255_255/0.35)_inset,0_1px_2px_rgb(32_33_36/0.12)] hover:bg-brand-400"
           >
-            Empezar gratis
+            Crear mi cuenta
           </Link>
         </div>
         <button type="button" aria-label={open ? "Cerrar menú" : "Abrir menú"} aria-expanded={open} onClick={() => setOpen(!open)} className="rounded-lg p-2 text-slate-600 md:hidden">
@@ -57,7 +57,7 @@ export function LandingNavbar() {
               Ingresar
             </Link>
             <Link href="/registro" className="flex-1 rounded-xl bg-brand-500 py-2.5 text-center text-sm font-medium text-slate-900">
-              Empezar gratis
+              Crear mi cuenta
             </Link>
           </div>
         </div>

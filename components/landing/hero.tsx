@@ -56,7 +56,7 @@ export function LandingHero() {
             href="/registro"
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-500 px-6 text-base font-medium text-slate-900 shadow-[0_1px_0_rgb(255_255_255/0.35)_inset,0_8px_24px_-8px_rgb(251_110_26/0.6)] transition-colors hover:bg-brand-400"
           >
-            Empezar gratis <span aria-hidden>→</span>
+            Crear mi cuenta <span aria-hidden>→</span>
           </Link>
           <a href="#como-funciona" className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
             Ver cómo funciona
