@@ -7,6 +7,7 @@ import { Badge, Card, PageHeader } from "@/components/ui/primitives";
 import { CheckoutPanel } from "@/components/billing/checkout-panel";
 import { ExtraUsersForm } from "@/components/billing/extra-users-form";
 import { PlanChangeForm } from "@/components/billing/plan-change-form";
+import { CancelSubscription } from "@/components/billing/cancel-subscription";
 
 const dateFmt = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" });
 
@@ -161,6 +162,11 @@ export default async function SubscriptionPage() {
                 />
               </div>
             )}
+          </Card>
+        )}
+        {isOwner && overview.hasPaidSubscription && (
+          <Card className="p-4">
+            <CancelSubscription />
           </Card>
         )}
         {!isOwner && (
