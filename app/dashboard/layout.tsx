@@ -70,7 +70,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <RoleProvider role={ctx.role} access={toClientAccess(access)}>
-    <div className="app-backdrop flex min-h-screen">
+    <div className="app-backdrop flex min-h-dvh w-full max-w-full overflow-x-clip">
       <Sidebar businessName={workspace.business.name} activeModules={activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar businessName={workspace.business.name} activeModules={activeModules} opportunityLabel={opportunityLabel} customModules={customModules} />

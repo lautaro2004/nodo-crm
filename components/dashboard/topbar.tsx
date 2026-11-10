@@ -4,6 +4,7 @@ import { SearchIcon } from "@/components/ui/icons";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { HelpButton } from "@/components/support/help-button";
 import type { ModuleLabel } from "@/modules/workspace/module-config-shared";
 import type { CustomModuleNav } from "@/components/dashboard/sidebar";
 
@@ -31,6 +32,7 @@ export function Topbar({
         </Link>
       </div>
       <div className="flex items-center gap-1">
+        <HelpButton />
         <NotificationBell />
         <UserMenu />
       </div>

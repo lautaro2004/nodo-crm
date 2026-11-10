@@ -3,6 +3,7 @@
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Logo } from "@/components/ui/logo";
 import {
@@ -247,9 +248,12 @@ export function MobileSidebarDrawer({
   open: boolean;
   onClose: () => void;
 }) {
-  if (!open) return null;
+  // Se monta en <body>: el Topbar usa backdrop-filter, y un ancestro con
+  // backdrop-filter pasa a ser el bloque contenedor de los hijos fixed (el
+  // drawer quedaba encerrado dentro de los 64px de la barra).
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 lg:hidden">
       <button aria-label="Cerrar menú" onClick={onClose} className="animate-overlay-in absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
       <div className="glass animate-sheet-in relative m-2 flex h-[calc(100%-1rem)] w-72 max-w-[85vw] flex-col rounded-[var(--radius-glass)]">
@@ -269,6 +273,7 @@ export function MobileSidebarDrawer({
           onNavigate={onClose}
         />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
