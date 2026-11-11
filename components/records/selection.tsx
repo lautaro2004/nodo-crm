@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button, Spinner } from "@/components/ui/primitives";
 import { TrashIcon, XIcon } from "@/components/ui/icons";
 import { useDeleteRecords, type RecordNoun } from "@/components/records/use-delete-records";
+import { BulkActionsMenu } from "@/components/records/bulk-actions";
 
 // Selección múltiple compartida por todas las listas (tabla y Kanban) de
 // Leads, Contactos, Empresas, Oportunidades y módulos personalizados.
@@ -37,6 +38,7 @@ export function RecordSelection({
   ids,
   noun,
   canDelete,
+  canEdit = false,
   children,
 }: {
   entityType: string;
@@ -44,6 +46,8 @@ export function RecordSelection({
   ids: string[];
   noun: RecordNoun;
   canDelete: boolean;
+  /** Permiso de edición: habilita el menú "Acciones masivas" (propietario, estado, etapa). */
+  canEdit?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -71,7 +75,7 @@ export function RecordSelection({
   }, []);
   const setAll = useCallback((value: boolean) => setSelected(value ? new Set(ids) : new Set()), [ids]);
 
-  const value = useMemo<SelectionState>(() => ({ enabled: canDelete, ids, selected, toggle, setAll }), [canDelete, ids, selected, toggle, setAll]);
+  const value = useMemo<SelectionState>(() => ({ enabled: canDelete || canEdit, ids, selected, toggle, setAll }), [canDelete, canEdit, ids, selected, toggle, setAll]);
 
   async function removeSelected() {
     const outcome = await deleteRecords([...selected]);
@@ -86,10 +90,10 @@ export function RecordSelection({
     <SelectionContext.Provider value={value}>
       {children}
       {/* Espacio para que la barra fija no tape la última fila. */}
-      {canDelete && n > 0 && <div aria-hidden className="h-20" />}
-      {canDelete && n > 0 && (
+      {(canDelete || canEdit) && n > 0 && <div aria-hidden className="h-20" />}
+      {(canDelete || canEdit) && n > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4" role="region" aria-label="Acciones sobre la selección">
-          <div className="pointer-events-auto flex animate-fade-in items-center gap-2 rounded-2xl bg-slate-900 py-2 pl-4 pr-2 text-sm text-white shadow-xl shadow-slate-900/20">
+          <div className="pointer-events-auto flex max-w-full animate-fade-in flex-wrap items-center justify-center gap-2 rounded-2xl bg-slate-900 py-2 pl-4 pr-2 text-sm text-white shadow-xl shadow-slate-900/20">
             <span className="font-medium tabular-nums" aria-live="polite">
               {n} {n === 1 ? `${noun.one} seleccionad${noun.feminine ? "a" : "o"}` : `${noun.many} seleccionad${noun.feminine ? "as" : "os"}`}
             </span>
@@ -98,10 +102,26 @@ export function RecordSelection({
                 Seleccionar {ids.length === 1 ? "el visible" : `los ${ids.length} visibles`}
               </button>
             )}
-            <Button size="sm" variant="danger" onClick={() => void removeSelected()} disabled={busy}>
-              {busy ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon className="h-3.5 w-3.5" />}
-              Eliminar
-            </Button>
+            {canEdit ? (
+              <BulkActionsMenu
+                entityType={entityType}
+                ids={[...selected]}
+                noun={noun}
+                canDelete={canDelete}
+                busy={busy}
+                onDelete={() => void removeSelected()}
+                onUpdated={(failed) => {
+                  // Quedan seleccionados solo los que fallaron (para reintentar).
+                  setSelected(new Set(failed));
+                  router.refresh();
+                }}
+              />
+            ) : (
+              <Button size="sm" variant="danger" onClick={() => void removeSelected()} disabled={busy}>
+                {busy ? <Spinner className="h-3.5 w-3.5" /> : <TrashIcon className="h-3.5 w-3.5" />}
+                Eliminar
+              </Button>
+            )}
             <button
               type="button"
               className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-50"

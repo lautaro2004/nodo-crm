@@ -141,6 +141,7 @@ export default async function CustomModulePage({ params, searchParams }: { param
             ids={result.items.map((r) => r.id)}
             noun={nounFromLabels(mod.labelSingular, mod.labelPlural)}
             canDelete={can(access, entity, "delete")}
+            canEdit={can(access, entity, "edit")}
           >
             <RecordTable basePath={basePath} records={result.items} columns={columns} custom={custom} ownerName={(id) => names.get(id)} thumbs={thumbs} />
           </RecordSelection>

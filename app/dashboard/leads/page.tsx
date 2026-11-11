@@ -109,7 +109,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           />
         )
       ) : (
-        <RecordSelection entityType="lead" ids={leads.map((l) => l.id)} noun={RECORD_NOUNS.lead} canDelete={can(access, "lead", "delete")}>
+        <RecordSelection entityType="lead" ids={leads.map((l) => l.id)} noun={RECORD_NOUNS.lead} canDelete={can(access, "lead", "delete")} canEdit={can(access, "lead", "edit")}>
           {display === "kanban" ? (
             <>
               <SelectAllBar />

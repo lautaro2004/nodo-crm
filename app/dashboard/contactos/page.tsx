@@ -50,7 +50,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
           }
         />
       ) : (
-        <RecordSelection entityType="contact" ids={contacts.map((c) => c.id)} noun={RECORD_NOUNS.contact} canDelete={can(access, "contact", "delete")}>
+        <RecordSelection entityType="contact" ids={contacts.map((c) => c.id)} noun={RECORD_NOUNS.contact} canDelete={can(access, "contact", "delete")} canEdit={can(access, "contact", "edit")}>
           <Card className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

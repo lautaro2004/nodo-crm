@@ -181,6 +181,7 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
               ids={rows.map((o) => o.id)}
               noun={nounFromLabels(moduleLabel.labelSingular, moduleLabel.labelPlural)}
               canDelete={can(access, "opportunity", "delete")}
+              canEdit={can(access, "opportunity", "edit")}
             >
               {display === "kanban" ? (
                 <>

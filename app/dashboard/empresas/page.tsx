@@ -68,7 +68,7 @@ export default async function CompaniesPage({
           }
         />
       ) : (
-        <RecordSelection entityType="company" ids={companies.map((c) => c.id)} noun={RECORD_NOUNS.company} canDelete={can(access, "company", "delete")}>
+        <RecordSelection entityType="company" ids={companies.map((c) => c.id)} noun={RECORD_NOUNS.company} canDelete={can(access, "company", "delete")} canEdit={can(access, "company", "edit")}>
           <Card className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
